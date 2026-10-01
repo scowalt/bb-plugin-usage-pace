@@ -1,4 +1,4 @@
-import { defineRpcContract } from "@get-bb/plugin-sdk";
+// Shared with the frontend: keep backend SDK runtime imports out of this module.
 import { z } from "zod";
 
 export const bankedResetsSchema = z.object({
@@ -23,10 +23,3 @@ export function bankedResetsUnavailable(
 ): BankedResets {
   return { status, accountEmail, fetchedAt: null, availableCount: null, credits: [], message };
 }
-
-export const bankedResetsHostContract = defineRpcContract({
-  readBankedResets: {
-    input: z.object({ force: z.boolean().optional() }).strict(),
-    output: bankedResetsSchema,
-  },
-});

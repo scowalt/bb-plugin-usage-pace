@@ -11,7 +11,8 @@ import { registerGrokProvider } from "./lib/grok-provider";
 import { createGrokUsageSource, grokUsageSourceContract } from "./lib/grok-usage-source";
 import { describePace, paceForWindows } from "./lib/pace";
 import { createTokenTotals } from "./lib/token-totals";
-import { bankedResetsHostContract, bankedResetsSchema, bankedResetsUnavailable, type BankedResets } from "./lib/banked-resets-contract";
+import { bankedResetsSchema, bankedResetsUnavailable, type BankedResets } from "./lib/banked-resets-contract";
+import { bankedResetsHostContract } from "./lib/banked-resets-host-contract";
 
 const windowSchema = z.object({
   label: z.string(),

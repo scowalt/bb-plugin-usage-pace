@@ -12,7 +12,7 @@ import { experimental_acpProviderBridge } from "@get-bb/plugin-sdk/provider-brid
 
 import { readGrokHealth, readGrokUsage } from "./lib/grok-usage";
 import { experimental_defineHostEntry } from "@get-bb/plugin-sdk/host";
-import { bankedResetsHostContract } from "./lib/banked-resets-contract";
+import { bankedResetsHostContract } from "./lib/banked-resets-host-contract";
 import { createBankedResetsReader } from "./lib/banked-resets";
 
 const readBankedResets = createBankedResetsReader();

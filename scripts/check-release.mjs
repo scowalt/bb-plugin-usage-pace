@@ -1,4 +1,5 @@
-// Verify the exact checkout to be tagged, then load its bundles without any
+// Verify the exact checkout to be tagged, exercise BB's production-only source
+// build, then load its prebuilt bundles without any
 // plugin node_modules or real Codex credentials. Supply only the SDK runtime
 // that BB provides to backend bundles. Never performs a provider request.
 import assert from "node:assert/strict";
@@ -8,6 +9,7 @@ import { tmpdir } from "node:os";
 import { registerHooks } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { checkInstall } from "./check-install.mjs";
 
 const root = resolve(process.argv[2] ?? join(dirname(fileURLToPath(import.meta.url)), ".."));
 const json = async path => JSON.parse(await readFile(path, "utf8"));
@@ -25,7 +27,7 @@ for (const bundle of ["server", "app", "host"]) {
   const meta = await json(join(root, "dist", `${bundle}.meta.json`));
   assert.equal(meta.pluginId, "usage-pace");
   assert.equal(meta.pluginVersion, pkg.version);
-  assert.equal(meta.sdkVersion, pkg.devDependencies["@get-bb/plugin-sdk"]);
+  assert.equal(meta.sdkVersion, pkg.dependencies["@get-bb/plugin-sdk"]);
   const bytes = await readFile(join(root, "dist", `${bundle}.js`));
   assert.ok(bytes.length > 0);
   if (bundle === "host") {
@@ -34,6 +36,8 @@ for (const bundle of ["server", "app", "host"]) {
 }
 assert.ok((await stat(join(root, "dist", "app.css"))).size > 0);
 assert.equal((await json(join(root, "dist", "package.json"))).type, "module");
+
+await checkInstall(root);
 
 const isolated = await mkdtemp(join(tmpdir(), "usage-pace-release-runtime-"));
 const previousCodexHome = process.env.CODEX_HOME;

@@ -164,10 +164,20 @@ describe("shared footer/dialog inventory", () => {
 });
 
 it("scrolls and focuses the requested banked-reset section after overlay autofocus", async () => {
+  // Drive the frame explicitly: jsdom's animation clock is not reliably
+  // advanced by the fake wall clock across repeated timer installations.
+  let onFrame: FrameRequestCallback | undefined;
+  const requestFrame = vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => {
+    onFrame = callback;
+    return 1;
+  });
+  vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
   await render(<BankedResetsList data={inventory()} loading={false} hostName="One" focusOnMount />);
   const section = container.querySelector("section")!;
   section.scrollIntoView = vi.fn();
-  await act(async () => { vi.advanceTimersByTime(20); });
+  expect(requestFrame).toHaveBeenCalledTimes(1);
+  expect(document.activeElement).not.toBe(section);
+  await act(async () => { onFrame!(0); });
   expect(section.scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
   expect(document.activeElement).toBe(section);
 });

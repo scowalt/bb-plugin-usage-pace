@@ -99,12 +99,12 @@ Turn this off with the *Add Grok Build usage to bb's usage card* setting, then r
 ## Install
 
 ```sh
-bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.3.0'
+bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.3.1'
 # Enable the footer strip (off by default) to see the Codex banked-reset badge:
 bb plugin config usage-pace set showStrip true
 ```
 
-Use `@^0.3.0` instead of `@v0.3.0` to track compatible releases with `bb plugin update usage-pace`. Release tags include prebuilt server, frontend, and host bundles; no local SDK or build tooling is needed for a Git install. Sign into Codex with a ChatGPT account on each host where you want banked-reset inventory.
+Use `@^0.3.1` instead of `@v0.3.1` to track compatible releases with `bb plugin update usage-pace`. **Use 0.3.1 or newer for Git installs**: 0.3.0 fails when development dependencies are absent. Release tags include prebuilt bundles, but BB's Git installer rebuilds source with its own build tooling after installing production dependencies. The required SDK runtime is installed automatically; you do not need to install it manually. Sign into Codex with a ChatGPT account on each host where you want banked-reset inventory.
 
 From a local checkout:
 
@@ -140,11 +140,16 @@ bun install
 bun run check   # tsc
 bun run test    # vitest (pace, reset badge/UI) + node:test (token totals)
 bun run build   # bb plugin build
-bun run check:release # metadata/digest and isolated bundle smoke test; no provider requests
+bun run check:install # rebuild an isolated copy with production dependencies only
+bun run check:release # includes check:install, metadata/digest and bundle smoke tests
 bb plugin reload usage-pace
 ```
 
-Before a release, update the version in `package.json` and `package-lock.json`, run the checks and build, and commit the generated `dist/` bundles alongside their sources. Every artifact's `pluginVersion` must match the package version. Create a new `vX.Y.Z` tag; never move a published tag.
+Keep `@get-bb/plugin-sdk` pinned in **dependencies**, not devDependencies: the Grok host bridge imports its runtime during install-time bundling. Do not let SDK type-sync tooling move it back to devDependencies. Browser-shared data must not import the backend SDK; host RPC wiring lives separately in `lib/banked-resets-host-contract.ts`.
+
+`check:install` defaults to Bun. Set `BB_INSTALL_NPM_CLI` to the absolute `npm-cli.js` shipped with the BB version under test for exact dependency-install parity (`--ignore-scripts --omit=dev --omit=optional`). Both modes invoke `bb plugin build` in a disposable checkout and make no provider requests. `check:release` honors the same setting.
+
+Before a release, update the version in `package.json` and `package-lock.json`, run the checks and build (including `check:release` with BB's bundled npm), and commit the generated `dist/` bundles alongside their sources. Every artifact's `pluginVersion` must match the package version. Create a new `vX.Y.Z` tag; never move a published tag.
 
 ---
 
