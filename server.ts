@@ -11,6 +11,7 @@ import { registerGrokProvider } from "./lib/grok-provider";
 import { createGrokUsageSource, grokUsageSourceContract } from "./lib/grok-usage-source";
 import { describePace, paceForWindows } from "./lib/pace";
 import { createTokenTotals } from "./lib/token-totals";
+import { bankedResetsHostContract, bankedResetsSchema, bankedResetsUnavailable, type BankedResets } from "./lib/banked-resets-contract";
 
 const windowSchema = z.object({
   label: z.string(),
@@ -47,6 +48,10 @@ const snapshotSchema = z.object({
 export type UsageSnapshot = z.infer<typeof snapshotSchema>;
 
 export const rpcContract = defineRpcContract({
+  getBankedResets: {
+    input: z.object({ hostId: z.string().min(1).max(128), force: z.boolean().optional() }).strict(),
+    output: bankedResetsSchema,
+  },
   getTokens: {
     input: z.object({ timeZone: z.string().max(100), force: z.boolean().optional() }),
     output: z.object({ day: z.number(), month: z.number(), timeZone: z.string(), fetchedAt: z.string().nullable(), error: z.string().nullable() }),
@@ -128,6 +133,18 @@ function normalizeProvider(
 
 export default async function plugin(bb: BbPluginApi) {
   const getTokens = createTokenTotals(bb);
+  const bankedHost = bb.hosts.experimental_client({ contract: bankedResetsHostContract });
+  const bankedController = new AbortController();
+  bb.onDispose(() => bankedController.abort());
+  async function getBankedResets(hostId: string, force = false): Promise<BankedResets> {
+    try {
+      const host = (await bb.sdk.hosts.list()).find(host => host.id === hostId);
+      if (!host || host.status === "disconnected") return bankedResetsUnavailable("Host is offline or no longer available. Reconnect it, then refresh.");
+      return await bankedHost.call("readBankedResets", { force }, { hostId, signal: bankedController.signal });
+    } catch {
+      return bankedResetsUnavailable("Could not read banked resets from this host. Reconnect it, then refresh.");
+    }
+  }
   const settings = bb.settings.define({
     cacheMinutes: {
       type: "number",
@@ -239,6 +256,7 @@ export default async function plugin(bb: BbPluginApi) {
   bb.events.on("thread.failed", markDirty);
 
   bb.rpc.register(rpcContract, {
+    getBankedResets: (input) => getBankedResets(input.hostId, input.force),
     getTokens: (input) => getTokens(input.timeZone, input.force),
     getCardSettings: () => ({ hiddenProviders }),
     getUsage: async (input) => ({
@@ -296,6 +314,7 @@ export default async function plugin(bb: BbPluginApi) {
     "Usage:",
     "  bb usage-pace [--all] [--force] [--json]",
     "",
+    "  --resets read-only Codex banked resets (primary host; --json for details)",
     "  --tokens total tokens across BB for today and this month (JSON)",
     "  --all    show every window, not only weekly ones",
     "  --force  bypass the cache and query providers now",
@@ -313,6 +332,16 @@ export default async function plugin(bb: BbPluginApi) {
       },
     ],
     async run(argv) {
+      if (argv.includes("--resets")) {
+        const hostId = (await bb.sdk.system.config()).primaryHostId;
+        const snapshot = hostId ? await getBankedResets(hostId, argv.includes("--force")) : bankedResetsUnavailable("No primary host is configured.");
+        const lines = snapshot.status === "ok" ? [
+          `Codex banked resets: ${snapshot.availableCount} banked (not necessarily redeemable now)`,
+          ...snapshot.credits.slice(0, 100).map(credit => `  ${credit.title} — ${credit.expiresAt ? `expires ${credit.expiresAt}` : "expiry not reported"}${credit.supported === false ? " (not supported by current plan)" : ""}`),
+          ...(snapshot.message ? [snapshot.message] : []),
+        ] : [snapshot.message ?? "Banked resets unavailable."];
+        return { exitCode: snapshot.status === "ok" ? 0 : 1, stdout: argv.includes("--json") ? JSON.stringify({ hostId, ...snapshot, credits: snapshot.credits.slice(0, 100), truncated: snapshot.credits.length > 100 }) : lines.join("\n") };
+      }
       if (argv.includes("--tokens")) {
         const snapshot = await getTokens(Intl.DateTimeFormat().resolvedOptions().timeZone, argv.includes("--force"));
         return { exitCode: snapshot.error ? 1 : 0, stdout: JSON.stringify(snapshot) };

@@ -1,14 +1,14 @@
 {
   "name": "bb-plugin-usage-pace",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "type": "module",
   "engines": {
-    "bb": ">=0.43",
-    "bbPluginSdk": ">=0.5.9"
+    "bb": ">=0.44.0",
+    "bbPluginSdk": ">=0.5.29"
   },
   "bb": {
     "name": "Usage Pace",
-    "description": "Shows provider quotas with the pace: will each window last until it resets? Adds Grok Build usage to bb's usage card.",
+    "description": "Shows quota pace, read-only Codex banked resets, and Grok Build usage in bb's sidebar.",
     "branding": {
       "icon": "ChartColumn"
     },
@@ -27,7 +27,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@get-bb/plugin-sdk": "0.5.9",
+    "@get-bb/plugin-sdk": "0.5.29",
     "@pierre/diffs": "^1.2.9",
     "@radix-ui/react-alert-dialog": "^1.1.19",
     "@radix-ui/react-context-menu": "^2.3.3",
@@ -69,22 +69,26 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/chug2k/bb-plugin-usage-pace.git"
+    "url": "https://github.com/scowalt/bb-plugin-usage-pace.git"
   },
   "files": [
     "server.ts",
     "app.tsx",
     "host.ts",
     "*.ts",
+    "*.tsx",
     "*.css",
     "components",
     "lib",
     "hooks",
     "assets",
     "skills",
+    "scripts",
     "dist/*.js",
     "dist/*.css",
     "dist/*.meta.json",
+    "dist/*.js.map",
+    "dist/package.json",
     "README.md",
     "PLUGIN_OVERVIEW.md",
     "LICENSE"
@@ -92,9 +96,14 @@
   "scripts": {
     "build": "bb plugin build",
     "check": "tsc --noEmit",
+    "check:release": "node scripts/check-release.mjs",
     "test": "vitest run && node --experimental-strip-types --test tests/token-totals.test.mjs"
   },
   "contributors": [
+    {
+      "name": "scowalt",
+      "url": "https://github.com/scowalt"
+    },
     {
       "name": "Dmitrii Kapustin",
       "url": "https://github.com/dmitriikapustin"

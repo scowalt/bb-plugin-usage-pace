@@ -11,6 +11,17 @@ import {
 import { experimental_acpProviderBridge } from "@get-bb/plugin-sdk/provider-bridge/acp";
 
 import { readGrokHealth, readGrokUsage } from "./lib/grok-usage";
+import { experimental_defineHostEntry } from "@get-bb/plugin-sdk/host";
+import { bankedResetsHostContract } from "./lib/banked-resets-contract";
+import { createBankedResetsReader } from "./lib/banked-resets";
+
+const readBankedResets = createBankedResetsReader();
+export default experimental_defineHostEntry({
+  contract: bankedResetsHostContract,
+  handlers: {
+    readBankedResets: (input, context) => readBankedResets(input.force, context.signal),
+  },
+});
 
 const { sendResult, sendError } = createBridgeIo();
 const MAINTENANCE_METHODS = new Set(["provider/health", "provider/usage"]);

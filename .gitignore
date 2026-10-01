@@ -1,3 +1,14 @@
-dist/
+# Git installs ship verified bundles; do not depend on devDependencies at install time.
+dist/*
+!dist/app.js
+!dist/app.css
+!dist/app.meta.json
+!dist/server.js
+!dist/server.js.map
+!dist/server.meta.json
+!dist/host.js
+!dist/host.js.map
+!dist/host.meta.json
+!dist/package.json
 node_modules/
 .claude/

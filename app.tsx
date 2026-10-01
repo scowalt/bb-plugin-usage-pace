@@ -52,6 +52,8 @@ import {
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { mountCardPace } from "@/lib/card-pace";
+import { BankedResetsBadge, BankedResetsSection } from "./banked-resets";
+import { BankedResetsProvider, useRefreshBankedResets, type BankedResetTarget } from "./hooks/use-banked-resets";
 
 const REFRESH_MS = 5 * 60_000;
 const BAR_HOST_ID = "usage-pace-bar-host";
@@ -235,11 +237,11 @@ function useTokenTotals() {
 
 const compactTokens = (value: number) => new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(value);
 
-function UsageBar({ tokens }: { tokens: TokenTotals | null }) {
+export function UsageBar({ tokens, onOpen }: { tokens: TokenTotals | null; onOpen: (target?: BankedResetTarget) => void }) {
   const state = useUsage();
   useMinuteTick();
   const chips = chipsFor(state);
-  const open = () => setOverlayOpen(true);
+  const open = () => onOpen();
   const empty =
     chips.length === 0
       ? state.error
@@ -249,56 +251,60 @@ function UsageBar({ tokens }: { tokens: TokenTotals | null }) {
           : "No usage limits"
       : null;
   return (
-    <button
-      type="button"
-      onClick={open}
-      aria-label="BB usage limits and token usage. Open details."
-      title="Usage Pace — click for details"
+    <div
+      role="group"
+      aria-label="BB usage limits and token usage"
       className="mb-1 flex w-full min-w-0 cursor-pointer items-center justify-start gap-2 flex-wrap rounded-md px-1.5 py-1 text-[11px] leading-none text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
     >
       {empty !== null ? (
-        <span className="truncate text-muted-foreground">{empty}</span>
+        <button type="button" onClick={open} className="truncate text-muted-foreground">{empty}</button>
       ) : (
         chips.map(({ key, provider, window, pace }) => {
           const tone = pace?.tone ?? toneForUsed(window.usedPercent);
           const reset = formatResetShort(window.resetsAt);
           const paceText = describePace(pace);
           return (
-            <span
-              key={key}
-              className="flex shrink-0 items-center gap-1 whitespace-nowrap"
-              title={`${provider.displayName} — ${window.label}: ${Math.round(window.usedPercent)}%${reset ? `, resets in ${formatReset(window.resetsAt)}` : ""}${paceText ? `\n${paceText}` : ""}`}
-            >
-              <ProviderMark provider={provider} />
-              <span
-                className="font-semibold tabular-nums"
-                style={{ color: toneColor(tone) }}
+            <span key={key} className="flex shrink-0 items-center gap-1 whitespace-nowrap">
+              <button
+                type="button"
+                onClick={open}
+                aria-label={`${provider.displayName} usage. Open details.`}
+                aria-haspopup="dialog"
+                className="flex items-center gap-1 rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+                title={`${provider.displayName} — ${window.label}: ${Math.round(window.usedPercent)}%${reset ? `, resets in ${formatReset(window.resetsAt)}` : ""}${paceText ? `\n${paceText}` : ""}`}
               >
-                {Math.round(window.usedPercent)}%
-              </span>
-              {pace?.ratio != null ? (
-                <span className="tabular-nums" style={{ color: toneColor(tone) }}>
-                  {formatRatio(pace.ratio)}
+                <ProviderMark provider={provider} />
+                <span
+                  className="font-semibold tabular-nums"
+                  style={{ color: toneColor(tone) }}
+                >
+                  {Math.round(window.usedPercent)}%
                 </span>
-              ) : null}
-              {pace !== null && pace.lockoutMs > 0 ? (
-                // Running out first makes the reset time less useful than
-                // the time spent without quota.
-                <span className="tabular-nums" style={{ color: toneColor(tone) }}>
-                  · {formatDuration(pace.lockoutMs)} short
-                </span>
-              ) : reset ? (
-                <span className="text-muted-foreground tabular-nums">{reset}</span>
-              ) : null}
+                {pace?.ratio != null ? (
+                  <span className="tabular-nums" style={{ color: toneColor(tone) }}>
+                    {formatRatio(pace.ratio)}
+                  </span>
+                ) : null}
+                {pace !== null && pace.lockoutMs > 0 ? (
+                  // Running out first makes the reset time less useful than
+                  // the time spent without quota.
+                  <span className="tabular-nums" style={{ color: toneColor(tone) }}>
+                    · {formatDuration(pace.lockoutMs)} short
+                  </span>
+                ) : reset ? (
+                  <span className="text-muted-foreground tabular-nums">{reset}</span>
+                ) : null}
+              </button>
+              {provider.id === "codex" ? <BankedResetsBadge target={provider} onOpen={() => onOpen(provider)} /> : null}
             </span>
           );
         })
       )}
-      <span className="flex shrink-0 items-center gap-1 whitespace-nowrap tabular-nums" title={tokens?.fetchedAt ? `Tokens across BB: today ${tokens.day.toLocaleString("en-US")}, month ${tokens.month.toLocaleString("en-US")}. ${tokens.timeZone}${tokens.error ? `. ${tokens.error}` : ""}` : tokens?.error ?? "Loading token usage"}>
+      <button type="button" onClick={open} aria-label="Token usage. Open details." aria-haspopup="dialog" className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded tabular-nums focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring" title={tokens?.fetchedAt ? `Tokens across BB: today ${tokens.day.toLocaleString("en-US")}, month ${tokens.month.toLocaleString("en-US")}. ${tokens.timeZone}${tokens.error ? `. ${tokens.error}` : ""}` : tokens?.error ?? "Loading token usage"}>
         <span aria-hidden="true" className="font-semibold">Σ</span>
         {tokens?.fetchedAt ? <span>{compactTokens(tokens.day)}<span className="text-muted-foreground"> today / </span>{compactTokens(tokens.month)}<span className="text-muted-foreground"> month</span>{tokens.error ? " ⚠" : ""}</span> : <span className="text-muted-foreground">{tokens?.error ? "—" : "…"}</span>}
-      </span>
-    </button>
+      </button>
+    </div>
   );
 }
 
@@ -370,9 +376,13 @@ function PaceVerdict({ pace }: { pace: Pace }) {
 function ProviderBlock({
   provider,
   showHost,
+  showBankedResets,
+  focusBankedResets,
 }: {
   provider: UsageProvider;
   showHost: boolean;
+  showBankedResets: boolean;
+  focusBankedResets: boolean;
 }) {
   const paces = paceForWindows(provider.windows);
   const subtitle = [
@@ -414,12 +424,14 @@ function ProviderBlock({
                 : (provider.message ?? "Usage could not be loaded.")}
         </p>
       )}
+      {showBankedResets && provider.id === "codex" ? <BankedResetsSection hostId={provider.hostId} hostName={provider.hostName} accountEmail={provider.accountEmail} focus={focusBankedResets} /> : null}
     </div>
   );
 }
 
-function UsageDialog({ tokens }: { tokens: TokenTotals | null }) {
+function UsageDialog({ tokens, bankedTarget }: { tokens: TokenTotals | null; bankedTarget: BankedResetTarget | null }) {
   const open = useSyncExternalStore(subscribeOverlay, isOverlayOpen);
+  const refreshBankedResets = useRefreshBankedResets();
   const state = useUsage();
   useMinuteTick();
   // Same account on several hosts reports one quota: keep the first "ok"
@@ -446,6 +458,7 @@ function UsageDialog({ tokens }: { tokens: TokenTotals | null }) {
               aria-label="Refresh usage"
               disabled={state.loading}
               onClick={() => {
+                refreshBankedResets();
                 void refreshUsage({ force: true });
               }}
             >
@@ -482,6 +495,8 @@ function UsageDialog({ tokens }: { tokens: TokenTotals | null }) {
                 key={`${provider.hostId}/${provider.id}`}
                 provider={provider}
                 showHost={hostCount > 1}
+                showBankedResets={open}
+                focusBankedResets={bankedTarget?.hostId === provider.hostId && bankedTarget.accountEmail === provider.accountEmail}
               />
             ))
           )}
@@ -506,14 +521,21 @@ function UsageOverlay() {
   const tokens = useTokenTotals();
   const host = useSyncExternalStore(subscribeBarHost, getBarHost);
   // Off by default: the pace also shows in bb's own usage card (card-pace).
-  const showStrip = useUsage().data?.showStrip === true;
+  const state = useUsage();
+  const showStrip = state.data?.showStrip === true;
+  const open = useSyncExternalStore(subscribeOverlay, isOverlayOpen);
+  const [bankedTarget, setBankedTarget] = useState<BankedResetTarget | null>(null);
+  const openDetails = (target?: BankedResetTarget) => {
+    setBankedTarget(target ?? null);
+    setOverlayOpen(true);
+  };
   return (
-    <>
+    <BankedResetsProvider providers={state.data?.providers ?? []} active={(showStrip && host !== null) || open}>
       {host === null || !showStrip
         ? null
-        : createPortal(<UsageBar tokens={tokens} />, host)}
-      <UsageDialog tokens={tokens} />
-    </>
+        : createPortal(<UsageBar tokens={tokens} onOpen={openDetails} />, host)}
+      <UsageDialog tokens={tokens} bankedTarget={bankedTarget} />
+    </BankedResetsProvider>
   );
 }
 

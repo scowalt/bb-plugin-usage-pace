@@ -1,11 +1,13 @@
 # Usage Pace
 
-[![BB](https://img.shields.io/badge/bb-0.43%2B-blue)](https://getbb.app)
+[![BB](https://img.shields.io/badge/bb-0.44%2B-blue)](https://getbb.app)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 Tells you if the current burn rate lasts until each quota window resets. If the rate does not last, it tells you when the quota runs out and how long you will be without quota.
 
-A fork of [Usage Bar](https://github.com/dmitriikapustin/bb-plugins-by-kapustin/tree/main/plugins/usage-bar) by Dmitrii Kapustin (MIT). The pace calculation and the usage-card integration are new. The optional footer strip, the dialog, the token totals and the CLI come from Usage Bar. The Grok Build usage comes from [Grok Build Usage](https://github.com/MacHatter1/bb-plugin-grok-build-usage) by MacHatter1 (MIT).
+This fork of [Usage Pace by Charles Lee](https://github.com/chug2k/bb-plugin-usage-pace) adds read-only Codex banked-reset details and a sidebar badge.
+
+Originally a fork of [Usage Bar](https://github.com/dmitriikapustin/bb-plugins-by-kapustin/tree/main/plugins/usage-bar) by Dmitrii Kapustin (MIT). The pace calculation and the usage-card integration are new. The optional footer strip, the dialog, the token totals and the CLI come from Usage Bar. The Grok Build usage comes from [Grok Build Usage](https://github.com/MacHatter1/bb-plugin-grok-build-usage) by MacHatter1 (MIT).
 
 ## What it shows
 
@@ -36,6 +38,10 @@ The card belongs to another plugin. Usage Pace only adds nodes to it, and reads 
 - `2d 15h short`: at this rate, the quota runs out 2d 15h before the reset. If the rate lasts, the chip shows the time to the reset.
 
 The colour changes to warning when the projection is above 85%, and to critical when it is above 100%. The Usage Bar thresholds (80% and 95% used) also stay.
+
+**Codex banked resets.** The Codex chip also shows `↺ 3` for three banked resets. Hover for the earliest reported expiration; the badge turns amber when a reset expires within seven days. Click the badge to open and focus that account's reset details. `↺ 0` is dimmed, `↺ …` is loading, and `↺ ?` means unavailable or expired-since-read data—not zero.
+
+This is read-only: opening details never redeems a reset. Banked resets do not change quota percentages or pace calculations. The footer and dialog share one inventory, refreshed every five minutes while visible, on focus, or with the dialog's refresh button. Reads run on the corresponding Codex host using its local ChatGPT login and a private Codex inventory endpoint; availability may vary. Counts are provider-reported and details may be incomplete.
 
 **Dialog.** Click the strip to open it. Each window shows a bar with a mark at even pace, the rate details, and the result:
 
@@ -93,8 +99,12 @@ Turn this off with the *Add Grok Build usage to bb's usage card* setting, then r
 ## Install
 
 ```sh
-bb plugin install 'git:https://github.com/chug2k/bb-plugin-usage-pace.git@^0.1.0'
+bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.3.0'
+# Enable the footer strip (off by default) to see the Codex banked-reset badge:
+bb plugin config usage-pace set showStrip true
 ```
+
+Use `@^0.3.0` instead of `@v0.3.0` to track compatible releases with `bb plugin update usage-pace`. Release tags include prebuilt server, frontend, and host bundles; no local SDK or build tooling is needed for a Git install. Sign into Codex with a ChatGPT account on each host where you want banked-reset inventory.
 
 From a local checkout:
 
@@ -121,17 +131,20 @@ Claude Code · Max (5x) (MacBook Pro)
 
 ## Requirements
 
-bb **0.43+** and Plugin SDK **0.5.9+**. The plugin uses the provider authentication that bb already has. Only providers and hosts that report quota information appear. Token totals are not billing data.
+bb **0.44.0+** with bundled Plugin SDK **0.5.29+**. The plugin uses the provider authentication that bb already has. Only providers and hosts that report quota information appear. Token totals are not billing data.
 
 ## Development
 
 ```sh
-npm install
-npm run check   # tsc
-npm test        # vitest (pace) + node:test (token totals)
-npm run build   # bb plugin build
+bun install
+bun run check   # tsc
+bun run test    # vitest (pace, reset badge/UI) + node:test (token totals)
+bun run build   # bb plugin build
+bun run check:release # metadata/digest and isolated bundle smoke test; no provider requests
 bb plugin reload usage-pace
 ```
+
+Before a release, update the version in `package.json` and `package-lock.json`, run the checks and build, and commit the generated `dist/` bundles alongside their sources. Every artifact's `pluginVersion` must match the package version. Create a new `vX.Y.Z` tag; never move a published tag.
 
 ---
 

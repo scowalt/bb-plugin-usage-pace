@@ -25,6 +25,10 @@ days to go, are you fine or not? Usage Pace answers that in the same card.
   tab. You can dismiss the message until the failure changes.
 - **Fewer tabs.** bb lists some providers, such as Cursor, on every
   machine. A setting hides the tabs you do not use.
+- **Codex banked resets in the footer.** The optional strip adds a `↺ 3`
+  badge with the saved-reset count, earliest-expiry tooltip, and an amber
+  warning within seven days of expiry. Click for read-only reset details;
+  banked resets do not alter the pace calculation.
 - **`bb usage-pace`** prints each window with its pace in a terminal, and
   `--json` gives agents a `pace` object for each window.
 
@@ -46,6 +50,11 @@ The plugin reads the data that bb's built-in Provider usage card already has,
 from that card's cache, so it adds no provider requests. It only adds
 elements to bb's card. If a bb update changes the card, the tick and the
 lines stop showing, and nothing else breaks.
+
+The Codex banked-reset badge and dialog make separate read-only inventory
+requests on the selected host using its local ChatGPT login. This private
+Codex endpoint may be unavailable; an unknown balance is never shown as zero.
+No resets are automatically or interactively redeemed by this preview.
 
 For Grok Build, it registers a companion provider, "Grok Build (usage)", so
 bb's provider picker shows it next to bb's own "Grok Build". It reads the
