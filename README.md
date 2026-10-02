@@ -27,23 +27,25 @@ The first line is the difference from even pace, in percentage points and in tim
 
 The card belongs to another plugin. Usage Pace only adds nodes to it, and reads the card's own data (`provider-usage` `getUsage`, from its cache), so the labels always match. If a bb update changes the card's markup, the tick and the delta stop showing, and nothing else breaks.
 
-**Optional footer strip.** Turn on *Also show the Usage Pace strip* in the plugin settings. It shows one chip for each provider account (the weekly window):
+**Optional compact footer.** Turn on *Also show the Usage Pace strip* in the plugin settings. It shows one aligned row for each provider account (provider icons represented by letters here):
 
 ```
-✳ 44% 1.6× · 2d 15h short
+C  ●  W 52%  S 32%
+X  ▲  W 78%  S 46%  ↺3
 ```
 
-- `44%`: the used percent.
-- `1.6×`: the pace. The used percent divided by the share of the window that has passed. `1.0×` is even pace.
-- `2d 15h short`: at this rate, the quota runs out 2d 15h before the reset. If the rate lasts, the chip shows the time to the reset.
+- `W` and `S`: weekly and five-hour session quota **used**, not remaining. Missing windows stay blank. Providers with neither show their first window (`M` for monthly, `D` for daily, otherwise its label).
+- `●`: all reported windows last to reset at the current rate. An amber dot means nearing a quota limit (projected use above 85% or current use at least 80%).
+- `▲`: a window is exhausted or projected to run out before reset.
+- `—`: pace is unknown, too early to judge, or the data may be stale/incomplete. A reported exhausted or overshooting window still warns even if another window's pace is unknown.
 
-The colour changes to warning when the projection is above 85%, and to critical when it is above 100%. The Usage Bar thresholds (80% and 95% used) also stay.
+Numbers stay neutral; only the status glyph carries the pace colour. Status considers **all** reported windows, including model-specific limits not displayed in the row. Hover for full window names, pace multipliers, reset times, and run-out estimates; click for the full dialog. Token totals remain in the dialog, not the footer.
 
-**Codex banked resets.** The Codex chip also shows `↺ 3` for three banked resets. Hover for the earliest reported expiration; the badge turns amber when a reset expires within seven days. Click the badge to open and focus that account's reset details. `↺ 0` is dimmed, `↺ …` is loading, and `↺ ?` means unavailable or expired-since-read data—not zero.
+**Codex banked resets.** The Codex row also shows `↺ 3` for three banked resets. Hover for the earliest reported expiration; the badge turns amber when a reset expires within seven days. Click the badge to open and focus that account's reset details. `↺ 0` is dimmed, `↺ …` is loading, and `↺ ?` means unavailable or expired-since-read data—not zero.
 
 This is read-only: opening details never redeems a reset. Banked resets do not change quota percentages or pace calculations. The footer and dialog share one inventory, refreshed every five minutes while visible, on focus, or with the dialog's refresh button. Reads run on the corresponding Codex host using its local ChatGPT login and a private Codex inventory endpoint; availability may vary. Counts are provider-reported and details may be incomplete.
 
-**Dialog.** Click the strip to open it. Each window shows a bar with a mark at even pace, the rate details, and the result:
+**Dialog.** Click a provider row to open it. Each window shows a bar with a mark at even pace, the rate details, and the result:
 
 ```
 Weekly limit                    resets in 5d 2h   44%
@@ -99,12 +101,12 @@ Turn this off with the *Add Grok Build usage to bb's usage card* setting, then r
 ## Install
 
 ```sh
-bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.3.1'
-# Enable the footer strip (off by default) to see the Codex banked-reset badge:
+bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.3.2'
+# Enable the compact footer rows (off by default), including Codex banked resets:
 bb plugin config usage-pace set showStrip true
 ```
 
-Use `@^0.3.1` instead of `@v0.3.1` to track compatible releases with `bb plugin update usage-pace`. **Use 0.3.1 or newer for Git installs**: 0.3.0 fails when development dependencies are absent. Release tags include prebuilt bundles, but BB's Git installer rebuilds source with its own build tooling after installing production dependencies. The required SDK runtime is installed automatically; you do not need to install it manually. Sign into Codex with a ChatGPT account on each host where you want banked-reset inventory.
+Use `@^0.3.2` instead of `@v0.3.2` to track compatible releases with `bb plugin update usage-pace`. **Use 0.3.1 or newer for Git installs**: 0.3.0 fails when development dependencies are absent. Release tags include prebuilt bundles, but BB's Git installer rebuilds source with its own build tooling after installing production dependencies. The required SDK runtime is installed automatically; you do not need to install it manually. Sign into Codex with a ChatGPT account on each host where you want banked-reset inventory.
 
 From a local checkout:
 

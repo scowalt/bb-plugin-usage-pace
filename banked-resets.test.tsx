@@ -182,7 +182,7 @@ it("scrolls and focuses the requested banked-reset section after overlay autofoc
   expect(document.activeElement).toBe(section);
 });
 
-it("adds only a Codex badge, keeps pace and Claude, and opens the selected account without nested buttons", async () => {
+it("shows compact provider rows, keeps hover details, and opens the reset account without nested buttons", async () => {
   const claude = { ...provider, id: "claude-code", displayName: "Claude" };
   const providers = [provider, claude];
   const state: usageStore.UsageState = {
@@ -191,13 +191,20 @@ it("adds only a Codex badge, keeps pace and Claude, and opens the selected accou
   vi.spyOn(usageStore, "getUsageState").mockReturnValue(state);
   const onOpen = vi.fn();
   await render(<BankedResetsProvider providers={providers} active>
-    <UsageBar tokens={null} onOpen={onOpen} />
+    <UsageBar onOpen={onOpen} />
   </BankedResetsProvider>);
   expect(container.querySelectorAll('button[aria-label^="Codex:"]')).toHaveLength(1);
   expect(container.querySelector("button button")).toBeNull();
   expect(container.textContent).toContain("52%");
-  expect(container.textContent).toContain("0.7×");
-  expect(container.querySelector('button[aria-label="Claude usage. Open details."]')).not.toBeNull();
+  expect(container.textContent).not.toContain("0.7×");
+  expect(container.textContent).not.toContain("today");
+  expect(container.textContent).not.toContain("Σ");
+  const claudeRow = container.querySelector<HTMLButtonElement>('button[aria-label^="Claude ·"]')!;
+  expect(claudeRow.title).toContain("0.7× pace");
+  expect(claudeRow.title).toContain("52% used");
+  expect(claudeRow.textContent).toBe("●W52%");
+  await click(claudeRow);
+  expect(onOpen).toHaveBeenLastCalledWith();
   await click(badge());
   expect(onOpen).toHaveBeenCalledWith(provider);
   expect(rpc.mock.calls.every(([method]) => method === "getBankedResets")).toBe(true);

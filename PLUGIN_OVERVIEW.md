@@ -25,6 +25,10 @@ days to go, are you fine or not? Usage Pace answers that in the same card.
   tab. You can dismiss the message until the failure changes.
 - **Fewer tabs.** bb lists some providers, such as Cursor, on every
   machine. A setting hides the tabs you do not use.
+- **Compact footer rows.** The optional strip shows one row per provider account:
+  provider icon, pace-status glyph, weekly and session percentages used. Hover
+  for full pace details; click for the dialog and token totals. Unknown or stale
+  pace is a dash, not a healthy status.
 - **Codex banked resets in the footer.** The optional strip adds a `↺ 3`
   badge with the saved-reset count, earliest-expiry tooltip, and an amber
   warning within seven days of expiry. Click for read-only reset details;

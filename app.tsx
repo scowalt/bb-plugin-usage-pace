@@ -4,8 +4,8 @@
 // Surfaces (all fed by one store in lib/usage-store.ts):
 //   1. A content script keeps an empty container as the first child of the
 //      sidebar footer (above the icon row) and publishes it to the store.
-//   2. An app overlay slot (always mounted) portals a one-line React bar into
-//      that container — provider icon · used % · pace · time to reset — and
+//   2. An app overlay slot (always mounted) portals compact provider rows into
+//      that container — provider icon · pace status · weekly/session used % — and
 //      owns a centered dialog with the full breakdown, opened by clicking it.
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
@@ -17,7 +17,6 @@ import {
 import type { UsageProvider, UsageWindow } from "./server";
 import {
   formatReset,
-  formatResetShort,
   getBarHost,
   getUsageState,
   isOverlayOpen,
@@ -32,10 +31,8 @@ import {
   type UsageState,
 } from "@/lib/usage-store";
 import {
-  describePace,
   describeRate,
   formatDuration,
-  formatRatio,
   formatRunsOut,
   paceForWindows,
   toneForUsed,
@@ -52,6 +49,7 @@ import {
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { mountCardPace } from "@/lib/card-pace";
+import { compactUsageRows } from "@/lib/compact-usage";
 import { BankedResetsBadge, BankedResetsSection } from "./banked-resets";
 import { BankedResetsProvider, useRefreshBankedResets, type BankedResetTarget } from "./hooks/use-banked-resets";
 
@@ -143,35 +141,8 @@ function useMinuteTick() {
 }
 
 // ---------------------------------------------------------------------------
-// One-line bar
+// Compact footer rows
 // ---------------------------------------------------------------------------
-
-interface Chip {
-  key: string;
-  provider: UsageProvider;
-  window: UsageWindow;
-  pace: Pace | null;
-}
-
-/** One chip per (provider, account): the weekly window, else the first one. */
-function chipsFor(state: UsageState): Chip[] {
-  const chips: Chip[] = [];
-  const seen = new Set<string>();
-  for (const provider of state.data?.providers ?? []) {
-    if (provider.status !== "ok" || provider.windows.length === 0) continue;
-    const key = `${provider.id}/${provider.accountEmail ?? provider.hostId}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    const index = Math.max(
-      0,
-      provider.windows.findIndex((candidate) => candidate.weekly),
-    );
-    const window = provider.windows[index]!;
-    const pace = paceForWindows(provider.windows)[index]!;
-    chips.push({ key, provider, window, pace });
-  }
-  return chips;
-}
 
 function ProviderMark({
   provider,
@@ -235,75 +206,54 @@ function useTokenTotals() {
   return tokens;
 }
 
-const compactTokens = (value: number) => new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(value);
-
-export function UsageBar({ tokens, onOpen }: { tokens: TokenTotals | null; onOpen: (target?: BankedResetTarget) => void }) {
+export function UsageBar({ onOpen }: { onOpen: (target?: BankedResetTarget) => void }) {
   const state = useUsage();
   useMinuteTick();
-  const chips = chipsFor(state);
+  const rows = compactUsageRows(state);
   const open = () => onOpen();
-  const empty =
-    chips.length === 0
-      ? state.error
-        ? "Usage unavailable"
-        : state.loading
-          ? "Loading usage…"
-          : "No usage limits"
-      : null;
+  const empty = state.error || state.data?.error || state.data?.providers.some(provider => provider.status !== "ok" && provider.status !== "not_installed")
+    ? "Usage unavailable"
+    : state.loading ? "Loading usage…" : "No usage limits";
   return (
     <div
+      data-bb-plugin={PLUGIN_ID}
       role="group"
-      aria-label="BB usage limits and token usage"
-      className="mb-1 flex w-full min-w-0 cursor-pointer items-center justify-start gap-2 flex-wrap rounded-md px-1.5 py-1 text-[11px] leading-none text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+      aria-label="BB usage limits"
+      className="mb-1 flex w-full min-w-0 flex-col gap-0.5 py-1 text-[11px] leading-none text-sidebar-foreground"
     >
-      {empty !== null ? (
-        <button type="button" onClick={open} className="truncate text-muted-foreground">{empty}</button>
-      ) : (
-        chips.map(({ key, provider, window, pace }) => {
-          const tone = pace?.tone ?? toneForUsed(window.usedPercent);
-          const reset = formatResetShort(window.resetsAt);
-          const paceText = describePace(pace);
-          return (
-            <span key={key} className="flex shrink-0 items-center gap-1 whitespace-nowrap">
-              <button
-                type="button"
-                onClick={open}
-                aria-label={`${provider.displayName} usage. Open details.`}
-                aria-haspopup="dialog"
-                className="flex items-center gap-1 rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
-                title={`${provider.displayName} — ${window.label}: ${Math.round(window.usedPercent)}%${reset ? `, resets in ${formatReset(window.resetsAt)}` : ""}${paceText ? `\n${paceText}` : ""}`}
+      {rows.length === 0 ? (
+        <button type="button" onClick={open} aria-haspopup="dialog" className="truncate rounded px-1.5 py-1 text-left text-muted-foreground hover:bg-sidebar-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">{empty}</button>
+      ) : rows.map(({ key, provider, windows, status, title }) => (
+        <div key={key} className="flex min-w-0 items-center">
+          <button
+            type="button"
+            onClick={open}
+            aria-label={`${title}\nOpen usage details.`}
+            aria-haspopup="dialog"
+            className="grid min-w-0 grid-cols-[0.875rem_0.625rem_3.25rem_3.25rem] items-center gap-x-2 rounded px-1.5 py-1 text-left hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+            title={title}
+          >
+            <ProviderMark provider={provider} />
+            <span
+              aria-hidden="true"
+              className="text-center text-[9px]"
+              style={{ color: status.tone === null ? "var(--muted-foreground)" : status.tone === "ok" ? "var(--success, var(--primary, currentColor))" : toneColor(status.tone) }}
+            >{status.glyph}</span>
+            {windows.map(({ window, label, detail }, index) => (
+              <span
+                key={index}
+                aria-hidden="true"
+                title={`${status.detail}\n${detail}`}
+                className={cn("flex min-w-0 items-center justify-between gap-1 whitespace-nowrap", label === "S" ? "col-start-4" : "col-start-3")}
               >
-                <ProviderMark provider={provider} />
-                <span
-                  className="font-semibold tabular-nums"
-                  style={{ color: toneColor(tone) }}
-                >
-                  {Math.round(window.usedPercent)}%
-                </span>
-                {pace?.ratio != null ? (
-                  <span className="tabular-nums" style={{ color: toneColor(tone) }}>
-                    {formatRatio(pace.ratio)}
-                  </span>
-                ) : null}
-                {pace !== null && pace.lockoutMs > 0 ? (
-                  // Running out first makes the reset time less useful than
-                  // the time spent without quota.
-                  <span className="tabular-nums" style={{ color: toneColor(tone) }}>
-                    · {formatDuration(pace.lockoutMs)} short
-                  </span>
-                ) : reset ? (
-                  <span className="text-muted-foreground tabular-nums">{reset}</span>
-                ) : null}
-              </button>
-              {provider.id === "codex" ? <BankedResetsBadge target={provider} onOpen={() => onOpen(provider)} /> : null}
-            </span>
-          );
-        })
-      )}
-      <button type="button" onClick={open} aria-label="Token usage. Open details." aria-haspopup="dialog" className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded tabular-nums focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring" title={tokens?.fetchedAt ? `Tokens across BB: today ${tokens.day.toLocaleString("en-US")}, month ${tokens.month.toLocaleString("en-US")}. ${tokens.timeZone}${tokens.error ? `. ${tokens.error}` : ""}` : tokens?.error ?? "Loading token usage"}>
-        <span aria-hidden="true" className="font-semibold">Σ</span>
-        {tokens?.fetchedAt ? <span>{compactTokens(tokens.day)}<span className="text-muted-foreground"> today / </span>{compactTokens(tokens.month)}<span className="text-muted-foreground"> month</span>{tokens.error ? " ⚠" : ""}</span> : <span className="text-muted-foreground">{tokens?.error ? "—" : "…"}</span>}
-      </button>
+                <span className="truncate text-muted-foreground">{label}</span>
+                <span className="shrink-0 font-semibold tabular-nums">{Math.round(window.usedPercent)}%</span>
+              </span>
+            ))}
+          </button>
+          {provider.id === "codex" ? <BankedResetsBadge target={provider} onOpen={() => onOpen(provider)} /> : null}
+        </div>
+      ))}
     </div>
   );
 }
@@ -533,7 +483,7 @@ function UsageOverlay() {
     <BankedResetsProvider providers={state.data?.providers ?? []} active={(showStrip && host !== null) || open}>
       {host === null || !showStrip
         ? null
-        : createPortal(<UsageBar tokens={tokens} onOpen={openDetails} />, host)}
+        : createPortal(<UsageBar onOpen={openDetails} />, host)}
       <UsageDialog tokens={tokens} bankedTarget={bankedTarget} />
     </BankedResetsProvider>
   );
