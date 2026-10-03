@@ -148,6 +148,54 @@ describe("paceFor", () => {
     expect(describePace(pace, NOW)).toMatch(/^too early to judge pace/);
   });
 
+  it("warns about 11% used five hours into a weekly window", () => {
+    const pace = paceFor({ label: "Weekly limit", usedPercent: 11, resetsAt: at(163) }, NOW)!;
+    expect(describePace(pace, NOW)).not.toContain("too early");
+    expect(describeDelta(pace, 11, NOW)[0]).toContain("ahead of pace");
+    expect(pace.projectedPercent).toBeCloseTo(369.6);
+    expect(pace.runsOutAtMs).not.toBeNull();
+    expect(pace.tone).toBe("critical");
+  });
+
+  it.each([
+    [4.99, false],
+    [5, true],
+    [11, true],
+  ])("judges early pace once enough quota is used (%s%%)", (usedPercent, hasProjection) => {
+    const pace = paceFor({ label: "7d", usedPercent, resetsAt: at(167) }, NOW)!;
+    if (hasProjection) {
+      expect(pace.projectedPercent).toBeCloseTo(usedPercent * 168);
+      expect(pace.ratio).toBeCloseTo(usedPercent * 168 / 100);
+      expect(pace.runsOutAtMs).not.toBeNull();
+      expect(pace.tone).toBe("critical");
+    } else {
+      expect(pace.projectedPercent).toBeNull();
+      expect(pace.ratio).toBeNull();
+      expect(pace.runsOutAtMs).toBeNull();
+    }
+  });
+
+  it("still projects low usage once 5% of the window has elapsed", () => {
+    const pace = paceFor({ label: "7d", usedPercent: 3, resetsAt: at(159.6) }, NOW)!;
+    expect(pace.projectedPercent).toBeCloseTo(60);
+    expect(pace.runsOutAtMs).toBeNull();
+  });
+
+  it("also warns about significant early usage in a five-hour session", () => {
+    const pace = paceFor({ label: "5h", usedPercent: 11, resetsAt: at(4.9) }, NOW)!;
+    expect(pace.projectedPercent).toBeCloseTo(550);
+    expect(pace.lockoutMs).toBeGreaterThan(0);
+    expect(pace.tone).toBe("critical");
+  });
+
+  it.each([168, 169])("does not extrapolate without positive elapsed time (%sh remaining)", (remainingHours) => {
+    const pace = paceFor({ label: "7d", usedPercent: 11, resetsAt: at(remainingHours) }, NOW)!;
+    expect(pace.elapsedFraction).toBe(0);
+    expect(pace.projectedPercent).toBeNull();
+    expect(pace.ratio).toBeNull();
+    expect(pace.runsOutAtMs).toBeNull();
+  });
+
   it("reports a full window as already out", () => {
     const pace = paceFor({ label: "5h", usedPercent: 100, resetsAt: at(2) }, NOW)!;
     expect(pace.runsOutAtMs).toBe(NOW);

@@ -26,9 +26,9 @@ days to go, are you fine or not? Usage Pace answers that in the same card.
 - **Fewer tabs.** bb lists some providers, such as Cursor, on every
   machine. A setting hides the tabs you do not use.
 - **Compact footer rows.** The optional strip shows one row per provider account:
-  provider icon, pace-status glyph, weekly and session percentages used. Hover
-  for full pace details; click for the dialog and token totals. Unknown or stale
-  pace is a dash, not a healthy status.
+  provider icon, pace-status glyph, weekly/session usage, and a countdown to
+  the earliest projected run-out. Hover for pace details; click for the dialog
+  and token totals. Unknown or stale pace is a dash, with no countdown.
 - **Codex banked resets in the footer.** The optional strip adds a `↺ 3`
   badge with the saved-reset count, earliest-expiry tooltip, and an amber
   warning within seven days of expiry. Click for read-only reset details;
@@ -45,8 +45,9 @@ at the same time. The start of the window is the reset time minus the length.
 The plugin then projects the current rate in a straight line to the reset.
 
 Nights and weekends usually lower the real rate, so the projection is a
-warning, not a forecast. In the first 5% of a window, the plugin shows "too
-early to judge pace".
+warning, not a forecast. "Too early to judge pace" applies only while both
+elapsed time and quota used are below 5%. Significant early usage still warns;
+unknown pace never claims to last until reset.
 
 ## Requirements and data
 

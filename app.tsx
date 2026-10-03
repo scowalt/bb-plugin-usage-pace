@@ -223,7 +223,7 @@ export function UsageBar({ onOpen }: { onOpen: (target?: BankedResetTarget) => v
     >
       {rows.length === 0 ? (
         <button type="button" onClick={open} aria-haspopup="dialog" className="truncate rounded px-1.5 py-1 text-left text-muted-foreground hover:bg-sidebar-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">{empty}</button>
-      ) : rows.map(({ key, provider, windows, status, title }) => (
+      ) : rows.map(({ key, provider, windows, status, countdown, title }) => (
         <div key={key} className="flex min-w-0 items-center">
           <button
             type="button"
@@ -250,6 +250,13 @@ export function UsageBar({ onOpen }: { onOpen: (target?: BankedResetTarget) => v
                 <span className="shrink-0 font-semibold tabular-nums">{Math.round(window.usedPercent)}%</span>
               </span>
             ))}
+            {countdown ? (
+              <span
+                aria-hidden="true"
+                title={countdown.detail}
+                className="col-span-2 col-start-3 row-start-2 mt-1 whitespace-nowrap text-muted-foreground tabular-nums"
+              >{countdown.label}</span>
+            ) : null}
           </button>
           {provider.id === "codex" ? <BankedResetsBadge target={provider} onOpen={() => onOpen(provider)} /> : null}
         </div>
@@ -308,7 +315,7 @@ function PaceVerdict({ pace }: { pace: Pace }) {
     <div className="flex items-start justify-between gap-3 text-[11px] tabular-nums">
       <span className="min-w-0 text-muted-foreground">{describeRate(pace)}</span>
       {runsOut === null ? (
-        <span className="shrink-0 text-muted-foreground">Lasts to reset</span>
+        pace.projectedPercent !== null ? <span className="shrink-0 text-muted-foreground">Lasts to reset</span> : null
       ) : (
         <span className="flex shrink-0 flex-col items-end text-right">
           <span className="font-semibold" style={{ color: toneColor(pace.tone) }}>
@@ -323,7 +330,7 @@ function PaceVerdict({ pace }: { pace: Pace }) {
   );
 }
 
-function ProviderBlock({
+export function ProviderBlock({
   provider,
   showHost,
   showBankedResets,

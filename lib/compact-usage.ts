@@ -1,7 +1,7 @@
 import type { UsageProvider, UsageWindow } from "../server";
 import type { UsageState } from "./usage-store";
 import { formatReset } from "./usage-store";
-import { describePace, paceForWindows, windowDurationMs, type Pace, type Tone } from "./pace";
+import { describePace, formatDuration, paceForWindows, windowDurationMs, type Pace, type Tone } from "./pace";
 
 const HOUR = 3_600_000;
 
@@ -22,6 +22,7 @@ export interface CompactUsageRow {
   provider: UsageProvider;
   windows: CompactWindow[];
   status: CompactStatus;
+  countdown: { label: string; detail: string } | null;
   title: string;
 }
 
@@ -55,16 +56,39 @@ function statusFor(windows: UsageWindow[], paces: (Pace | null)[], error: string
   return { glyph: "●", tone: "ok", detail: "All quota windows last to reset at this rate." };
 }
 
+/** Earliest depletion across all windows, not just the displayed W/S values. */
+function countdownFor(windows: UsageWindow[], paces: (Pace | null)[], now: number): CompactUsageRow["countdown"] {
+  const exhausted = windows.find(window => window.usedPercent >= 100);
+  if (exhausted) return { label: "out now", detail: `${exhausted.label}: quota exhausted.` };
+
+  let first: { window: UsageWindow; at: number } | null = null;
+  for (const [index, pace] of paces.entries()) {
+    const at = pace?.runsOutAtMs;
+    if (at != null && (first === null || at < first.at)) {
+      first = { window: windows[index]!, at };
+    }
+  }
+  if (first === null) return null;
+  const remaining = first.at - now;
+  const label = remaining <= 0 ? "out now (est.)"
+    : remaining < 60_000 ? "out in <1m" : `out in ${formatDuration(remaining)}`;
+  return { label, detail: `${first.window.label}: ${label} at the last reported pace.` };
+}
+
 /** One row per provider/account; W and S first, other limits remain in details. */
 export function compactUsageRows(state: UsageState, now = Date.now()): CompactUsageRow[] {
   const rows: CompactUsageRow[] = [];
   const seen = new Set<string>();
+  // Anchor projections to the observation, not the render time: otherwise an
+  // unchanged usedPercent makes the estimated rate slow on every minute tick.
+  const fetchedAt = Date.parse(state.data?.fetchedAt ?? "");
+  const paceAt = Number.isFinite(fetchedAt) ? Math.min(fetchedAt, now) : now;
   for (const provider of state.data?.providers ?? []) {
     if (provider.status !== "ok" || provider.windows.length === 0) continue;
     const key = `${provider.id}/${provider.accountEmail ?? provider.hostId}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    const paces = paceForWindows(provider.windows, now);
+    const paces = paceForWindows(provider.windows, paceAt);
     const allWindows = provider.windows.map((window, index): CompactWindow => {
       const reset = formatReset(window.resetsAt, now);
       const pace = paces[index]!;
@@ -82,8 +106,10 @@ export function compactUsageRows(state: UsageState, now = Date.now()): CompactUs
     // Monthly/daily/unknown windows still have a useful row, without inventing W/S values.
     if (selected.length === 0) selected.push(allWindows[0]!);
     const status = statusFor(provider.windows, paces, state.error ?? state.data?.error ?? null, now);
+    const countdown = status.glyph === "▲" ? countdownFor(provider.windows, paces, now) : null;
     const identity = [provider.displayName, provider.accountEmail, provider.hostName].filter(Boolean).join(" · ");
-    rows.push({ key, provider, windows: selected, status, title: [identity, status.detail, ...allWindows.map(entry => entry.detail)].join("\n") });
+    rows.push({ key, provider, windows: selected, status, countdown,
+      title: [identity, status.detail, countdown?.detail, ...allWindows.map(entry => entry.detail)].filter(Boolean).join("\n") });
   }
   return rows;
 }

@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { UsageProvider } from "./server";
-import { UsageBar } from "./app";
+import { ProviderBlock, UsageBar } from "./app";
 import * as usageStore from "./lib/usage-store";
 
 vi.mock("@get-bb/plugin-sdk/app", () => ({
@@ -27,7 +27,16 @@ let root: Root;
 let container: HTMLDivElement;
 let state: usageStore.UsageState;
 const onOpen = vi.fn();
-const render = async () => { await act(async () => root.render(<UsageBar onOpen={onOpen} />)); };
+const render = async (element = <UsageBar onOpen={onOpen} />) => { await act(async () => root.render(element)); };
+const renderWeeklyWindow = (usedPercent: number, remainingHours = 163) => render(
+  <ProviderBlock
+    provider={{ ...provider, id: "codex", displayName: "Codex", windows: [{
+      label: "Weekly limit", weekly: true, usedPercent,
+      resetsAt: new Date(NOW + remainingHours * 3_600_000).toISOString(),
+    }] }}
+    showHost={false} showBankedResets={false} focusBankedResets={false}
+  />,
+);
 
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -63,6 +72,54 @@ it("renders a neutral W/S readout with a separately coloured pace glyph and acce
   expect(button.getAttribute("aria-haspopup")).toBe("dialog");
   await act(async () => button.click());
   expect(onOpen).toHaveBeenCalledExactlyOnceWith();
+});
+
+it("shows an accessible run-out countdown below the compact quota values", async () => {
+  state.data!.providers = [{ ...provider, windows: [{
+    ...provider.windows[0]!, usedPercent: 11, resetsAt: "2026-10-08T07:00:00Z",
+  }] }];
+  await render();
+  const button = container.querySelector("button")!;
+  expect(button.textContent).toBe("C▲W11%out in 1d 16h");
+  expect(button.title).toContain("Weekly limit: out in 1d 16h at the last reported pace");
+  expect(button.getAttribute("aria-label")).toContain("out in 1d 16h");
+  expect(button.querySelector(".row-start-2")?.textContent).toBe("out in 1d 16h");
+  await act(async () => button.click());
+  expect(onOpen).toHaveBeenCalledExactlyOnceWith();
+});
+
+it("ticks the footer countdown and removes it if refresh fails", async () => {
+  state.data!.providers = [{ ...provider, windows: [{ ...provider.windows[1]!, usedPercent: 90 }] }];
+  await render();
+  expect(container.textContent).toContain("out in 20m");
+  await act(async () => { vi.advanceTimersByTime(60_000); });
+  expect(container.textContent).toContain("out in 19m");
+  state = { ...state, error: "Offline" };
+  await render();
+  expect(container.textContent).not.toContain("out in");
+  expect(container.querySelector(".row-start-2")).toBeNull();
+});
+
+it("warns in the dialog about 11% used five hours into the week", async () => {
+  await renderWeeklyWindow(11);
+  expect(container.textContent).toContain("resets in 6d 19h");
+  expect(container.textContent).toContain("3.7× pace · on track for over 300% · budget 13%/day");
+  expect(container.textContent).toContain("5d 2h without quota");
+  expect(container.textContent).toContain("runs out");
+  expect(container.textContent).not.toContain("too early");
+  expect(container.textContent).not.toContain("Lasts to reset");
+});
+
+it("does not reassure in the dialog when early pace is unknown", async () => {
+  await renderWeeklyWindow(3);
+  expect(container.textContent).toContain("too early to judge pace");
+  expect(container.textContent).not.toContain("Lasts to reset");
+  expect(container.textContent).not.toContain("without quota");
+});
+
+it("still shows Lasts to reset for a known sustainable pace", async () => {
+  await renderWeeklyWindow(20, 84);
+  expect(container.textContent).toContain("Lasts to reset");
 });
 
 it("keeps session-only values in the session column", async () => {

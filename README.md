@@ -32,11 +32,12 @@ The card belongs to another plugin. Usage Pace only adds nodes to it, and reads 
 ```
 C  ●  W 52%  S 32%
 X  ▲  W 78%  S 46%  ↺3
+      out in 1d 16h
 ```
 
 - `W` and `S`: weekly and five-hour session quota **used**, not remaining. Missing windows stay blank. Providers with neither show their first window (`M` for monthly, `D` for daily, otherwise its label).
 - `●`: all reported windows last to reset at the current rate. An amber dot means nearing a quota limit (projected use above 85% or current use at least 80%).
-- `▲`: a window is exhausted or projected to run out before reset.
+- `▲`: a window is exhausted or projected to run out before reset. A second line shows time until the earliest projected exhaustion across all windows (`out in 1d 16h`), or `out now` for reported exhaustion. Hover to see which window. The estimate counts down each minute from the last usage snapshot and is recalculated on refresh; `out now (est.)` means the estimate has passed, not confirmed exhaustion. Unknown/stale pace has no countdown.
 - `—`: pace is unknown, too early to judge, or the data may be stale/incomplete. A reported exhausted or overshooting window still warns even if another window's pace is unknown.
 
 Numbers stay neutral; only the status glyph carries the pace colour. Status considers **all** reported windows, including model-specific limits not displayed in the row. Hover for full window names, pace multipliers, reset times, and run-out estimates; click for the full dialog. Token totals remain in the dialog, not the footer.
@@ -67,7 +68,7 @@ Providers report only `usedPercent` and `resetsAt` for each window. The window l
 
 A monthly window ("Monthly credits") starts one calendar month before its reset.
 
-This is a straight-line projection. Nights and weekends usually lower the real rate. In the first 5% of a window, the plugin shows "too early to judge pace" and no projection.
+This is a straight-line projection. Nights and weekends usually lower the real rate. In the first 5% of a window, the plugin shows "too early to judge pace" only while less than 5% of the quota has been used. Significant early usage still warns: 11% used five hours into a week is about 3.7× pace. A projection requires positive elapsed time; unknown pace never claims "Lasts to reset".
 
 ## Which provider failed
 
@@ -101,12 +102,12 @@ Turn this off with the *Add Grok Build usage to bb's usage card* setting, then r
 ## Install
 
 ```sh
-bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.3.2'
+bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.3.3'
 # Enable the compact footer rows (off by default), including Codex banked resets:
 bb plugin config usage-pace set showStrip true
 ```
 
-Use `@^0.3.2` instead of `@v0.3.2` to track compatible releases with `bb plugin update usage-pace`. **Use 0.3.1 or newer for Git installs**: 0.3.0 fails when development dependencies are absent. Release tags include prebuilt bundles, but BB's Git installer rebuilds source with its own build tooling after installing production dependencies. The required SDK runtime is installed automatically; you do not need to install it manually. Sign into Codex with a ChatGPT account on each host where you want banked-reset inventory.
+Use `@^0.3.3` instead of `@v0.3.3` to track compatible releases with `bb plugin update usage-pace`. **Use 0.3.1 or newer for Git installs**: 0.3.0 fails when development dependencies are absent. Release tags include prebuilt bundles, but BB's Git installer rebuilds source with its own build tooling after installing production dependencies. The required SDK runtime is installed automatically; you do not need to install it manually. Sign into Codex with a ChatGPT account on each host where you want banked-reset inventory.
 
 From a local checkout:
 
