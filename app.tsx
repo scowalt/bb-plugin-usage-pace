@@ -7,7 +7,7 @@
 //   2. An app overlay slot (always mounted) portals compact provider rows into
 //      that container — provider icon · pace status · weekly/session used % — and
 //      owns a centered dialog with the full breakdown, opened by clicking it.
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import {
   definePluginApp,
@@ -49,7 +49,7 @@ import {
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { mountCardPace } from "@/lib/card-pace";
-import { compactUsageRows } from "@/lib/compact-usage";
+import { compactUsageRows, type CompactUsageRow } from "@/lib/compact-usage";
 import { BankedResetsBadge, BankedResetsSection } from "./banked-resets";
 import { BankedResetsProvider, useRefreshBankedResets, type BankedResetTarget } from "./hooks/use-banked-resets";
 
@@ -140,6 +140,27 @@ function useMinuteTick() {
   }, []);
 }
 
+/** One forced refresh per exhausted reset, not one per tick or stale response. */
+function useResetRefresh(rows: CompactUsageRow[], loading: boolean, now: number) {
+  const refreshed = useRef(new Map<string, number>());
+  useEffect(() => {
+    const keys = new Set(rows.map(row => row.key));
+    for (const key of refreshed.current.keys()) {
+      if (!keys.has(key)) refreshed.current.delete(key);
+    }
+    if (loading || document.visibilityState !== "visible") return;
+    let due = false;
+    for (const row of rows) {
+      const at = row.countdown?.resetAtMs;
+      if (at === undefined || at > now || refreshed.current.get(row.key) === at) continue;
+      refreshed.current.set(row.key, at);
+      due = true;
+    }
+    // Bypass the server cache; coalesce simultaneous account resets into one read.
+    if (due) void refreshUsage({ force: true });
+  }, [rows, loading, now]);
+}
+
 // ---------------------------------------------------------------------------
 // Compact footer rows
 // ---------------------------------------------------------------------------
@@ -209,7 +230,9 @@ function useTokenTotals() {
 export function UsageBar({ onOpen }: { onOpen: (target?: BankedResetTarget) => void }) {
   const state = useUsage();
   useMinuteTick();
-  const rows = compactUsageRows(state);
+  const now = Date.now();
+  const rows = compactUsageRows(state, now);
+  useResetRefresh(rows, state.loading, now);
   const open = () => onOpen();
   const empty = state.error || state.data?.error || state.data?.providers.some(provider => provider.status !== "ok" && provider.status !== "not_installed")
     ? "Usage unavailable"
@@ -238,8 +261,8 @@ export function UsageBar({ onOpen }: { onOpen: (target?: BankedResetTarget) => v
               aria-hidden="true"
               className="text-center text-[9px]"
               style={{ color: status.tone === null ? "var(--muted-foreground)" : status.tone === "ok" ? "var(--success, var(--primary, currentColor))" : toneColor(status.tone) }}
-            >{status.glyph}</span>
-            {windows.map(({ window, label, detail }, index) => (
+            >{status.glyph === "⌛" ? <Icon name="Hourglass" className="size-2.5" aria-hidden /> : status.glyph}</span>
+            {status.glyph !== "⌛" && windows.map(({ window, label, detail }, index) => (
               <span
                 key={index}
                 aria-hidden="true"
@@ -254,7 +277,7 @@ export function UsageBar({ onOpen }: { onOpen: (target?: BankedResetTarget) => v
               <span
                 aria-hidden="true"
                 title={countdown.detail}
-                className="col-span-2 col-start-3 row-start-2 mt-1 whitespace-nowrap text-muted-foreground tabular-nums"
+                className={cn("col-span-2 col-start-3 whitespace-nowrap text-muted-foreground tabular-nums", status.glyph === "⌛" ? "row-start-1" : "row-start-2 mt-1")}
               >{countdown.label}</span>
             ) : null}
           </button>

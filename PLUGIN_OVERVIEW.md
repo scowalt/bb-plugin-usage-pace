@@ -1,6 +1,5 @@
-bb's usage card shows how much of each quota window you used, and when it
-resets. It does not show if your rate lasts until then. With 42% used and five
-days to go, are you fine or not? Usage Pace answers that in the same card.
+See whether your current quota burn rate lasts until reset, directly in bb's
+Provider usage card.
 
 ## What you get
 
@@ -25,10 +24,11 @@ days to go, are you fine or not? Usage Pace answers that in the same card.
   tab. You can dismiss the message until the failure changes.
 - **Fewer tabs.** bb lists some providers, such as Cursor, on every
   machine. A setting hides the tabs you do not use.
-- **Compact footer rows.** The optional strip shows one row per provider account:
-  provider icon, pace-status glyph, weekly/session usage, and a countdown to
-  the earliest projected run-out. Hover for pace details; click for the dialog
-  and token totals. Unknown or stale pace is a dash, with no countdown.
+- **Compact footer rows.** One row per account shows weekly/session usage and
+  a projected run-out countdown. When exhausted, an amber hourglass and reset
+  countdown replace the percentages on one line. It uses the latest exhausted
+  reset; missing times show “reset unknown.” Hover for details; click for the
+  dialog and token totals. Unknown/stale pace is a dash.
 - **Codex banked resets in the footer.** The optional strip adds a `↺ 3`
   badge with the saved-reset count, earliest-expiry tooltip, and an amber
   warning within seven days of expiry. Click for read-only reset details;
@@ -51,10 +51,10 @@ unknown pace never claims to last until reset.
 
 ## Requirements and data
 
-The plugin reads the data that bb's built-in Provider usage card already has,
-from that card's cache, so it adds no provider requests. It only adds
-elements to bb's card. If a bb update changes the card, the tick and the
-lines stop showing, and nothing else breaks.
+In-card annotations reuse bb's cached Provider usage data with no extra
+provider requests. If bb changes the card, annotations may stop showing.
+The optional footer reads usage separately and refreshes once when an exhausted
+reset countdown ends, awaiting fresh data before implying quota is available.
 
 The Codex banked-reset badge and dialog make separate read-only inventory
 requests on the selected host using its local ChatGPT login. This private

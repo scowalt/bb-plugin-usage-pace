@@ -88,14 +88,74 @@ describe("compact usage rows", () => {
     expect(compactUsageRows(snapshot, NOW + 60_000)[0]?.countdown?.label).toBe("out in 19m");
     expect(compactUsageRows(snapshot, NOW + 19.5 * 60_000)[0]?.countdown?.label).toBe("out in <1m");
     expect(compactUsageRows(snapshot, NOW + 21 * 60_000)[0]?.countdown?.label).toBe("out now (est.)");
+    expect(compactUsageRows(snapshot, NOW + 21 * 60_000)[0]?.status).toMatchObject({ glyph: "▲", tone: "critical" });
     snapshot.data!.fetchedAt = new Date(NOW + 60_000).toISOString();
     expect(compactUsageRows(snapshot, NOW + 60_000)[0]?.countdown?.label).toBe("out in 20m");
   });
 
-  it("shows out now for an exhausted window even without a known duration", () => {
+  it("shows an amber hourglass and reset countdown for confirmed exhaustion even without a known duration", () => {
     const result = row([{ ...weekly, label: "Credit balance", usedPercent: 100 }]);
-    expect(result.countdown?.label).toBe("out now");
+    expect(result.status).toMatchObject({ glyph: "⌛", tone: "warning" });
+    expect(result.countdown?.label).toBe("resets in 2d 0h");
     expect(result.countdown?.detail).toContain("Credit balance");
+    expect(result.countdown?.resetAtMs).toBe(Date.parse(weekly.resetsAt!));
+  });
+
+  it("uses the latest exhausted reset, including hidden model limits, but ignores unexhausted limits", () => {
+    const windows = [
+      { ...session, usedPercent: 100 },
+      { ...weekly, usedPercent: 100 },
+      { ...weekly, label: "Weekly model limit", usedPercent: 100, resetsAt: "2026-10-04T12:00:00Z" },
+      { ...weekly, label: "Another model limit", usedPercent: 99, resetsAt: "2026-10-05T12:00:00Z" },
+    ];
+    for (const ordered of [windows, [...windows].reverse()]) {
+      const result = row(ordered);
+      expect(result.windows).toHaveLength(2);
+      expect(result.countdown?.label).toBe("resets in 3d 0h");
+      expect(result.countdown?.detail).toContain("Weekly model limit");
+      expect(result.title).toContain("5-hour limit: 100% used · resets in 2h 0m");
+      expect(result.title).toContain("Weekly limit: 100% used · resets in 2d 0h");
+    }
+  });
+
+  it.each([null, "invalid"])("shows reset unknown if any exhausted reset is unavailable (%s)", resetsAt => {
+    const result = row([{ ...session, usedPercent: 100, resetsAt }, { ...weekly, usedPercent: 100 }]);
+    expect(result.status.glyph).toBe("⌛");
+    expect(result.countdown?.label).toBe("reset unknown");
+    expect(result.countdown?.detail).toContain("5-hour limit");
+    expect(result.countdown?.resetAtMs).toBeUndefined();
+  });
+
+  it("keeps counting down to the last exhausted reset when an earlier window has reset", () => {
+    const snapshot = state([{ ...provider, windows: [{ ...session, usedPercent: 100 }, { ...weekly, usedPercent: 100 }] }]);
+    const result = compactUsageRows(snapshot, NOW + 3 * 3_600_000)[0]!;
+    expect(result.status.glyph).toBe("⌛");
+    expect(result.countdown?.label).toBe("resets in 1d 21h");
+    expect(result.title).toContain("5-hour limit: 100% used · reset passed; refresh usage");
+  });
+
+  it("counts down each minute and awaits refresh at zero, including after a failed refresh", () => {
+    const snapshot = state([{ ...provider, windows: [{ ...session, usedPercent: 100 }] }]);
+    expect(compactUsageRows(snapshot, NOW + 60_000)[0]?.countdown?.label).toBe("resets in 1h 59m");
+    const resetAt = Date.parse(session.resetsAt!);
+    expect(compactUsageRows(snapshot, resetAt - 30_000)[0]?.countdown?.label).toBe("resets in <1m");
+    for (const error of [null, "offline"]) {
+      const result = compactUsageRows({ ...snapshot, error }, resetAt)[0]!;
+      expect(result.status).toMatchObject({ glyph: "⌛", tone: "warning" });
+      expect(result.countdown?.label).toBe("awaiting refresh");
+      expect(result.countdown?.resetAtMs).toBe(resetAt);
+      expect(result.title).not.toContain("All quota windows last");
+      if (error) expect(result.title).toContain(error);
+    }
+  });
+
+  it("hides a future reset countdown if usage becomes stale or incomplete", () => {
+    const snapshot = state([{ ...provider, windows: [{ ...session, usedPercent: 100 }] }]);
+    for (const failed of [{ ...snapshot, error: "offline" }, { ...snapshot, data: { ...snapshot.data!, error: "One host failed" } }]) {
+      const result = compactUsageRows(failed, NOW)[0]!;
+      expect(result.status.glyph).toBe("—");
+      expect(result.countdown).toBeNull();
+    }
   });
 
   it("omits the countdown for sustainable or unknown pace", () => {
@@ -136,7 +196,7 @@ describe("compact usage rows", () => {
   });
 
   it("still warns for exhausted quotas during the early window", () => {
-    expect(row([{ ...session, usedPercent: 100, resetsAt: "2026-10-01T16:55:00Z" }]).status.glyph).toBe("▲");
+    expect(row([{ ...session, usedPercent: 100, resetsAt: "2026-10-01T16:55:00Z" }]).status.glyph).toBe("⌛");
   });
 
   it("marks failed refreshes, partial snapshots, and elapsed resets as unknown", () => {

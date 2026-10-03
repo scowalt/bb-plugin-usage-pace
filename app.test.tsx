@@ -44,6 +44,7 @@ beforeEach(() => {
   vi.setSystemTime(NOW);
   state = { data: { providers: [provider], fetchedAt: new Date(NOW).toISOString(), error: null }, loading: false, error: null };
   vi.spyOn(usageStore, "getUsageState").mockImplementation(() => state);
+  vi.spyOn(usageStore, "refreshUsage").mockResolvedValue();
   onOpen.mockReset();
   container = document.createElement("div");
   document.body.append(container);
@@ -98,6 +99,96 @@ it("ticks the footer countdown and removes it if refresh fails", async () => {
   await render();
   expect(container.textContent).not.toContain("out in");
   expect(container.querySelector(".row-start-2")).toBeNull();
+});
+
+it("replaces all quota percentages with a single-line reset countdown when blocked", async () => {
+  state.data!.providers = [{ ...provider, windows: [provider.windows[0]!, { ...provider.windows[1]!, usedPercent: 100 }] }];
+  await render();
+  const button = container.querySelector("button")!;
+  const icon = button.querySelector('svg[data-icon="Hourglass"]');
+  expect(icon).not.toBeNull();
+  expect(icon?.parentElement?.style.color).toBe(usageStore.toneColor("warning"));
+  expect(button.textContent).toBe("Cresets in 2h 0m");
+  expect(button.querySelector(".row-start-2")).toBeNull();
+  expect(button.querySelector(".row-start-1.col-span-2")?.textContent).toBe("resets in 2h 0m");
+  expect(button.getAttribute("aria-label")).toContain("quota window is exhausted");
+  expect(button.getAttribute("aria-label")).toContain("resets in 2h 0m");
+  expect(button.title).toContain("Weekly limit: 52% used");
+  expect(button.title).toContain("5-hour limit: 100% used");
+  await act(async () => { vi.advanceTimersByTime(60_000); });
+  expect(container.querySelector(".row-start-1")?.textContent).toBe("resets in 1h 59m");
+  expect(usageStore.refreshUsage).not.toHaveBeenCalled();
+  await act(async () => button.click());
+  expect(onOpen).toHaveBeenCalledExactlyOnceWith();
+});
+
+it("refreshes once when the reset countdown reaches zero and awaits confirmation even after failure", async () => {
+  state.data!.providers = [{ ...provider, windows: [{
+    ...provider.windows[1]!, usedPercent: 100, resetsAt: "2026-10-01T12:01:00Z",
+  }] }];
+  await render();
+  expect(container.textContent).toContain("resets in 1m");
+  expect(usageStore.refreshUsage).not.toHaveBeenCalled();
+  await act(async () => { vi.advanceTimersByTime(60_000); });
+  expect(container.textContent).toBe("Cawaiting refresh");
+  expect(container.querySelector(".row-start-2")).toBeNull();
+  expect(usageStore.refreshUsage).toHaveBeenCalledExactlyOnceWith({ force: true });
+  state = { ...state, error: "Offline" };
+  await render();
+  await act(async () => { vi.advanceTimersByTime(60_000); });
+  expect(container.textContent).toContain("awaiting refresh");
+  expect(container.querySelector("button")?.title).toContain("Offline");
+  expect(usageStore.refreshUsage).toHaveBeenCalledTimes(1);
+
+  state = { ...state, error: null, data: { ...state.data!, fetchedAt: new Date(Date.now()).toISOString(), providers: [provider] } };
+  await render();
+  expect(container.textContent).toBe("C●W52%S32%");
+  expect(container.querySelector('[data-icon="Hourglass"]')).toBeNull();
+});
+
+it("coalesces expired accounts into one refresh and waits for an existing request", async () => {
+  const expired = { ...provider, windows: [{ ...provider.windows[1]!, usedPercent: 100, resetsAt: new Date(NOW).toISOString() }] };
+  state = { ...state, loading: true, data: { ...state.data!, providers: [expired, { ...expired, accountEmail: "two@example.test" }] } };
+  await render();
+  expect(container.querySelectorAll(".row-start-1.col-span-2")).toHaveLength(2);
+  expect(container.querySelector(".row-start-2")).toBeNull();
+  expect(container.textContent).toContain("awaiting refresh");
+  expect(usageStore.refreshUsage).not.toHaveBeenCalled();
+  state = { ...state, loading: false };
+  await render();
+  expect(usageStore.refreshUsage).toHaveBeenCalledExactlyOnceWith({ force: true });
+  // A provider may continue to report its old reset even in a new snapshot.
+  state = { ...state, data: { ...state.data!, fetchedAt: new Date(NOW + 60_000).toISOString() } };
+  await render();
+  await act(async () => { vi.advanceTimersByTime(60_000); });
+  expect(usageStore.refreshUsage).toHaveBeenCalledTimes(1);
+
+  state = { ...state, data: { ...state.data!, providers: [{ ...expired, windows: [{ ...expired.windows[0]!, resetsAt: "2026-10-01T12:02:00Z" }] }] } };
+  await render();
+  expect(container.textContent).toContain("resets in 1m");
+  await act(async () => { vi.advanceTimersByTime(60_000); });
+  expect(usageStore.refreshUsage).toHaveBeenCalledTimes(2);
+});
+
+it("shows reset unknown without guessing or refreshing when an exhausted reset is missing", async () => {
+  state.data!.providers = [{ ...provider, windows: [{ ...provider.windows[1]!, usedPercent: 100, resetsAt: null }] }];
+  await render();
+  expect(container.querySelector('[data-icon="Hourglass"]')).not.toBeNull();
+  expect(container.textContent).toBe("Creset unknown");
+  expect(container.querySelector(".row-start-1")?.textContent).toBe("reset unknown");
+  expect(container.querySelector(".row-start-2")).toBeNull();
+  await act(async () => { vi.advanceTimersByTime(60_000); });
+  expect(usageStore.refreshUsage).not.toHaveBeenCalled();
+});
+
+it("keeps passed run-out estimates distinct from confirmed exhaustion", async () => {
+  state.data!.providers = [{ ...provider, windows: [{ ...provider.windows[1]!, usedPercent: 90 }] }];
+  await render();
+  await act(async () => { vi.advanceTimersByTime(21 * 60_000); });
+  expect(container.textContent).toContain("▲");
+  expect(container.textContent).toContain("out now (est.)");
+  expect(container.querySelector('[data-icon="Hourglass"]')).toBeNull();
+  expect(usageStore.refreshUsage).not.toHaveBeenCalled();
 });
 
 it("warns in the dialog about 11% used five hours into the week", async () => {

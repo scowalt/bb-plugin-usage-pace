@@ -33,12 +33,14 @@ The card belongs to another plugin. Usage Pace only adds nodes to it, and reads 
 C  ●  W 52%  S 32%
 X  ▲  W 78%  S 46%  ↺3
       out in 1d 16h
+G  ⌛  resets in 2h 14m
 ```
 
 - `W` and `S`: weekly and five-hour session quota **used**, not remaining. Missing windows stay blank. Providers with neither show their first window (`M` for monthly, `D` for daily, otherwise its label).
 - `●`: all reported windows last to reset at the current rate. An amber dot means nearing a quota limit (projected use above 85% or current use at least 80%).
-- `▲`: a window is exhausted or projected to run out before reset. A second line shows time until the earliest projected exhaustion across all windows (`out in 1d 16h`), or `out now` for reported exhaustion. Hover to see which window. The estimate counts down each minute from the last usage snapshot and is recalculated on refresh; `out now (est.)` means the estimate has passed, not confirmed exhaustion. Unknown/stale pace has no countdown.
-- `—`: pace is unknown, too early to judge, or the data may be stale/incomplete. A reported exhausted or overshooting window still warns even if another window's pace is unknown.
+- `▲`: a window is projected to run out before reset. A second line shows time until the earliest projected exhaustion across all windows (`out in 1d 16h`). Hover to see which window. The estimate counts down each minute from the last usage snapshot and is recalculated on refresh; `out now (est.)` means the estimate has passed, not confirmed exhaustion.
+- `⌛` (amber hourglass): a window is confirmed exhausted. A countdown **replaces the quota percentages on the same line**, updating each minute to the **latest reset among exhausted windows**, including model-specific limits (`resets in 2h 14m`, or `resets in <1m`). Hover for individual window percentages and resets. If any exhausted window has a missing or invalid reset time, it shows `reset unknown`. When the countdown reaches zero, the plugin requests fresh usage once, bypassing its cache, and shows `awaiting refresh` until updated data establishes the new state—even if that refresh fails. The countdown describes scheduled quota renewal, not a guarantee of service availability.
+- `—`: pace is unknown, too early to judge, or the data may be stale/incomplete. Unknown/stale pace has no countdown. A reported exhausted or overshooting window still warns even if another window's pace is unknown.
 
 Numbers stay neutral; only the status glyph carries the pace colour. Status considers **all** reported windows, including model-specific limits not displayed in the row. Hover for full window names, pace multipliers, reset times, and run-out estimates; click for the full dialog. Token totals remain in the dialog, not the footer.
 
@@ -102,12 +104,12 @@ Turn this off with the *Add Grok Build usage to bb's usage card* setting, then r
 ## Install
 
 ```sh
-bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.3.3'
+bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.3.4'
 # Enable the compact footer rows (off by default), including Codex banked resets:
 bb plugin config usage-pace set showStrip true
 ```
 
-Use `@^0.3.3` instead of `@v0.3.3` to track compatible releases with `bb plugin update usage-pace`. **Use 0.3.1 or newer for Git installs**: 0.3.0 fails when development dependencies are absent. Release tags include prebuilt bundles, but BB's Git installer rebuilds source with its own build tooling after installing production dependencies. The required SDK runtime is installed automatically; you do not need to install it manually. Sign into Codex with a ChatGPT account on each host where you want banked-reset inventory.
+Use `@^0.3.4` instead of `@v0.3.4` to track compatible releases with `bb plugin update usage-pace`. **Use 0.3.1 or newer for Git installs**: 0.3.0 fails when development dependencies are absent. Release tags include prebuilt bundles, but BB's Git installer rebuilds source with its own build tooling after installing production dependencies. The required SDK runtime is installed automatically; you do not need to install it manually. Sign into Codex with a ChatGPT account on each host where you want banked-reset inventory.
 
 From a local checkout:
 

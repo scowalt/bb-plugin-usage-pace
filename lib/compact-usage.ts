@@ -12,7 +12,7 @@ export interface CompactWindow {
 }
 
 interface CompactStatus {
-  glyph: "●" | "▲" | "—";
+  glyph: "●" | "▲" | "⌛" | "—";
   tone: Tone | null;
   detail: string;
 }
@@ -22,7 +22,12 @@ export interface CompactUsageRow {
   provider: UsageProvider;
   windows: CompactWindow[];
   status: CompactStatus;
-  countdown: { label: string; detail: string } | null;
+  countdown: {
+    label: string;
+    detail: string;
+    /** Latest exhausted reset; reaching it requests a fresh usage snapshot. */
+    resetAtMs?: number;
+  } | null;
   title: string;
 }
 
@@ -36,13 +41,17 @@ function shortLabel(window: UsageWindow): string {
   return window.label;
 }
 
-function statusFor(windows: UsageWindow[], paces: (Pace | null)[], error: string | null, now: number): CompactStatus {
+function statusFor(windows: UsageWindow[], paces: (Pace | null)[], error: string | null, now: number, reset: CompactUsageRow["countdown"]): CompactStatus {
+  // A passed reset is not evidence of available quota, even if refresh fails.
+  if (reset?.resetAtMs !== undefined && reset.resetAtMs <= now) {
+    return { glyph: "⌛", tone: "warning", detail: `Scheduled reset passed. Awaiting refreshed usage.${error ? ` Usage may be stale or incomplete. ${error}` : ""}` };
+  }
   if (error) return { glyph: "—", tone: null, detail: `Usage may be stale or incomplete. ${error}` };
+  if (reset !== null) {
+    return { glyph: "⌛", tone: "warning", detail: "A quota window is exhausted." };
+  }
   if (windows.some(window => window.resetsAt !== null && Date.parse(window.resetsAt) <= now)) {
     return { glyph: "—", tone: null, detail: "Reset passed since last update. Refresh usage." };
-  }
-  if (windows.some(window => window.usedPercent >= 100)) {
-    return { glyph: "▲", tone: "critical", detail: "A quota window is exhausted." };
   }
   if (paces.some(pace => pace !== null && pace.lockoutMs > 0)) {
     return { glyph: "▲", tone: "critical", detail: "At this rate, a quota window runs out before reset." };
@@ -56,11 +65,26 @@ function statusFor(windows: UsageWindow[], paces: (Pace | null)[], error: string
   return { glyph: "●", tone: "ok", detail: "All quota windows last to reset at this rate." };
 }
 
-/** Earliest depletion across all windows, not just the displayed W/S values. */
-function countdownFor(windows: UsageWindow[], paces: (Pace | null)[], now: number): CompactUsageRow["countdown"] {
-  const exhausted = windows.find(window => window.usedPercent >= 100);
-  if (exhausted) return { label: "out now", detail: `${exhausted.label}: quota exhausted.` };
+/** Every exhausted allowance must reset, including model limits hidden from the row. */
+function resetCountdownFor(windows: UsageWindow[], now: number): CompactUsageRow["countdown"] {
+  const exhausted = windows.filter(window => window.usedPercent >= 100);
+  if (exhausted.length === 0) return null;
+  const resets = exhausted.map(window => Date.parse(window.resetsAt ?? ""));
+  if (resets.some(at => !Number.isFinite(at))) {
+    return { label: "reset unknown", detail: `${exhausted.map(window => window.label).join(", ")}: quota exhausted; at least one reset time is unavailable.` };
+  }
+  const resetAtMs = Math.max(...resets);
+  const last = exhausted[resets.indexOf(resetAtMs)]!;
+  const remaining = resetAtMs - now;
+  if (remaining <= 0) {
+    return { label: "awaiting refresh", detail: "Scheduled resets for the reported exhausted windows have passed. Awaiting refreshed usage.", resetAtMs };
+  }
+  const label = `resets in ${remaining < 60_000 ? "<1m" : formatDuration(remaining)}`;
+  return { label, detail: `${last.label}: ${label} (latest reset among exhausted windows).`, resetAtMs };
+}
 
+/** Earliest projected depletion across all windows, not just the displayed W/S values. */
+function countdownFor(windows: UsageWindow[], paces: (Pace | null)[], now: number): CompactUsageRow["countdown"] {
   let first: { window: UsageWindow; at: number } | null = null;
   for (const [index, pace] of paces.entries()) {
     const at = pace?.runsOutAtMs;
@@ -105,8 +129,10 @@ export function compactUsageRows(state: UsageState, now = Date.now()): CompactUs
     const selected = [weekly, session].filter((entry): entry is CompactWindow => entry !== undefined);
     // Monthly/daily/unknown windows still have a useful row, without inventing W/S values.
     if (selected.length === 0) selected.push(allWindows[0]!);
-    const status = statusFor(provider.windows, paces, state.error ?? state.data?.error ?? null, now);
-    const countdown = status.glyph === "▲" ? countdownFor(provider.windows, paces, now) : null;
+    const reset = resetCountdownFor(provider.windows, now);
+    const status = statusFor(provider.windows, paces, state.error ?? state.data?.error ?? null, now, reset);
+    const countdown = status.glyph === "⌛" ? reset
+      : status.glyph === "▲" ? countdownFor(provider.windows, paces, now) : null;
     const identity = [provider.displayName, provider.accountEmail, provider.hostName].filter(Boolean).join(" · ");
     rows.push({ key, provider, windows: selected, status, countdown,
       title: [identity, status.detail, countdown?.detail, ...allWindows.map(entry => entry.detail)].filter(Boolean).join("\n") });
