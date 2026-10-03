@@ -64,15 +64,75 @@ describe("compact usage rows", () => {
     expect(row([weekly, { ...session, usedPercent: 70 }]).status.glyph).toBe("▲");
   });
 
+  it("shows time until the weekly quota runs out", () => {
+    const result = row([{ ...weekly, usedPercent: 11, resetsAt: "2026-10-08T07:00:00Z" }]);
+    expect(result.countdown?.label).toBe("out in 1d 16h");
+    expect(result.countdown?.detail).toContain("Weekly limit");
+    expect(result.title).toContain("out in 1d 16h");
+  });
+
+  it("uses the earliest run-out, including model windows hidden from the row", () => {
+    const result = row([
+      { ...weekly, usedPercent: 90 },
+      { ...session, usedPercent: 70 },
+      { ...session, label: "Session model limit", usedPercent: 90 },
+    ]);
+    expect(result.windows).toHaveLength(2);
+    expect(result.countdown?.label).toBe("out in 20m");
+    expect(result.countdown?.detail).toContain("Session model limit");
+  });
+
+  it("counts down from the snapshot's pace between refreshes", () => {
+    const snapshot = state([{ ...provider, windows: [{ ...session, usedPercent: 90 }] }]);
+    expect(compactUsageRows(snapshot, NOW)[0]?.countdown?.label).toBe("out in 20m");
+    expect(compactUsageRows(snapshot, NOW + 60_000)[0]?.countdown?.label).toBe("out in 19m");
+    expect(compactUsageRows(snapshot, NOW + 19.5 * 60_000)[0]?.countdown?.label).toBe("out in <1m");
+    expect(compactUsageRows(snapshot, NOW + 21 * 60_000)[0]?.countdown?.label).toBe("out now (est.)");
+    snapshot.data!.fetchedAt = new Date(NOW + 60_000).toISOString();
+    expect(compactUsageRows(snapshot, NOW + 60_000)[0]?.countdown?.label).toBe("out in 20m");
+  });
+
+  it("shows out now for an exhausted window even without a known duration", () => {
+    const result = row([{ ...weekly, label: "Credit balance", usedPercent: 100 }]);
+    expect(result.countdown?.label).toBe("out now");
+    expect(result.countdown?.detail).toContain("Credit balance");
+  });
+
+  it("omits the countdown for sustainable or unknown pace", () => {
+    expect(row().countdown).toBeNull();
+    expect(row([{ ...weekly, usedPercent: 1, resetsAt: "2026-10-08T07:00:00Z" }]).countdown).toBeNull();
+    expect(row([{ ...weekly, resetsAt: null }]).countdown).toBeNull();
+  });
+
+  it("hides run-out estimates after failed refreshes, partial snapshots, or resets", () => {
+    const snapshot = state([{ ...provider, windows: [{ ...session, usedPercent: 90 }] }]);
+    expect(compactUsageRows({ ...snapshot, error: "offline" }, NOW)[0]?.countdown).toBeNull();
+    snapshot.data!.error = "One host failed";
+    expect(compactUsageRows(snapshot, NOW)[0]?.countdown).toBeNull();
+    snapshot.data!.error = null;
+    expect(compactUsageRows(snapshot, NOW + 2 * 3_600_000)[0]?.countdown).toBeNull();
+  });
+
   it("uses an amber dot for a near-limit but sustainable rate", () => {
     expect(row([{ ...weekly, usedPercent: 65 }]).status).toMatchObject({ glyph: "●", tone: "warning" });
   });
 
   it("marks early and unknown pace as unknown, not healthy", () => {
-    expect(row([{ ...session, resetsAt: "2026-10-01T16:55:00Z" }]).status).toMatchObject({ glyph: "—", tone: null });
+    expect(row([{ ...session, usedPercent: 1, resetsAt: "2026-10-01T16:55:00Z" }]).status).toMatchObject({ glyph: "—", tone: null });
     expect(row([{ ...weekly, resetsAt: null }]).status.glyph).toBe("—");
     expect(row([{ ...weekly, resetsAt: "invalid" }]).status.glyph).toBe("—");
     expect(row([{ ...session, label: "Credit balance" }]).status.glyph).toBe("—");
+  });
+
+  it("warns for significant early usage even if another window is too early to judge", () => {
+    const result = row([
+      { ...weekly, usedPercent: 11, resetsAt: "2026-10-08T07:00:00Z" },
+      { ...session, usedPercent: 1, resetsAt: "2026-10-01T16:55:00Z" },
+    ]);
+    expect(result.status).toMatchObject({ glyph: "▲", tone: "critical" });
+    expect(result.title).toContain("3.7× pace");
+    expect(result.status.detail).toContain("runs out before reset");
+    expect(result.countdown?.label).toBe("out in 1d 16h");
   });
 
   it("still warns for exhausted quotas during the early window", () => {

@@ -8,8 +8,10 @@
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
 
-/** Before this share of the window has passed, the rate is mostly noise. */
+/** Below this share of elapsed time, require meaningful usage to judge pace. */
 export const MIN_ELAPSED_FRACTION = 0.05;
+/** Significant quota consumption must warn even near the start of a window. */
+const MIN_USED_PERCENT = 5;
 
 export type Tone = "ok" | "warning" | "critical";
 
@@ -186,7 +188,10 @@ export function paceFor(
   const remainingMs = Math.max(0, Math.min(windowMs, resetsAtMs - now));
   const elapsedMs = windowMs - remainingMs;
   const elapsedFraction = elapsedMs / windowMs;
-  const early = elapsedFraction < MIN_ELAPSED_FRACTION;
+  // Suppress small early samples, not significant burns. With no elapsed
+  // time (including a reset beyond the inferred window), no rate is possible.
+  const early = elapsedMs <= 0 ||
+    (elapsedFraction < MIN_ELAPSED_FRACTION && used < MIN_USED_PERCENT);
 
   const ratio = early ? null : used / (elapsedFraction * 100);
   const projectedPercent = early ? null : used / elapsedFraction;
