@@ -1,5 +1,3 @@
-// Shared client-side usage store. Works outside React (content script) and
-// inside React (disclosure) so both surfaces show one snapshot.
 import type { UsageSnapshot } from "../server";
 import type { Tone } from "./pace";
 
@@ -87,7 +85,6 @@ export function refreshUsage(
   return inflight;
 }
 
-// --- UI coordination between the content script and the overlay slot ------
 
 type Listener = () => void;
 
@@ -125,7 +122,6 @@ export function subscribeOverlay(listener: Listener): () => void {
   };
 }
 
-/** Top unit only: "6d", "16h", "26m". */
 export function formatResetShort(resetsAt: string | null, now = Date.now()): string {
   if (resetsAt === null) return "";
   const ms = new Date(resetsAt).getTime() - now;

@@ -1,4 +1,3 @@
-// From bb-plugin-grok-build-usage by MacHatter1 (MIT), moved to vitest.
 import { describe, expect, it } from "vitest";
 import { GROK_LAUNCH_SPEC, GROK_PROVIDER_ID } from "./grok-provider";
 import { parseBillingUsage, parseSubscriptionTier } from "./grok-usage";

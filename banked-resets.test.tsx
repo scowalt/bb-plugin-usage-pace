@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -11,7 +10,6 @@ import * as usageStore from "./lib/usage-store";
 
 const rpc = vi.hoisted(() => vi.fn());
 vi.mock("@get-bb/plugin-sdk/app", () => ({
-  // Deliberately unstable, as a real SDK client may be. Renders must not refetch.
   useRpc: () => ({ call: rpc }),
   useRealtime: () => {},
   definePluginApp: (factory: unknown) => factory,
@@ -164,8 +162,6 @@ describe("shared footer/dialog inventory", () => {
 });
 
 it("scrolls and focuses the requested banked-reset section after overlay autofocus", async () => {
-  // Drive the frame explicitly: jsdom's animation clock is not reliably
-  // advanced by the fake wall clock across repeated timer installations.
   let onFrame: FrameRequestCallback | undefined;
   const requestFrame = vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => {
     onFrame = callback;

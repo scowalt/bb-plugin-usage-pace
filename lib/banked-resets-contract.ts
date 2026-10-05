@@ -1,4 +1,3 @@
-// Shared with the frontend: keep backend SDK runtime imports out of this module.
 import { z } from "zod";
 
 export const bankedResetsSchema = z.object({

@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   decorateFailure,
@@ -16,7 +15,6 @@ const HOUR = 3_600_000;
 const NOW = Date.parse("2026-09-24T06:20:00Z");
 const at = (hoursFromNow: number) => new Date(NOW + hoursFromNow * HOUR).toISOString();
 
-/** The provider-usage RPC result, trimmed from a real response. */
 function cardResponse(weeklyUsed = 42) {
   return {
     ok: true,
@@ -104,7 +102,6 @@ describe("matchRow", () => {
   });
 });
 
-/** The markup bb's provider-usage card renders for one provider. */
 function renderCard(rows: { label: string; used: number }[]) {
   document.body.innerHTML = `
     <div class="flex max-h-80 flex-col">
@@ -163,7 +160,6 @@ describe("mountCardPace", () => {
   });
 
   const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
-  /** First frame starts the fetch; the next frame after it decorates. */
   const settle = async () => {
     await frame();
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
@@ -283,7 +279,6 @@ describe("mountCardPace", () => {
   it("puts the delta under bb's reset line when the row is tapped open", async () => {
     const [row] = await mount([{ label: "Weekly limit", used: 42 }]);
 
-    // What bb does on a tap: aria-expanded, then its own reset line at the end.
     row!.setAttribute("aria-expanded", "true");
     const reset = document.createElement("span");
     reset.textContent = "Resets Tue 3:59 PM";
@@ -295,11 +290,9 @@ describe("mountCardPace", () => {
     expect(line.previousElementSibling).toBe(reset);
     expect(getComputedStyle(line).textAlign).toBe("right");
     expect(line.textContent).toMatch(/^15% ahead of pace/u);
-    // bb's own reset line repeats the row's reset time: it is hidden.
     expect(getComputedStyle(reset).display).toBe("none");
     expect(getComputedStyle(row!.firstElementChild!).display).not.toBe("none");
 
-    // What bb does on the second tap.
     row!.setAttribute("aria-expanded", "false");
     reset.remove();
     await frame();
@@ -386,7 +379,6 @@ describe("hideTabs", () => {
       .map((name) => `<button role="tab" aria-label="${name}" aria-selected="${name === selected}"></button>`)
       .join("")}</div>`;
     const header = document.querySelector("[data-provider-usage-header]")!;
-    // What bb does when a tab is clicked.
     for (const tab of header.querySelectorAll("[role=tab]")) {
       tab.addEventListener("click", () => {
         for (const other of header.querySelectorAll("[role=tab]")) other.setAttribute("aria-selected", String(other === tab));
@@ -427,7 +419,6 @@ describe("failure notice", () => {
   const REFRESH_FAILED = "Couldn\u2019t refresh usage. Showing the last available update.";
   const opencode = { provider: "opencode", machine: "MacBook Pro (7)", message: "OpenCode Go usage access was denied." };
 
-  /** bb's card with its status message; `selected` is the open tab. */
   function card(message: string, selected = "opencode") {
     document.body.innerHTML = `
       <div class="card">
@@ -529,10 +520,8 @@ describe("failure notice", () => {
     const header = card(REFRESH_FAILED);
     decorateFailure(header, [opencode], "MacBook Pro (7)", storage);
     button()!.click();
-    // mountCardPace's stylesheet hides a status with this attribute.
     expect(status().hasAttribute("data-usage-pace-dismissed")).toBe(true);
 
-    // bb renders the card again.
     const again = card(REFRESH_FAILED);
     decorateFailure(again, [opencode], "MacBook Pro (7)", storage);
     expect(status().hasAttribute("data-usage-pace-dismissed")).toBe(true);

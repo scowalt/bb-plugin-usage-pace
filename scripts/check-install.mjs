@@ -1,5 +1,3 @@
-// Exercise the source-build path used by BB Git installs, not just the
-// checked-in bundles. A development checkout otherwise hides missing deps.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { cp, mkdtemp, rm } from "node:fs/promises";
@@ -20,13 +18,10 @@ export async function checkInstall(root) {
     assert.equal(result.status, 0, `${command} ${args.join(" ")} failed in a production-only checkout`);
   };
   try {
-    // Retain dist/: Git installs may rebuild even when prebuilt files exist.
     await cp(root, isolated, {
       recursive: true,
       filter: path => !excluded.has(relative(root, path).split(/[\\/]/)[0]),
     });
-    // For exact installer parity, point BB_INSTALL_NPM_CLI at the npm-cli.js
-    // shipped with the BB version under test. Bun is the portable default.
     const npmCli = process.env.BB_INSTALL_NPM_CLI;
     if (npmCli) {
       run(process.execPath, [npmCli, "install", "--prefix", isolated, "--ignore-scripts", "--omit=dev", "--omit=optional", "--no-audit", "--no-fund"]);
@@ -41,7 +36,6 @@ export async function checkInstall(root) {
         `The source-build test must not have access to the ${name} devDependency`,
       );
     }
-    // Provider-bridge imports need the pinned SDK runtime during host bundling.
     assert.ok(require.resolve("@get-bb/plugin-sdk/provider-bridge/acp"));
     run("bb", ["plugin", "build", isolated]);
     console.log("Production-only source build passed (no devDependencies, no provider requests).");

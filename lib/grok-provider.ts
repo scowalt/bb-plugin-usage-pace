@@ -1,14 +1,3 @@
-// Grok Build usage for bb's usage card.
-//
-// bb's built-in ACP plugin owns `acp-grok`, and that provider reports no
-// usage, so the card has no Grok tab. This registers a companion provider
-// that runs the same Grok Build ACP agent and also answers bb's usage
-// request (host.ts, lib/grok-usage.ts). bb's card then shows a Grok tab, and
-// card-pace adds pace to it like to any other tab.
-//
-// From bb-plugin-grok-build-usage by MacHatter1 (MIT). The id is different
-// (`usage-pace-grok`, not `grok-build-usage`): bb refuses a second provider
-// with an id that another plugin already registered.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import type { AcpLaunchSpec } from "@get-bb/plugin-sdk/provider-bridge/acp";
 
@@ -51,8 +40,6 @@ export const GROK_LAUNCH_SPEC = {
 export function registerGrokProvider(bb: BbPluginApi) {
   bb.providers.register({
     id: GROK_PROVIDER_ID,
-    // Not "Grok Build": bb's own acp-grok provider has that name, and the
-    // picker shows both.
     displayName: "Grok Build (usage)",
     family: "grok-build",
     icon: "./assets/icons/grok.svg",
@@ -60,7 +47,6 @@ export function registerGrokProvider(bb: BbPluginApi) {
       acpDialect: "grok",
       acpLaunchSpec: GROK_LAUNCH_SPEC,
     },
-    // Listed only on hosts where the `grok` command is installed.
     experimental_visibility: "installed",
     maintenance: {
       health: true,

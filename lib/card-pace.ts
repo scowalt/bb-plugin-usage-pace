@@ -1,64 +1,21 @@
-// Adds pace to bb's built-in usage card (the provider-usage plugin's sidebar
-// footer card). That card is another plugin's React tree, so this content
-// script mostly adds nodes to it:
-//   - an even-pace tick on each window's bar, and a band between the used
-//     percent and that tick: red when ahead of pace, faint when under it;
-//   - bb's "Couldn't refresh usage" message on the failed provider's tab
-//     only, with that provider's error, a red dot on that tab, and a button
-//     that dismisses the message. bb shows the message on every tab when
-//     one provider on the machine fails, and does not say which one. The
-//     failure comes from this plugin's own usage snapshot.
-//   - provider tabs the user hid in the settings (bb lists some providers,
-//     such as Cursor, on every machine, installed or not);
-//   - the delta from even pace, as a line inside the row, under the dates.
-//     It shows while the pointer is over the row (mouse only), and when bb
-//     expands the row on tap, click or Enter (the touch path).
-//
-// Hover is not CSS `:hover`. The delta line makes the row taller and moves
-// the rows below it, so `:hover` closed the row whenever the pointer was in a
-// gap between rows, and the card jumped. Here the open row stays open while
-// the pointer is anywhere in the list of rows, and changes only when the
-// pointer enters another row. The one change to a React node: while a row is
-// open by hover, its `title` is held back, so the browser does not show a
-// second, native tooltip over the delta. It is put back when the row closes.
-//
-// The card has no plugin attribute. It is found from its header
-// (`[data-provider-usage-header]`); each window row is a button whose
-// aria-label starts with the window label ("Weekly limit: 44% used. …").
-// The selected provider tab and the "Usage machine: …" button tell which
-// provider and machine the rows belong to.
-//
-// The data comes from the card's own RPC, so labels and numbers are the ones
-// the card shows. `maxAgeMs` lets that plugin answer from its cache.
 import { describeDelta, paceForWindows, type Pace, type PaceInput } from "./pace";
 
 const HEADER_SELECTOR = "[data-provider-usage-header]";
 const TICK_ATTR = "data-usage-pace-tick";
-/** The part of the bar between the used percent and even pace. */
 const BAND_ATTR = "data-usage-pace-band";
-/** The delta line inside a row. */
 const DETAIL_ATTR = "data-usage-pace-detail";
-/** Where the `title` of a hover-open row waits until the row closes. */
 const TITLE_ATTR = "data-usage-pace-title";
-/** Hover only where a pointer can hover; touch uses bb's tap to expand. */
 const HOVER_QUERY = "(hover: hover) and (pointer: fine)";
-/** Marks a provider tab that the user hid; the style hides it. */
 const HIDDEN_ATTR = "data-usage-pace-hidden";
 const SETTINGS_RPC_URL = "/api/v1/plugins/usage-pace/rpc/getCardSettings";
 const OWN_USAGE_RPC_URL = "/api/v1/plugins/usage-pace/rpc/getUsage";
-/** On bb's status message when it is a refresh or load failure. */
 const FAILED_ATTR = "data-usage-pace-failed";
-/** The line that names the failed providers. */
 const FAILURE_ATTR = "data-usage-pace-failure";
 const DISMISS_ATTR = "data-usage-pace-dismiss";
 const DISMISSED_ATTR = "data-usage-pace-dismissed";
-/** On bb's failure message on a tab whose provider did not fail. */
 const OTHER_TAB_ATTR = "data-usage-pace-other-tab";
-/** On the tab of a provider that failed: a red dot. */
 const FAILED_TAB_ATTR = "data-usage-pace-failed-tab";
-/** localStorage key: the failure the user dismissed. */
 const DISMISSED_KEY = "usage-pace:dismissed-failure";
-/** bb's texts: "Couldn’t refresh usage. …" and "Couldn’t load usage." */
 const FAILURE_MESSAGE = /couldn.t (refresh|load) usage/iu;
 const STYLE_ID = "usage-pace-card-style";
 const MACHINE_PREFIX = "Usage machine: ";
@@ -156,14 +113,12 @@ button:has(> [${DETAIL_ATTR}]) > :not(:first-child):not([${DETAIL_ATTR}]) {
 }
 `;
 
-/** One provider on one machine, with the names the card shows. */
 export interface CardProvider {
   machine: string;
   provider: string;
   windows: PaceInput[];
 }
 
-/** Reads the provider-usage RPC result; unknown shapes give an empty list. */
 export function parseCardUsage(body: unknown): CardProvider[] {
   const out: CardProvider[] = [];
   const result = (body as { ok?: boolean; result?: unknown } | null)?.result;
@@ -189,7 +144,6 @@ export function parseCardUsage(body: unknown): CardProvider[] {
   return out;
 }
 
-/** Reads this plugin's getCardSettings result: lowercase provider names. */
 export function parseCardSettings(body: unknown): string[] {
   const list = (body as { result?: { hiddenProviders?: unknown } } | null)?.result?.hiddenProviders;
   return Array.isArray(list)
@@ -202,10 +156,6 @@ export interface RowMatch {
   usedPercent: number;
 }
 
-/**
- * The pace for one card row. `provider` and `machine` are the names the
- * card shows; either can be null when the card does not show it.
- */
 export function matchRow(
   providers: readonly CardProvider[],
   provider: string | null,
@@ -224,7 +174,6 @@ export function matchRow(
       ariaLabel.startsWith(`${window.label}: `),
     );
     if (index === -1) continue;
-    // The row can be newer than the last fetch: use the percent it shows.
     const shown = /: (\d+(?:\.\d+)?)% used/u.exec(ariaLabel);
     const windows = candidate.windows.map((window, j) =>
       j === index && shown ? { ...window, usedPercent: Number(shown[1]) } : window,
@@ -251,11 +200,9 @@ function restoreTitle(row: HTMLElement) {
   const title = row.getAttribute(TITLE_ATTR);
   if (title === null) return;
   row.removeAttribute(TITLE_ATTR);
-  // React sets a new title when its value changes; keep that one.
   if (!row.hasAttribute("title")) row.setAttribute("title", title);
 }
 
-/** Returns true when the row was decorated. */
 function decorateRow(
   row: HTMLElement,
   match: RowMatch | null,
@@ -263,7 +210,6 @@ function decorateRow(
   hovered: boolean,
 ): boolean {
   const grid = row.firstElementChild;
-  // The bar is the second cell of the row grid: label, bar, percent, reset.
   const bar = grid?.children.item(1);
   let band = bar?.querySelector<HTMLElement>(`[${BAND_ATTR}]`) ?? null;
   let tick = bar?.querySelector<HTMLElement>(`[${TICK_ATTR}]`) ?? null;
@@ -301,9 +247,6 @@ function decorateRow(
   const left = `${even.toFixed(2)}%`;
   if (tick.style.left !== left) tick.style.left = left;
 
-  // bb expands the row on tap and adds its reset line as the last child.
-  // The delta goes after it (the style hides bb's line); appendChild also
-  // moves it back to the end if React adds its line later. It is always right-aligned, under the dates.
   const expanded = row.getAttribute("aria-expanded") === "true";
   if (expanded || hovered) {
     if (detail === null) {
@@ -320,7 +263,6 @@ function decorateRow(
   return true;
 }
 
-/** The window rows of one card, without the machine menu in its header. */
 function cardRows(header: Element): HTMLElement[] {
   const card = header.parentElement;
   if (card === null) return [];
@@ -329,18 +271,12 @@ function cardRows(header: Element): HTMLElement[] {
   );
 }
 
-/**
- * Hides the provider tabs named in `hidden` (lowercase names). When the
- * selected tab is hidden, selects the first visible tab instead.
- */
-/** A provider whose usage read failed, from this plugin's own snapshot. */
 export interface ProviderFailure {
   provider: string;
   machine: string;
   message: string | null;
 }
 
-/** Reads this plugin's getUsage result: the providers with status "error". */
 export function parseFailures(body: unknown): ProviderFailure[] {
   const providers = (body as { result?: { providers?: unknown } } | null)?.result?.providers;
   if (!Array.isArray(providers)) return [];
@@ -353,7 +289,6 @@ export function parseFailures(body: unknown): ProviderFailure[] {
     }));
 }
 
-/** "opencode: OpenCode Go usage access was denied. …", one line each. */
 export function describeFailures(failures: readonly ProviderFailure[]): string {
   if (failures.length === 0) return "The provider that failed is not known.";
   return failures
@@ -369,16 +304,6 @@ function toggleAttribute(element: Element, name: string, on: boolean) {
   else element.removeAttribute(name);
 }
 
-/**
- * Puts bb's failure message on the tab of the provider that failed only.
- *
- * bb shows the message on every tab of the machine. When this plugin knows
- * which providers failed, the message shows on their tabs, with their
- * errors, and is hidden on the other tabs, whose data is current; the
- * failed tabs get a red dot. When no failed provider is known, the message
- * shows on every tab, as bb shows it. The dismiss button hides the message
- * until the failure changes.
- */
 export function decorateFailure(
   header: Element,
   failures: readonly ProviderFailure[],
@@ -409,13 +334,11 @@ export function decorateFailure(
   const selectedTab = header.querySelector('[role="tab"][aria-selected="true"]');
   const selected = selectedTab === null ? null : tabName(selectedTab);
   const onFailedTab = selected !== null && failed.has(selected);
-  // Known failures, none of them on this tab: this tab's data is current.
   toggleAttribute(status, OTHER_TAB_ATTR, failed.size > 0 && selected !== null && !onFailedTab);
   const shown = onFailedTab
     ? here.filter((failure) => failure.provider.trim().toLowerCase() === selected)
     : here;
   const detail = describeFailures(shown);
-  // The key changes when another provider fails or the message changes.
   const key = `${machine ?? ""}|${text.trim()}|${detail}`;
 
   toggleAttribute(status, FAILED_ATTR, true);
@@ -434,12 +357,9 @@ export function decorateFailure(
     button.title = "Dismiss until the failure changes";
     button.textContent = "×";
   }
-  // After bb's icon and text: the line, then the button. append() moves
-  // them back to the end if React added a child later.
   if (status.lastElementChild !== button || button.previousElementSibling !== line) {
     status.append(line, button);
   }
-  // The handler reads the key from the button, so it stays current.
   button.dataset.key = key;
   button.onclick = (event) => {
     event.stopPropagation();
@@ -536,7 +456,6 @@ export function mountCardPace({ signal }: { signal: AbortSignal }) {
       decorateFailure(header, failures, cardMachine(header), safeStorage());
       decorateCard(header, providers, now, hovered, decorated);
     }
-    // React puts a changed title back; hold it again.
     if (hovered !== null) holdTitle(hovered);
   };
 
@@ -554,8 +473,6 @@ export function mountCardPace({ signal }: { signal: AbortSignal }) {
     if (hovered !== null) restoreTitle(hovered);
     hovered = row;
     if (row !== null) holdTitle(row);
-    // Now, not on the next frame: the layout must change before the next
-    // pointer event is read against it.
     run();
   };
 
@@ -568,12 +485,10 @@ export function mountCardPace({ signal }: { signal: AbortSignal }) {
   const onOver = (event: MouseEvent) => {
     if (!canHover()) return;
     const row = rowFrom(event.target);
-    // Over a gap between rows, `row` is null: keep the open row.
     if (row !== null) setHovered(row);
   };
   const onOut = (event: MouseEvent) => {
     if (hovered === null) return;
-    // The hitbox is the whole list of rows, gaps included.
     const list = hovered.parentElement;
     const next = event.relatedTarget;
     if (!(next instanceof Node && list?.contains(next))) setHovered(null);
@@ -592,8 +507,6 @@ export function mountCardPace({ signal }: { signal: AbortSignal }) {
         body: JSON.stringify(body),
         signal,
       }).then((response) => response.json());
-    // Each read keeps its last value when it fails; the next run tries
-    // again after REFETCH_MS.
     const [card, settings, own] = await Promise.allSettled([
       post(CARD_RPC_URL, { force: false, machineIds: null, providerId: null, maxAgeMs: CARD_MAX_AGE_MS }),
       post(SETTINGS_RPC_URL, {}),
@@ -609,8 +522,6 @@ export function mountCardPace({ signal }: { signal: AbortSignal }) {
     }
   }
 
-  // Our own writes also trigger the observer; `run` writes only on change,
-  // so the second pass is a no-op.
   const observer = new MutationObserver(schedule);
   observer.observe(document.body, { childList: true, subtree: true });
   const minute = window.setInterval(schedule, REFETCH_MS);

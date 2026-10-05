@@ -1,13 +1,3 @@
-// Makes the Grok usage provider a source for bb's usage card.
-//
-// A registered provider with `maintenance.usage` is not enough: bb's
-// provider-usage card lists the plugins that serve the discoverable
-// `provider-usage.v1` RPC contract, and shows the resources they list. Each
-// provider plugin serves it for its own providers (provider-acp,
-// provider-claude-code, provider-codex), so this plugin serves it for
-// `usage-pace-grok`: one resource per connected host where the provider is
-// listed. The numbers come from the provider bridge (host.ts) through
-// `bb.sdk.system.usageLimits`.
 import { defineRpcContract, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { GROK_PROVIDER_ID } from "./grok-provider";
@@ -95,7 +85,6 @@ function windowId(label: string): string {
   return label.toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-|-$/gu, "") || "window";
 }
 
-/** The usage bb reports for a provider, in the provider-usage.v1 shape. */
 export function toSourceUsage(raw: RawUsage | undefined): SourceUsage {
   const empty = { plan: null, accountEmail: null, planLabel: null };
   if (raw === undefined) return { status: "error", ...empty, message: "No usage reported." };
@@ -138,8 +127,6 @@ export function createGrokUsageSource(
     const resources: z.infer<typeof resourceSchema>[] = [];
     for (const host of hosts) {
       if (host.status === "disconnected") continue;
-      // The provider has `experimental_visibility: "installed"`, so bb lists
-      // it only on hosts where the grok command is installed.
       const listed = await bb.sdk.providers
         .list({ hostId: host.id, capability: "usage" })
         .then((providers) => providers.some((provider) => provider.id === GROK_PROVIDER_ID))

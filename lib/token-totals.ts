@@ -1,6 +1,5 @@
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 
-/** Provider totals already include cached/reasoning tokens where applicable. */
 export function tokenDelta(total: number, last: number, previous?: number): number {
   if (![total, last].every((n) => Number.isSafeInteger(n) && n >= 0)) return 0;
   if (previous === undefined || total < previous) return Math.min(total, last);
@@ -48,7 +47,6 @@ export function createTokenTotals(bb: BbPluginApi) {
   async function sync() {
     const seen = new Set<string>();
     let failures = 0;
-    // Both lists include hidden workers; paging avoids the default list cap.
     for (const archived of [false, true]) {
       for (let offset = 0; ; offset += 100) {
         const threads = await bb.sdk.threads.list({ archived, includeHidden: true, limit: 100, offset, signal: controller.signal });
@@ -71,7 +69,6 @@ export function createTokenTotals(bb: BbPluginApi) {
                   const prior = previous.get(thread.id, providerThreadId) as { total: number } | undefined;
                   const total = tokenUsage.total.totalTokens;
                   const amount = tokenDelta(total, tokenUsage.last.totalTokens, prior?.total);
-                  // Copied fork history establishes a baseline but is not new spend.
                   if (event.createdAt >= thread.createdAt) insert.run(event.id, event.createdAt, amount);
                   saveSession.run(thread.id, providerThreadId, total);
                   seq = event.seq;
@@ -82,7 +79,6 @@ export function createTokenTotals(bb: BbPluginApi) {
             }
           } catch (cause) {
             if (controller.signal.aborted) throw cause;
-            // Retry unfinished pages even when the thread is otherwise unchanged.
             saveCursor.run(thread.id, seq, -1);
             failures++;
           }
@@ -95,7 +91,6 @@ export function createTokenTotals(bb: BbPluginApi) {
   }
 
   return async (timeZone: string, force = false) => {
-    // Validate the timezone before doing any work.
     new Intl.DateTimeFormat("en", { timeZone }).format();
     if (pending) await pending;
     else if (force || Date.now() - fetchedAt > 30_000) {
