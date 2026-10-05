@@ -1,7 +1,6 @@
 import type { BankedResets } from "./banked-resets-contract";
 import { formatReset } from "./usage-store";
 
-/** The reported balance is authoritative; incomplete details never imply zero. */
 export function bankedResetBadge(data: BankedResets | null, loading: boolean, now = Date.now()) {
   const unknown = (title: string, text = "?") => ({ text, title, warning: false, empty: false });
   if (data === null) return unknown(loading ? "Loading banked resets…" : "Banked resets unavailable.", loading ? "…" : "?");

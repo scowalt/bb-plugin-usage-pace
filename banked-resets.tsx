@@ -17,7 +17,6 @@ export function BankedResetsList({ data, loading, hostName, id, focusOnMount = f
   data: BankedResets | null; loading: boolean; hostName: string; id?: string; focusOnMount?: boolean; now?: number;
 }) {
   const section = useRef<HTMLElement>(null);
-  // After the overlay's autofocus, on both desktop dialogs and compact drawers.
   useEffect(() => {
     if (!focusOnMount) return;
     const frame = window.requestAnimationFrame(() => {
@@ -64,7 +63,6 @@ export function BankedResetsList({ data, loading, hostName, id, focusOnMount = f
   );
 }
 
-/** Both surfaces subscribe to the same host/account inventory. */
 export function BankedResetsSection({ hostId, hostName, accountEmail, focus = false }: BankedResetTarget & { hostName: string; focus?: boolean }) {
   const { data, loading } = useBankedResets({ hostId, accountEmail });
   return <BankedResetsList id={bankedResetSectionId({ hostId, accountEmail })} data={data} loading={loading} hostName={hostName} focusOnMount={focus} />;

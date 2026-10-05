@@ -11,12 +11,10 @@ const Context = createContext<{ states: Record<string, ResetState>; refresh: () 
 export const bankedResetKey = (target: BankedResetTarget) => JSON.stringify([target.hostId, target.accountEmail]);
 export const bankedResetSectionId = (target: BankedResetTarget) => `banked-resets-${encodeURIComponent(bankedResetKey(target))}`;
 
-/** One inventory feed for the footer and dialog; independent of quota/pace reads. */
 export function BankedResetsProvider({ providers, active, children }: {
   providers: UsageProvider[]; active: boolean; children: ReactNode;
 }) {
   const rpc = useRpc<typeof rpcContract>();
-  // The SDK need not return the same client object on every render.
   const rpcRef = useRef(rpc);
   rpcRef.current = rpc;
   const refreshRef = useRef(() => {});
@@ -24,7 +22,6 @@ export function BankedResetsProvider({ providers, active, children }: {
   const seen = new Set<string>();
   const targets = providers.filter(provider => {
     if (provider.id !== "codex") return false;
-    // Match the dialog's account deduplication: failed hosts stay separate.
     if (provider.status !== "ok" || provider.accountEmail === null) return true;
     if (seen.has(provider.accountEmail)) return false;
     seen.add(provider.accountEmail);
@@ -63,7 +60,6 @@ export function BankedResetsProvider({ providers, active, children }: {
       pending = false;
       if (forceQueued && !disposed) void refresh();
     };
-    // Discard inventories from a previous host/account selection.
     setStates({});
     refreshRef.current = () => { void refresh(true); };
     void refresh();

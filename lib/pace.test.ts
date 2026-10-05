@@ -28,7 +28,6 @@ describe("windowDurationMs", () => {
     ["Week (all models)", 168 * HOUR],
     ["Daily", 24 * HOUR],
     ["2 weeks", 336 * HOUR],
-    // The labels bb's provider-usage card shows.
     ["Five-hour limit", 5 * HOUR],
     ["Weekly limit", 168 * HOUR],
     ["Weekly · Fable", 168 * HOUR],
@@ -51,11 +50,8 @@ describe("windowDurationMs", () => {
   });
 
   it("reads a monthly window as the calendar month before the reset", () => {
-    // 1 Sep -> 1 Oct: 30 days.
     expect(windowDurationMs("Monthly credits", Date.parse("2026-10-01T00:00:00Z"))).toBe(30 * 24 * HOUR);
-    // 1 Feb -> 1 Mar 2026: 28 days.
     expect(windowDurationMs("Monthly credits", Date.parse("2026-03-01T00:00:00Z"))).toBe(28 * 24 * HOUR);
-    // No reset time: no length.
     expect(windowDurationMs("Monthly credits")).toBeNull();
   });
 });
@@ -73,19 +69,16 @@ describe("oneMonthBefore", () => {
 
 describe("Grok Build monthly credits", () => {
   it("projects the pace over the calendar month", () => {
-    // 40% used, 10 of 30 days passed (reset 1 Oct, now 11 Sep).
     const now = Date.parse("2026-09-11T00:00:00Z");
     const pace = paceFor({ label: "Monthly credits", usedPercent: 40, resetsAt: "2026-10-01T00:00:00.000Z" }, now)!;
     expect(pace.windowMs).toBe(30 * 24 * HOUR);
     expect(pace.elapsedFraction).toBeCloseTo(1 / 3);
     expect(pace.projectedPercent).toBeCloseTo(120);
-    // 60% left over 20 days.
     expect(formatBudget(pace)).toBe("budget 3%/day");
   });
 });
 
 describe("windowLengths", () => {
-  // The labels Claude Code reports on a Max plan.
   const claude = [
     { label: "Current session", usedPercent: 25, resetsAt: "2026-09-24T10:59:59.770Z" },
     { label: "Weekly limit", usedPercent: 44, resetsAt: "2026-09-29T08:59:59.770Z" },
@@ -229,7 +222,6 @@ describe("formatting", () => {
   });
 
   it("gives what is left, with no rate, under 3 hours before the reset", () => {
-    // The case that read "budget 68%/day": 7d, 96% used, 1h 25m left.
     const week = paceFor({ label: "7d", usedPercent: 96, resetsAt: at(85 / 60) }, NOW)!;
     expect(formatBudget(week)).toBe("4% left for 1h 25m");
     expect(describeDelta(week, 96, NOW)[1]).toBe("lasts to reset · 4% left for 1h 25m");
@@ -297,7 +289,6 @@ describe("describeDelta", () => {
 
   it("shows how far ahead of pace, and the time without quota", () => {
     const pace = paceFor({ label: "7d", usedPercent: 42, resetsAt: at(122) }, NOW)!;
-    // 42 − 27.4 = 14.6 points; 14.6% of 168 h = 24.5 h.
     expect(describeDelta(pace, 42, NOW, TZ)).toEqual([
       "15% ahead of pace (1d 0h)",
       "runs out Sun 04:51 · 2d 10h without quota",

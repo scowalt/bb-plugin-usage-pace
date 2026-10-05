@@ -22,7 +22,6 @@ function fakeBb(usage: unknown = okUsage) {
         ]),
       },
       providers: {
-        // Grok is installed on host_a only.
         list: vi.fn(async ({ hostId }: { hostId: string }) =>
           hostId === "host_a" ? [{ id: "claude-code" }, { id: GROK_PROVIDER_ID }] : [{ id: "claude-code" }],
         ),
@@ -37,7 +36,6 @@ type Handlers = ReturnType<typeof createGrokUsageSource>;
 const LIST = "provider-usage.v1.listResources";
 const GET = "provider-usage.v1.getResource";
 
-/** Calls a handler the way bb does: input and output checked by the contract. */
 function call(handlers: Handlers, method: typeof LIST, input: unknown): Promise<z.infer<typeof grokUsageSourceContract[typeof LIST]["output"]>>;
 function call(handlers: Handlers, method: typeof GET, input: unknown): Promise<z.infer<typeof grokUsageSourceContract[typeof GET]["output"]>>;
 async function call(handlers: Handlers, method: typeof LIST | typeof GET, input: unknown) {

@@ -1,12 +1,3 @@
-// bb-plugin-usage-pace — frontend entry. Forked from Usage Bar by Dmitrii
-// Kapustin (MIT); the pace math lives in lib/pace.ts.
-//
-// Surfaces (all fed by one store in lib/usage-store.ts):
-//   1. A content script keeps an empty container as the first child of the
-//      sidebar footer (above the icon row) and publishes it to the store.
-//   2. An app overlay slot (always mounted) portals compact provider rows into
-//      that container — provider icon · pace status · weekly/session used % — and
-//      owns a centered dialog with the full breakdown, opened by clicking it.
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -57,9 +48,6 @@ const REFRESH_MS = 5 * 60_000;
 const BAR_HOST_ID = "usage-pace-bar-host";
 const FOOTER_SELECTOR = 'div[data-sidebar="footer"]';
 
-// ---------------------------------------------------------------------------
-// Content script: keep the container in the footer + refresh loop
-// ---------------------------------------------------------------------------
 
 function mountBarHost({ signal }: { signal: AbortSignal }) {
   const host = document.createElement("div");
@@ -119,9 +107,6 @@ function mountBarHost({ signal }: { signal: AbortSignal }) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Hooks
-// ---------------------------------------------------------------------------
 
 function useUsage(): UsageState {
   const state = useSyncExternalStore(subscribeUsage, getUsageState);
@@ -131,7 +116,6 @@ function useUsage(): UsageState {
   return state;
 }
 
-/** Re-render once a minute so "resets in" stays fresh. */
 function useMinuteTick() {
   const [, tick] = useState(0);
   useEffect(() => {
@@ -140,7 +124,6 @@ function useMinuteTick() {
   }, []);
 }
 
-/** One forced refresh per exhausted reset, not one per tick or stale response. */
 function useResetRefresh(rows: CompactUsageRow[], loading: boolean, now: number) {
   const refreshed = useRef(new Map<string, number>());
   useEffect(() => {
@@ -156,14 +139,10 @@ function useResetRefresh(rows: CompactUsageRow[], loading: boolean, now: number)
       refreshed.current.set(row.key, at);
       due = true;
     }
-    // Bypass the server cache; coalesce simultaneous account resets into one read.
     if (due) void refreshUsage({ force: true });
   }, [rows, loading, now]);
 }
 
-// ---------------------------------------------------------------------------
-// Compact footer rows
-// ---------------------------------------------------------------------------
 
 function ProviderMark({
   provider,
@@ -288,9 +267,6 @@ export function UsageBar({ onOpen }: { onOpen: (target?: BankedResetTarget) => v
   );
 }
 
-// ---------------------------------------------------------------------------
-// Centered dialog with the full breakdown
-// ---------------------------------------------------------------------------
 
 function WindowRow({ window, pace }: { window: UsageWindow; pace: Pace | null }) {
   const tone = pace?.tone ?? toneForUsed(window.usedPercent);
@@ -331,7 +307,6 @@ function WindowRow({ window, pace }: { window: UsageWindow; pace: Pace | null })
   );
 }
 
-/** Rate details on the left; on the right, how long the quota is gone. */
 function PaceVerdict({ pace }: { pace: Pace }) {
   const runsOut = formatRunsOut(pace, Date.now(), undefined, true);
   return (
@@ -414,8 +389,6 @@ function UsageDialog({ tokens, bankedTarget }: { tokens: TokenTotals | null; ban
   const refreshBankedResets = useRefreshBankedResets();
   const state = useUsage();
   useMinuteTick();
-  // Same account on several hosts reports one quota: keep the first "ok"
-  // entry per (provider, account); keep every non-ok entry (they are per host).
   const seenAccounts = new Set<string>();
   const providers = (state.data?.providers ?? []).filter((provider) => {
     if (provider.status !== "ok" || provider.accountEmail === null) return true;
@@ -496,11 +469,9 @@ function UsageDialog({ tokens, bankedTarget }: { tokens: TokenTotals | null; ban
   );
 }
 
-/** Always-mounted overlay: portals the bar into the footer + owns the dialog. */
 function UsageOverlay() {
   const tokens = useTokenTotals();
   const host = useSyncExternalStore(subscribeBarHost, getBarHost);
-  // Off by default: the pace also shows in bb's own usage card (card-pace).
   const state = useUsage();
   const showStrip = state.data?.showStrip === true;
   const open = useSyncExternalStore(subscribeOverlay, isOverlayOpen);

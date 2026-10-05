@@ -1,7 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 
-// The browser data module must not import the backend SDK, even when it is
-// available locally for host/provider-bridge builds.
 vi.mock("@get-bb/plugin-sdk", () => {
   throw new Error("The browser's reset data module imported the backend SDK");
 });

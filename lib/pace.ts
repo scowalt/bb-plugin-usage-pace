@@ -1,16 +1,8 @@
-// Pace: is the current burn rate going to last until the window resets?
-//
-// Providers report only `usedPercent` and `resetsAt`. The window length comes
-// from the label ("5h", "7d · Fable", "Weekly", "5-hour window"), so the
-// start of the window is `resetsAt - length`. Everything else is a
-// straight-line projection from the start of the window to now.
 
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
 
-/** Below this share of elapsed time, require meaningful usage to judge pace. */
 export const MIN_ELAPSED_FRACTION = 0.05;
-/** Significant quota consumption must warn even near the start of a window. */
 const MIN_USED_PERCENT = 5;
 
 export type Tone = "ok" | "warning" | "critical";
@@ -24,21 +16,13 @@ export interface PaceInput {
 export interface Pace {
   windowMs: number;
   resetsAtMs: number;
-  /** Share of the window that has passed, 0..1. */
   elapsedFraction: number;
-  /** Used percent ÷ even-pace percent. 1 = on pace. Null while too early. */
   ratio: number | null;
-  /** Used percent at the reset if the rate stays the same. Null while too early. */
   projectedPercent: number | null;
-  /** When usage reaches 100% at this rate, if that is before the reset. */
   runsOutAtMs: number | null;
-  /** Time with no quota: from running out to the reset. 0 when it lasts. */
   lockoutMs: number;
-  /** Percent per hour that lasts exactly until the reset. */
   budgetPerHour: number;
-  /** Time from now to the reset. */
   remainingMs: number;
-  /** Percent of the window not used yet. */
   leftPercent: number;
   tone: Tone;
 }
@@ -76,10 +60,6 @@ const DURATION_PATTERN = new RegExp(
   "iu",
 );
 
-/**
- * The moment one calendar month before `atMs`, in UTC. A day that the
- * earlier month does not have becomes its last day (31 Mar -> 28 Feb).
- */
 export function oneMonthBefore(atMs: number): number {
   const at = new Date(atMs);
   const year = at.getUTCFullYear();
@@ -96,11 +76,6 @@ export function oneMonthBefore(atMs: number): number {
   );
 }
 
-/**
- * Window length from a provider label, or null when the label has none.
- * A monthly window ("Monthly credits") has no fixed length: it needs the
- * reset time, and starts one calendar month before it.
- */
 export function windowDurationMs(label: string, resetsAtMs?: number): number | null {
   const match = DURATION_PATTERN.exec(label);
   if (match !== null) {
@@ -114,19 +89,12 @@ export function windowDurationMs(label: string, resetsAtMs?: number): number | n
     if (resetsAtMs === undefined || !Number.isFinite(resetsAtMs)) return null;
     return resetsAtMs - oneMonthBefore(resetsAtMs);
   }
-  // Claude Code and Codex both call their five-hour window a "session".
   if (/\bsession\b/iu.test(label)) return 5 * HOUR_MS;
   return null;
 }
 
-/** Two windows that reset within this interval share one length. */
 const SAME_RESET_MS = HOUR_MS;
 
-/**
- * Window lengths for all windows of one provider. A window whose label has
- * no length ("Fable") takes the length of a window that resets at the same
- * moment ("Weekly limit").
- */
 export function windowLengths(windows: readonly PaceInput[]): (number | null)[] {
   const resets = windows.map((window) =>
     window.resetsAt === null ? Number.NaN : new Date(window.resetsAt).getTime(),
@@ -144,7 +112,6 @@ export function windowLengths(windows: readonly PaceInput[]): (number | null)[] 
   });
 }
 
-/** Pace for all windows of one provider, in the same order. */
 export function paceForWindows(
   windows: readonly PaceInput[],
   now = Date.now(),
@@ -158,7 +125,6 @@ function worse(a: Tone, b: Tone): Tone {
   return rank[a] >= rank[b] ? a : b;
 }
 
-/** Tone from the used percent alone: the thresholds Usage Bar used. */
 export function toneForUsed(percent: number): Tone {
   if (percent >= 95) return "critical";
   if (percent >= 80) return "warning";
@@ -188,8 +154,6 @@ export function paceFor(
   const remainingMs = Math.max(0, Math.min(windowMs, resetsAtMs - now));
   const elapsedMs = windowMs - remainingMs;
   const elapsedFraction = elapsedMs / windowMs;
-  // Suppress small early samples, not significant burns. With no elapsed
-  // time (including a reset beyond the inferred window), no rate is possible.
   const early = elapsedMs <= 0 ||
     (elapsedFraction < MIN_ELAPSED_FRACTION && used < MIN_USED_PERCENT);
 
@@ -222,7 +186,6 @@ export function paceFor(
   };
 }
 
-/** The two largest units: "2d 9h", "3h 12m", "45m". */
 export function formatDuration(ms: number): string {
   const totalMinutes = Math.max(0, Math.round(ms / 60_000));
   const days = Math.floor(totalMinutes / 1440);
@@ -233,46 +196,29 @@ export function formatDuration(ms: number): string {
   return `${minutes}m`;
 }
 
-/** "1.5×". */
 export function formatRatio(ratio: number): string {
   return `${ratio >= 10 ? Math.round(ratio) : ratio.toFixed(1)}×`;
 }
 
-/** Below this much time to the reset, a per-hour rate says little. */
 const MIN_RATE_MS = 3 * HOUR_MS;
 
-/** "68%", "2.8%", "4%" (no ".0"). */
 const percent = (value: number) =>
   `${value >= 10 ? Math.round(value) : Number(value.toFixed(1))}%`;
 
-/**
- * The budget that lasts to the reset. The unit follows the time left, not
- * the window length: a per-day rate with an hour left ("68%/day") is
- * correct arithmetic and no use to anyone.
- *   1 day or more left:  "budget 11%/day"
- *   3 hours to 1 day:    "budget 2.8%/h"
- *   under 3 hours:       "4% left for 1h 25m"
- */
 export function formatBudget(pace: Pace): string {
   if (pace.remainingMs >= DAY_MS) return `budget ${percent(pace.budgetPerHour * 24)}/day`;
   if (pace.remainingMs >= MIN_RATE_MS) return `budget ${percent(pace.budgetPerHour)}/h`;
   return `${percent(pace.leftPercent)} left for ${formatDuration(pace.remainingMs)}`;
 }
 
-/** Above this, a projection only says "far too fast". */
 const MAX_PROJECTED_PERCENT = 300;
 
-/** "on track for 162%", or "on track for over 300%". */
 export function formatProjection(projected: number): string {
   return projected > MAX_PROJECTED_PERCENT
     ? `on track for over ${MAX_PROJECTED_PERCENT}%`
     : `on track for ${Math.round(projected)}%`;
 }
 
-/**
- * "Sun 05:00" in the local time zone; only "05:00" when it is today.
- * The long form adds the date: "Sun 27 Sep, 05:00" or "today, 05:00".
- */
 export function formatMoment(
   atMs: number,
   now = Date.now(),
@@ -299,10 +245,6 @@ export function formatMoment(
   return `${date}, ${time}`;
 }
 
-/**
- * The estimated moment the window runs out at the current rate: "Sat 23:59",
- * or "now" when it is already full. Null when the window lasts to the reset.
- */
 export function formatRunsOut(
   pace: Pace | null,
   now = Date.now(),
@@ -314,7 +256,6 @@ export function formatRunsOut(
   return formatMoment(pace.runsOutAtMs, now, timeZone, long);
 }
 
-/** Pace details without the run-out moment: "1.6× pace · on track for 162% · budget 11%/day". */
 export function describeRate(pace: Pace | null): string {
   if (pace === null) return "";
   const budget = formatBudget(pace);
@@ -328,14 +269,8 @@ export function describeRate(pace: Pace | null): string {
   ].join(" · ");
 }
 
-/** Below this many percentage points from even pace, the window is on pace. */
 const ON_PACE_POINTS = 1;
 
-/**
- * The difference from even pace, and what it costs. Two lines:
- *   "17% ahead of pace (1d 4h)"
- *   "runs out Sun 00:03 · 2d 15h without quota"
- */
 export function describeDelta(
   pace: Pace,
   usedPercent: number,
@@ -363,7 +298,6 @@ export function describeDelta(
   return [first, second];
 }
 
-/** One line for tooltips and the CLI. */
 export function describePace(pace: Pace | null, now = Date.now(), timeZone?: string): string {
   const rate = describeRate(pace);
   const runsOut = formatRunsOut(pace, now, timeZone);

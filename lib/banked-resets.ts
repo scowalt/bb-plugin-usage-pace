@@ -1,5 +1,3 @@
-// Read-only Codex inventory. Credentials and private response fields stay on
-// the host; this module never refreshes auth or calls a consume endpoint.
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -66,7 +64,6 @@ function normalize(raw: unknown, accountEmail: string | null, now: number): Bank
   };
 }
 
-/** One reader per host worker. Dependencies are local I/O seams for tests. */
 export function createBankedResetsReader(deps: {
   readAuth?: () => Promise<string>;
   fetch?: typeof fetch;
@@ -79,8 +76,6 @@ export function createBankedResetsReader(deps: {
   let pending: { key: string; work: Promise<BankedResets> } | null = null;
 
   return async function readBankedResets(force = false, signal?: AbortSignal): Promise<BankedResets> {
-    // Re-read login even on a cache hit so switching accounts cannot show the
-    // previous account's inventory. No credentials are persisted by the plugin.
     let auth: z.infer<typeof authSchema>;
     try { auth = authSchema.parse(JSON.parse(await readAuth())); }
     catch {
@@ -119,7 +114,6 @@ export function createBankedResetsReader(deps: {
         });
         if (response.status === 401) return bankedResetsUnavailable("Codex login expired. Sign in with Codex, then refresh.", "unauthenticated", email);
         if (!response.ok) return bankedResetsUnavailable(`Banked resets unavailable (HTTP ${response.status}). This private Codex endpoint may be unavailable for this account.`, "error", email);
-        // Bound private response data before parsing; never echo its body/errors.
         if (!response.body) throw new Error("Missing body");
         const reader = response.body.getReader();
         const chunks: Uint8Array[] = [];

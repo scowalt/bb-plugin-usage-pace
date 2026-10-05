@@ -1,10 +1,3 @@
-// bb-plugin-usage-pace — backend entry. Forked from Usage Bar by Dmitrii
-// Kapustin (MIT).
-//
-// Reads agent-provider usage limits (weekly windows and friends) through
-// bb.sdk.system.usageLimits, caches them per host, and exposes them to the
-// frontend over RPC and to shells/agents via `bb usage-pace`. Pace is not
-// cached: it depends on the current time, so each reader computes it.
 import { defineRpcContract, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { registerGrokProvider } from "./lib/grok-provider";
@@ -18,7 +11,6 @@ const windowSchema = z.object({
   label: z.string(),
   usedPercent: z.number(),
   resetsAt: z.string().nullable(),
-  /** True when the label looks like a 7-day / weekly window. */
   weekly: z.boolean(),
 });
 export type UsageWindow = z.infer<typeof windowSchema>;
@@ -43,7 +35,6 @@ const snapshotSchema = z.object({
   providers: z.array(providerSchema),
   fetchedAt: z.string(),
   error: z.string().nullable(),
-  /** The `showStrip` setting, sent with the snapshot so the app can read it. */
   showStrip: z.boolean().optional(),
 });
 export type UsageSnapshot = z.infer<typeof snapshotSchema>;
@@ -67,7 +58,6 @@ export const rpcContract = defineRpcContract({
   },
 });
 
-/** "Cursor, opencode" -> ["cursor", "opencode"]. */
 export function parseProviderList(value: string): string[] {
   return value
     .split(",")
@@ -179,12 +169,8 @@ export default async function plugin(bb: BbPluginApi) {
     hiddenProviders = parseProviderList(String(values.hiddenCardProviders ?? ""));
   };
   await applySettings();
-  // bb registers providers when the plugin loads, so this setting applies
-  // after a reload.
   if ((await settings.get()).grokUsage !== false) {
     registerGrokProvider(bb);
-    // bb's usage card shows the providers of plugins that serve this
-    // discoverable contract; the provider alone does not add a Grok tab.
     bb.rpc.register(grokUsageSourceContract, createGrokUsageSource(bb), {
       experimental_discoverable: true,
       experimental_description:
@@ -290,7 +276,6 @@ export default async function plugin(bb: BbPluginApi) {
         );
         continue;
       }
-      // Pace needs every window: a window can take its length from a sibling.
       const paces = paceForWindows(provider.windows);
       const shown = provider.windows
         .map((window, index) => ({ window, pace: paces[index]! }))

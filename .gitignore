@@ -1,4 +1,3 @@
-# Git installs ship verified bundles; do not depend on devDependencies at install time.
 dist/*
 !dist/app.js
 !dist/app.css

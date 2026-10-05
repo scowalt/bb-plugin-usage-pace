@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -62,7 +61,6 @@ it("renders a neutral W/S readout with a separately coloured pace glyph and acce
   await render();
   const button = container.querySelector("button")!;
   expect(button.textContent).toBe("C●W52%S32%");
-  // The footer portal is outside the overlay slot's automatic CSS scope.
   expect(button.closest('[data-bb-plugin="usage-pace"]')).not.toBeNull();
   expect(button.getAttribute("aria-label")).toContain("Weekly limit: 52% used");
   expect(button.getAttribute("aria-label")).toContain("5-hour limit: 32% used");
@@ -157,7 +155,6 @@ it("coalesces expired accounts into one refresh and waits for an existing reques
   state = { ...state, loading: false };
   await render();
   expect(usageStore.refreshUsage).toHaveBeenCalledExactlyOnceWith({ force: true });
-  // A provider may continue to report its old reset even in a new snapshot.
   state = { ...state, data: { ...state.data!, fetchedAt: new Date(NOW + 60_000).toISOString() } };
   await render();
   await act(async () => { vi.advanceTimersByTime(60_000); });

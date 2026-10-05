@@ -1,7 +1,3 @@
-// Verify the exact checkout to be tagged, exercise BB's production-only source
-// build, then load its prebuilt bundles without any
-// plugin node_modules or real Codex credentials. Supply only the SDK runtime
-// that BB provides to backend bundles. Never performs a provider request.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { cp, mkdtemp, readFile, rm, stat } from "node:fs/promises";
@@ -41,8 +37,6 @@ await checkInstall(root);
 
 const isolated = await mkdtemp(join(tmpdir(), "usage-pace-release-runtime-"));
 const previousCodexHome = process.env.CODEX_HOME;
-// BB resolves this public runtime export itself; it is intentionally external
-// in backend bundles, not a production npm dependency of the plugin.
 const sdkUrl = process.env.BB_RELEASE_SDK_URL ?? import.meta.resolve("@get-bb/plugin-sdk");
 const hooks = registerHooks({
   resolve(specifier, context, nextResolve) {

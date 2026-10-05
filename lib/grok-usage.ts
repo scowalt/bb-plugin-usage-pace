@@ -1,6 +1,3 @@
-// Grok Build usage: reads the Grok CLI login and asks xAI's billing service
-// for the credit window. From bb-plugin-grok-build-usage by MacHatter1 (MIT),
-// https://github.com/MacHatter1/bb-plugin-grok-build-usage, unchanged.
 
 import { execFile as execFileCallback } from "node:child_process";
 import { readFile } from "node:fs/promises";
@@ -147,8 +144,6 @@ async function readSubscriptionTier(
     if (!response.ok) return null;
     return parseSubscriptionTier(await response.json());
   } catch {
-    // Plan metadata is supplementary; billing usage should remain visible if
-    // the settings endpoint is unavailable or changes shape.
     return null;
   }
 }
@@ -231,7 +226,6 @@ export function parseBillingUsage(
   if (explicitPercent !== null) {
     usedPercent = clampPercent(explicitPercent);
   } else if (period !== null) {
-    // The proto omits a zero-valued percentage immediately after rollover.
     usedPercent = 0;
   } else if (used !== null && limit !== null && limit > 0 && used >= 0) {
     usedPercent = clampPercent((used / limit) * 100);

@@ -1,7 +1,3 @@
-// Provider bridge for the Grok usage provider (see lib/grok-provider.ts).
-// Maintenance requests (health, usage) go to lib/grok-usage.ts; everything
-// else goes to bb's ACP bridge, so threads on this provider run Grok Build.
-// From bb-plugin-grok-build-usage by MacHatter1 (MIT).
 
 import {
   createBridgeIo,
