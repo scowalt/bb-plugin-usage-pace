@@ -10,12 +10,16 @@ import { readGrokHealth, readGrokUsage } from "./lib/grok-usage";
 import { experimental_defineHostEntry } from "@get-bb/plugin-sdk/host";
 import { bankedResetsHostContract } from "./lib/banked-resets-host-contract";
 import { createBankedResetsReader } from "./lib/banked-resets";
+import { createClaudeLimitResetsReader } from "./lib/claude-limit-resets";
 
 const readBankedResets = createBankedResetsReader();
+const readClaudeLimitResets = createClaudeLimitResetsReader();
 export default experimental_defineHostEntry({
   contract: bankedResetsHostContract,
   handlers: {
-    readBankedResets: (input, context) => readBankedResets(input.force, context.signal),
+    readBankedResets: (input, context) => input.providerId === "claude-code"
+      ? readClaudeLimitResets(input.force, context.signal)
+      : readBankedResets(input.force, context.signal),
   },
 });
 

@@ -1,6 +1,6 @@
 {
   "name": "bb-plugin-usage-pace",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "type": "module",
   "engines": {
     "bb": ">=0.44.0",
@@ -8,7 +8,7 @@
   },
   "bb": {
     "name": "Usage Pace",
-    "description": "Shows quota pace, read-only Codex banked resets, and Grok Build usage in bb's sidebar.",
+    "description": "Shows quota pace, read-only Codex and Claude resets, and Grok Build usage in bb's sidebar.",
     "branding": {
       "icon": "ChartColumn"
     },

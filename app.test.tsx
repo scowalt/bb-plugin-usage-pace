@@ -128,7 +128,7 @@ it("refreshes once when the reset countdown reaches zero and awaits confirmation
   expect(container.textContent).toContain("resets in 1m");
   expect(usageStore.refreshUsage).not.toHaveBeenCalled();
   await act(async () => { vi.advanceTimersByTime(60_000); });
-  expect(container.textContent).toBe("Cawaiting refresh");
+  expect(container.querySelector("button")?.textContent).toBe("Cawaiting refresh");
   expect(container.querySelector(".row-start-2")).toBeNull();
   expect(usageStore.refreshUsage).toHaveBeenCalledExactlyOnceWith({ force: true });
   state = { ...state, error: "Offline" };
@@ -140,7 +140,7 @@ it("refreshes once when the reset countdown reaches zero and awaits confirmation
 
   state = { ...state, error: null, data: { ...state.data!, fetchedAt: new Date(Date.now()).toISOString(), providers: [provider] } };
   await render();
-  expect(container.textContent).toBe("C●W52%S32%");
+  expect(container.querySelector("button")?.textContent).toBe("C●W52%S32%");
   expect(container.querySelector('[data-icon="Hourglass"]')).toBeNull();
 });
 
@@ -171,7 +171,7 @@ it("shows reset unknown without guessing or refreshing when an exhausted reset i
   state.data!.providers = [{ ...provider, windows: [{ ...provider.windows[1]!, usedPercent: 100, resetsAt: null }] }];
   await render();
   expect(container.querySelector('[data-icon="Hourglass"]')).not.toBeNull();
-  expect(container.textContent).toBe("Creset unknown");
+  expect(container.querySelector("button")?.textContent).toBe("Creset unknown");
   expect(container.querySelector(".row-start-1")?.textContent).toBe("reset unknown");
   expect(container.querySelector(".row-start-2")).toBeNull();
   await act(async () => { vi.advanceTimersByTime(60_000); });
@@ -221,7 +221,7 @@ it("replaces reassuring status and window tooltips when refresh fails", async ()
   await render();
   state = { ...state, error: "Offline" };
   await render();
-  expect(container.textContent).toBe("C—W52%S32%");
+  expect(container.querySelector("button")?.textContent).toBe("C—W52%S32%");
   expect(container.querySelector("button")?.title).toContain("stale or incomplete. Offline");
   expect(container.querySelector(".col-start-3")?.getAttribute("title")).toContain("stale or incomplete. Offline");
 });

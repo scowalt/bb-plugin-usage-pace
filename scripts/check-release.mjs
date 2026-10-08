@@ -36,7 +36,7 @@ assert.equal((await json(join(root, "dist", "package.json"))).type, "module");
 await checkInstall(root);
 
 const isolated = await mkdtemp(join(tmpdir(), "usage-pace-release-runtime-"));
-const previousCodexHome = process.env.CODEX_HOME;
+const previousEnv = new Map(["CODEX_HOME", "CLAUDE_CONFIG_DIR", "CLAUDE_SECURESTORAGE_CONFIG_DIR"].map(key => [key, process.env[key]]));
 const sdkUrl = process.env.BB_RELEASE_SDK_URL ?? import.meta.resolve("@get-bb/plugin-sdk");
 const hooks = registerHooks({
   resolve(specifier, context, nextResolve) {
@@ -48,6 +48,7 @@ const hooks = registerHooks({
 try {
   await cp(join(root, "dist"), join(isolated, "dist"), { recursive: true });
   process.env.CODEX_HOME = join(isolated, "no-codex-login");
+  process.env.CLAUDE_CONFIG_DIR = process.env.CLAUDE_SECURESTORAGE_CONFIG_DIR = join(isolated, "no-claude-login");
   const server = await import(pathToFileURL(join(isolated, "dist", "server.js")).href);
   const host = await import(pathToFileURL(join(isolated, "dist", "host.js")).href);
   assert.equal(typeof server.default, "function");
@@ -57,10 +58,15 @@ try {
   const inventory = await host.default.handlers.readBankedResets({}, { signal: new AbortController().signal });
   assert.equal(inventory.status, "unauthenticated");
   assert.equal(inventory.availableCount, null);
+  const claude = await host.default.handlers.readBankedResets({ providerId: "claude-code" }, { signal: new AbortController().signal });
+  assert.equal(claude.status, "unauthenticated");
+  assert.equal(claude.availableCount, null);
   console.log(`Release ${pkg.version}: versions, metadata, host digest, and isolated backend/host loading (with BB's SDK runtime) verified. No provider requests made.`);
 } finally {
   hooks.deregister();
-  if (previousCodexHome === undefined) delete process.env.CODEX_HOME;
-  else process.env.CODEX_HOME = previousCodexHome;
+  for (const [key, value] of previousEnv) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
   await rm(isolated, { recursive: true, force: true });
 }

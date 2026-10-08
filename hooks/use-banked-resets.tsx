@@ -1,14 +1,14 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useRpc } from "@get-bb/plugin-sdk/app";
 import type { rpcContract, UsageProvider } from "../server";
-import { bankedResetsUnavailable, type BankedResets } from "../lib/banked-resets-contract";
+import { bankedResetsUnavailable, resetProviderName, supportsBankedResets, type BankedResets } from "../lib/banked-resets-contract";
 
-export type BankedResetTarget = Pick<UsageProvider, "hostId" | "accountEmail">;
+export type BankedResetTarget = Pick<UsageProvider, "id" | "hostId" | "accountEmail">;
 type ResetState = { data: BankedResets | null; loading: boolean };
 const EMPTY: ResetState = { data: null, loading: true };
 const Context = createContext<{ states: Record<string, ResetState>; refresh: () => void }>({ states: {}, refresh: () => {} });
 
-export const bankedResetKey = (target: BankedResetTarget) => JSON.stringify([target.hostId, target.accountEmail]);
+export const bankedResetKey = (target: BankedResetTarget) => JSON.stringify([target.id, target.hostId, target.accountEmail]);
 export const bankedResetSectionId = (target: BankedResetTarget) => `banked-resets-${encodeURIComponent(bankedResetKey(target))}`;
 
 export function BankedResetsProvider({ providers, active, children }: {
@@ -21,12 +21,13 @@ export function BankedResetsProvider({ providers, active, children }: {
   const [states, setStates] = useState<Record<string, ResetState>>({});
   const seen = new Set<string>();
   const targets = providers.filter(provider => {
-    if (provider.id !== "codex") return false;
+    if (!supportsBankedResets(provider.id)) return false;
     if (provider.status !== "ok" || provider.accountEmail === null) return true;
-    if (seen.has(provider.accountEmail)) return false;
-    seen.add(provider.accountEmail);
+    const account = JSON.stringify([provider.id, provider.accountEmail]);
+    if (seen.has(account)) return false;
+    seen.add(account);
     return true;
-  }).map(({ hostId, accountEmail }) => ({ hostId, accountEmail }));
+  }).map(({ id, hostId, accountEmail }) => ({ id, hostId, accountEmail }));
   const targetKey = JSON.stringify(targets);
 
   useEffect(() => {
@@ -48,9 +49,10 @@ export function BankedResetsProvider({ providers, active, children }: {
         setStates(prior => ({ ...prior, [key]: { data: prior[key]?.data ?? null, loading: true } }));
         let data: BankedResets;
         try {
-          data = await rpcRef.current.call("getBankedResets", { hostId: target.hostId, force: forceRead });
-          if (data.status === "ok" && target.accountEmail !== null && data.accountEmail?.toLowerCase() !== target.accountEmail.toLowerCase()) {
-            data = bankedResetsUnavailable("Codex account changed on this host. Refresh usage to check the current account.");
+          if (!supportsBankedResets(target.id)) return;
+          data = await rpcRef.current.call("getBankedResets", { hostId: target.hostId, providerId: target.id, force: forceRead });
+          if ((data.status === "ok" || data.sessionReset) && target.accountEmail !== null && data.accountEmail?.toLowerCase() !== target.accountEmail.toLowerCase()) {
+            data = bankedResetsUnavailable(`${resetProviderName(target.id)} account changed on this host. Refresh usage to check the current account.`);
           }
         } catch {
           data = bankedResetsUnavailable("Could not refresh banked resets. Try the refresh button again.");

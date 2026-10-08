@@ -1,5 +1,17 @@
 import { z } from "zod";
 
+export const resetProviderSchema = z.enum(["codex", "claude-code"]);
+export type ResetProviderId = z.infer<typeof resetProviderSchema>;
+export const supportsBankedResets = (id: string): id is ResetProviderId => id === "codex" || id === "claude-code";
+export const resetProviderName = (id: string) => id === "claude-code" ? "Claude" : "Codex";
+
+export const sessionResetSchema = z.object({
+  availability: z.enum(["available", "unavailable", "unknown"]),
+  reason: z.string().nullable(),
+  nextAvailableAt: z.string().nullable(),
+});
+export type SessionReset = z.infer<typeof sessionResetSchema>;
+
 export const bankedResetsSchema = z.object({
   status: z.enum(["ok", "unauthenticated", "unsupported", "error"]),
   accountEmail: z.string().nullable(),
@@ -10,7 +22,12 @@ export const bankedResetsSchema = z.object({
     title: z.string(),
     expiresAt: z.string().nullable(),
     supported: z.boolean().nullable(),
+    remaining: z.number().int().positive().optional(),
+    scope: z.enum(["full", "five-hour", "other"]).optional(),
+    clears: z.array(z.string()).optional(),
+    usableNow: z.boolean().nullable().optional(),
   })),
+  sessionReset: sessionResetSchema.optional(),
   message: z.string().nullable(),
 });
 export type BankedResets = z.infer<typeof bankedResetsSchema>;

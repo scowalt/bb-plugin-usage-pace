@@ -43,6 +43,14 @@ describe("footer banked-reset badge", () => {
   it("treats a missing count as unknown, not zero", () => {
     expect(bankedResetBadge({ ...data(0), availableCount: null }, false, NOW).text).toBe("?");
   });
+  it("counts multi-use grant details and ignores conditional session availability", () => {
+    const inventory = { ...data(3, [2]), credits: [{ ...data(3, [2]).credits[0]!, remaining: 3 }], sessionReset: { availability: "available" as const, reason: null, nextAvailableAt: null } };
+    const badge = bankedResetBadge(inventory, false, NOW, "saved");
+    expect(badge.text).toBe("3");
+    expect(badge.title).toContain("3 saved resets");
+    expect(badge.title).toContain("Next expires");
+    expect(badge.title).not.toContain("Some reset details are unavailable");
+  });
   it("uses singular wording and marks an ongoing refresh", () => {
     expect(bankedResetBadge(data(1, [20]), true, NOW).title).toMatch(/^1 banked reset ·.*Refreshing/);
   });

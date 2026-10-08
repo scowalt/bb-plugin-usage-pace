@@ -42,6 +42,7 @@ import { cn } from "@/lib/utils";
 import { mountCardPace } from "@/lib/card-pace";
 import { compactUsageRows, type CompactUsageRow } from "@/lib/compact-usage";
 import { BankedResetsBadge, BankedResetsSection } from "./banked-resets";
+import { supportsBankedResets } from "./lib/banked-resets-contract";
 import { BankedResetsProvider, useRefreshBankedResets, type BankedResetTarget } from "./hooks/use-banked-resets";
 
 const REFRESH_MS = 5 * 60_000;
@@ -260,7 +261,7 @@ export function UsageBar({ onOpen }: { onOpen: (target?: BankedResetTarget) => v
               >{countdown.label}</span>
             ) : null}
           </button>
-          {provider.id === "codex" ? <BankedResetsBadge target={provider} onOpen={() => onOpen(provider)} /> : null}
+          {supportsBankedResets(provider.id) ? <BankedResetsBadge target={provider} onOpen={() => onOpen(provider)} /> : null}
         </div>
       ))}
     </div>
@@ -379,7 +380,7 @@ export function ProviderBlock({
                 : (provider.message ?? "Usage could not be loaded.")}
         </p>
       )}
-      {showBankedResets && provider.id === "codex" ? <BankedResetsSection hostId={provider.hostId} hostName={provider.hostName} accountEmail={provider.accountEmail} focus={focusBankedResets} /> : null}
+      {showBankedResets && supportsBankedResets(provider.id) ? <BankedResetsSection {...provider} focus={focusBankedResets} /> : null}
     </div>
   );
 }
@@ -449,7 +450,7 @@ function UsageDialog({ tokens, bankedTarget }: { tokens: TokenTotals | null; ban
                 provider={provider}
                 showHost={hostCount > 1}
                 showBankedResets={open}
-                focusBankedResets={bankedTarget?.hostId === provider.hostId && bankedTarget.accountEmail === provider.accountEmail}
+                focusBankedResets={bankedTarget?.id === provider.id && bankedTarget.hostId === provider.hostId && bankedTarget.accountEmail === provider.accountEmail}
               />
             ))
           )}

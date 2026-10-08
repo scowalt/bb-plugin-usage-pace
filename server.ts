@@ -4,7 +4,7 @@ import { registerGrokProvider } from "./lib/grok-provider";
 import { createGrokUsageSource, grokUsageSourceContract } from "./lib/grok-usage-source";
 import { describePace, paceForWindows } from "./lib/pace";
 import { createTokenTotals } from "./lib/token-totals";
-import { bankedResetsSchema, bankedResetsUnavailable, type BankedResets } from "./lib/banked-resets-contract";
+import { bankedResetsSchema, bankedResetsUnavailable, resetProviderSchema, type BankedResets, type ResetProviderId } from "./lib/banked-resets-contract";
 import { bankedResetsHostContract } from "./lib/banked-resets-host-contract";
 
 const windowSchema = z.object({
@@ -41,7 +41,7 @@ export type UsageSnapshot = z.infer<typeof snapshotSchema>;
 
 export const rpcContract = defineRpcContract({
   getBankedResets: {
-    input: z.object({ hostId: z.string().min(1).max(128), force: z.boolean().optional() }).strict(),
+    input: z.object({ hostId: z.string().min(1).max(128), force: z.boolean().optional(), providerId: resetProviderSchema.optional() }).strict(),
     output: bankedResetsSchema,
   },
   getTokens: {
@@ -127,11 +127,11 @@ export default async function plugin(bb: BbPluginApi) {
   const bankedHost = bb.hosts.experimental_client({ contract: bankedResetsHostContract });
   const bankedController = new AbortController();
   bb.onDispose(() => bankedController.abort());
-  async function getBankedResets(hostId: string, force = false): Promise<BankedResets> {
+  async function getBankedResets(hostId: string, force = false, providerId: ResetProviderId = "codex"): Promise<BankedResets> {
     try {
       const host = (await bb.sdk.hosts.list()).find(host => host.id === hostId);
       if (!host || host.status === "disconnected") return bankedResetsUnavailable("Host is offline or no longer available. Reconnect it, then refresh.");
-      return await bankedHost.call("readBankedResets", { force }, { hostId, signal: bankedController.signal });
+      return await bankedHost.call("readBankedResets", { force, providerId }, { hostId, signal: bankedController.signal });
     } catch {
       return bankedResetsUnavailable("Could not read banked resets from this host. Reconnect it, then refresh.");
     }
@@ -243,7 +243,7 @@ export default async function plugin(bb: BbPluginApi) {
   bb.events.on("thread.failed", markDirty);
 
   bb.rpc.register(rpcContract, {
-    getBankedResets: (input) => getBankedResets(input.hostId, input.force),
+    getBankedResets: (input) => getBankedResets(input.hostId, input.force, input.providerId),
     getTokens: (input) => getTokens(input.timeZone, input.force),
     getCardSettings: () => ({ hiddenProviders }),
     getUsage: async (input) => ({

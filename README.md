@@ -5,7 +5,7 @@
 
 Tells you if the current burn rate lasts until each quota window resets. If the rate does not last, it tells you when the quota runs out and how long you will be without quota.
 
-This fork of [Usage Pace by Charles Lee](https://github.com/chug2k/bb-plugin-usage-pace) adds read-only Codex banked-reset details and a sidebar badge.
+This fork of [Usage Pace by Charles Lee](https://github.com/chug2k/bb-plugin-usage-pace) adds read-only Codex banked resets and Claude limit resets, with sidebar badges and account-specific details.
 
 Originally a fork of [Usage Bar](https://github.com/dmitriikapustin/bb-plugins-by-kapustin/tree/main/plugins/usage-bar) by Dmitrii Kapustin (MIT). The pace calculation and the usage-card integration are new. The optional footer strip, the dialog, the token totals and the CLI come from Usage Bar. The Grok Build usage comes from [Grok Build Usage](https://github.com/MacHatter1/bb-plugin-grok-build-usage) by MacHatter1 (MIT).
 
@@ -30,7 +30,7 @@ The card belongs to another plugin. Usage Pace only adds nodes to it, and reads 
 **Optional compact footer.** Turn on *Also show the Usage Pace strip* in the plugin settings. It shows one aligned row for each provider account (provider icons represented by letters here):
 
 ```
-C  ●  W 52%  S 32%
+C  ●  W 52%  S 32%  ↺1
 X  ▲  W 78%  S 46%  ↺3
       out in 1d 16h
 G  ⌛  resets in 2h 14m
@@ -44,9 +44,15 @@ G  ⌛  resets in 2h 14m
 
 Numbers stay neutral; only the status glyph carries the pace colour. Status considers **all** reported windows, including model-specific limits not displayed in the row. Hover for full window names, pace multipliers, reset times, and run-out estimates; click for the full dialog. Token totals remain in the dialog, not the footer.
 
-**Codex banked resets.** The Codex row also shows `↺ 3` for three banked resets. Hover for the earliest reported expiration; the badge turns amber when a reset expires within seven days. Click the badge to open and focus that account's reset details. `↺ 0` is dimmed, `↺ …` is loading, and `↺ ?` means unavailable or expired-since-read data—not zero.
+**Saved resets (Codex and Claude).** Each supported row also shows `↺ 3` for three saved resets. Hover for the earliest reported expiration; the badge turns amber when a reset expires within seven days. Click the badge to open and focus that provider account's reset details. `↺ 0` is dimmed, `↺ …` is loading, and `↺ ?` means unavailable or expired-since-read data—not zero. Claude and Codex balances remain separate even when their account emails match.
 
-This is read-only: opening details never redeems a reset. Banked resets do not change quota percentages or pace calculations. The footer and dialog share one inventory, refreshed every five minutes while visible, on focus, or with the dialog's refresh button. Reads run on the corresponding Codex host using its local ChatGPT login and a private Codex inventory endpoint; availability may vary. Counts are provider-reported and details may be incomplete.
+Codex calls these **banked resets**; its count is provider-reported and details may be incomplete. Claude's **limit resets** are classified by the quota windows they affect: Full, 5-hour, or other saved resets. The Claude badge sums remaining uses in current, unpaused grants, not the number of grant records. A saved grant can count even when it is not currently redeemable.
+
+Claude's **conditional 5-hour reset availability** is shown separately in the dialog and never added to the badge. It may be available, unavailable now (for example, the session limit has not been reached), or unknown. Its next-availability time is not an expiry, and reaching that time does not prove the offer is available. Session-only resets still count toward the weekly usage limit.
+
+This is read-only: opening details never redeems a reset. Saved resets do not change quota percentages or pace calculations. The footer and dialog share one inventory, refreshed every five minutes while visible, on focus, or with the dialog's refresh button.
+
+Reads run on the corresponding **BB host**, not necessarily the machine running the server or UI. Codex uses that host's ChatGPT login and a private Codex inventory endpoint. Claude uses that host's Claude Code subscription login with profile scope, verifies account identity through the profile API, and uses the installed CLI version for its private usage API's client headers. Claude credentials are read from `.credentials.json` under `CLAUDE_SECURESTORAGE_CONFIG_DIR`, `CLAUDE_CONFIG_DIR`, or `~/.claude`; macOS uses the corresponding Claude Code keychain entry. Tokens stay on the host. The plugin does not refresh or rewrite credentials or import browser cookies. If a login expires, refresh Claude Code's login on the signed-in host; a login on the server machine is not required. Private endpoint access can vary; missing or client-gated inventory is unknown, never a guessed zero.
 
 **Dialog.** Click a provider row to open it. Each window shows a bar with a mark at even pace, the rate details, and the result:
 
@@ -104,12 +110,12 @@ Turn this off with the *Add Grok Build usage to bb's usage card* setting, then r
 ## Install
 
 ```sh
-bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.3.4'
-# Enable the compact footer rows (off by default), including Codex banked resets:
+bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.3.5'
+# Enable the compact footer rows (off by default), including Codex and Claude resets:
 bb plugin config usage-pace set showStrip true
 ```
 
-Use `@^0.3.4` instead of `@v0.3.4` to track compatible releases with `bb plugin update usage-pace`. **Use 0.3.1 or newer for Git installs**: 0.3.0 fails when development dependencies are absent. Release tags include prebuilt bundles, but BB's Git installer rebuilds source with its own build tooling after installing production dependencies. The required SDK runtime is installed automatically; you do not need to install it manually. Sign into Codex with a ChatGPT account on each host where you want banked-reset inventory.
+Use `@^0.3.5` instead of `@v0.3.5` to track compatible releases with `bb plugin update usage-pace`. **Use 0.3.1 or newer for Git installs**: 0.3.0 fails when development dependencies are absent. Release tags include prebuilt bundles, but BB's Git installer rebuilds source with its own build tooling after installing production dependencies. The required SDK runtime is installed automatically; you do not need to install it manually. Sign into Codex with a ChatGPT account or Claude Code with a Claude subscription on each host where you want that provider's reset information.
 
 From a local checkout:
 
@@ -126,7 +132,10 @@ bb usage-pace              # weekly windows, with pace
 bb usage-pace --all        # every window
 bb usage-pace --json       # each window has a `pace` object
 bb usage-pace --tokens     # token totals across BB
+bb usage-pace --resets --json # Codex banked resets on the primary host (unchanged)
 ```
+
+Claude reset details are currently in the strip/dialog; `--resets` retains its existing Codex-only behavior.
 
 ```
 Claude Code · Max (5x) (MacBook Pro)

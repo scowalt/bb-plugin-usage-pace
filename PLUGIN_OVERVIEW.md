@@ -29,10 +29,12 @@ Provider usage card.
   countdown replace the percentages on one line. It uses the latest exhausted
   reset; missing times show “reset unknown.” Hover for details; click for the
   dialog and token totals. Unknown/stale pace is a dash.
-- **Codex banked resets in the footer.** The optional strip adds a `↺ 3`
-  badge with the saved-reset count, earliest-expiry tooltip, and an amber
-  warning within seven days of expiry. Click for read-only reset details;
-  banked resets do not alter the pace calculation.
+- **Codex and Claude saved resets in the footer.** The optional strip adds a
+  `↺ 3` badge with the saved-reset count, earliest-expiry tooltip, and an amber
+  warning within seven days of expiry. Click for read-only account details.
+  Claude distinguishes full and five-hour saved grants; conditional five-hour
+  reset availability is shown separately and never added to the saved count.
+  Saved resets do not alter the pace calculation.
 - **`bb usage-pace`** prints each window with its pace in a terminal, and
   `--json` gives agents a `pace` object for each window.
 
@@ -56,10 +58,15 @@ provider requests. If bb changes the card, annotations may stop showing.
 The optional footer reads usage separately and refreshes once when an exhausted
 reset countdown ends, awaiting fresh data before implying quota is available.
 
-The Codex banked-reset badge and dialog make separate read-only inventory
-requests on the selected host using its local ChatGPT login. This private
-Codex endpoint may be unavailable; an unknown balance is never shown as zero.
-No resets are automatically or interactively redeemed by this preview.
+The saved-reset badges and dialog make separate read-only inventory requests
+on the selected BB host, using its local Codex ChatGPT or Claude Code
+subscription login. Claude also verifies account identity and uses the installed
+CLI version for compatibility with its private usage API. The server/UI host
+does not need its own subscription. No tokens leave the provider host, and the
+plugin neither rewrites credentials nor imports browser cookies. These private
+endpoints may be unavailable; an unknown balance is never shown as zero.
+No resets are automatically or interactively redeemed. `bb usage-pace --resets`
+remains Codex-only; Claude resets are shown in the strip and dialog.
 
 For Grok Build, it registers a companion provider, "Grok Build (usage)", so
 bb's provider picker shows it next to bb's own "Grok Build". It reads the
