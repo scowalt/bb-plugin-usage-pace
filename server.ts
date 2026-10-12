@@ -36,6 +36,9 @@ const snapshotSchema = z.object({
   fetchedAt: z.string(),
   error: z.string().nullable(),
   showStrip: z.boolean().optional(),
+  serverOnly: z.boolean().optional(),
+  serverHostId: z.string().nullable().optional(),
+  serverHostError: z.string().nullable().optional(),
 });
 export type UsageSnapshot = z.infer<typeof snapshotSchema>;
 
@@ -147,6 +150,12 @@ export default async function plugin(bb: BbPluginApi) {
       label: "Also show the Usage Pace strip above the sidebar footer",
       default: false,
     },
+    serverOnly: {
+      type: "boolean",
+      label: "Only show providers on the server machine",
+      description: "Filters the Usage Pace strip, dialog, and saved-reset details. Shared across browsers. The Provider Usage card, CLI, and token totals stay unchanged.",
+      default: false,
+    },
     hiddenCardProviders: {
       type: "string",
       label: "Hide these providers in bb's usage card",
@@ -161,11 +170,13 @@ export default async function plugin(bb: BbPluginApi) {
   });
   let cacheMs = 5 * 60_000;
   let showStrip = false;
+  let serverOnly = false;
   let hiddenProviders: string[] = [];
   const applySettings = async () => {
     const values = await settings.get();
     cacheMs = Math.max(0.5, Number(values.cacheMinutes) || 5) * 60_000;
     showStrip = values.showStrip === true;
+    serverOnly = values.serverOnly === true;
     hiddenProviders = parseProviderList(String(values.hiddenCardProviders ?? ""));
   };
   await applySettings();
@@ -177,24 +188,30 @@ export default async function plugin(bb: BbPluginApi) {
         "Grok Build usage from Usage Pace. Inventory reads metadata only.",
     });
   }
-  settings.onChange?.(() => {
-    void applySettings().then(() => {
-      bb.realtime.publish("usage-changed", { fetchedAt: new Date().toISOString() });
-    });
+  settings.onChange?.(async () => {
+    await applySettings();
+    bb.realtime.publish("usage-changed", { fetchedAt: new Date().toISOString() });
   });
 
-  let cached: { at: number; snapshot: UsageSnapshot; dirty: boolean } | null =
-    null;
-  let pending: Promise<UsageSnapshot> | null = null;
+  type LoadedUsage = {
+    snapshot: UsageSnapshot;
+    hostErrors: Map<string, string>;
+    hostsError: string | null;
+  };
+  let cached: { at: number; usage: LoadedUsage; dirty: boolean } | null = null;
+  let pending: Promise<LoadedUsage> | null = null;
 
-  async function loadSnapshot(): Promise<UsageSnapshot> {
+  async function loadSnapshot(): Promise<LoadedUsage> {
     const providers: UsageProvider[] = [];
+    const hostErrors = new Map<string, string>();
     let error: string | null = null;
+    let hostsError: string | null = null;
     let hosts: Host[] = [];
     try {
       hosts = await bb.sdk.hosts.list();
     } catch (cause) {
       error = cause instanceof Error ? cause.message : String(cause);
+      hostsError = error;
     }
     await Promise.all(
       hosts.map(async (host) => {
@@ -208,32 +225,59 @@ export default async function plugin(bb: BbPluginApi) {
             providers.push(normalizeProvider(host, provider, usage[provider.id]));
           }
         } catch (cause) {
-          error ??= `${host.name}: ${
+          const message = `${host.name}: ${
             cause instanceof Error ? cause.message : String(cause)
           }`;
+          hostErrors.set(host.id, message);
+          error ??= message;
         }
       }),
     );
     providers.sort((a, b) => a.displayName.localeCompare(b.displayName));
-    return { providers, fetchedAt: new Date().toISOString(), error };
+    return {
+      snapshot: { providers, fetchedAt: new Date().toISOString(), error },
+      hostErrors,
+      hostsError,
+    };
   }
 
-  async function getUsage(force: boolean): Promise<UsageSnapshot> {
+  async function getUsage(force: boolean): Promise<LoadedUsage> {
     const maxAge = cached?.dirty ? Math.min(cacheMs, 60_000) : cacheMs;
     if (!force && cached !== null && Date.now() - cached.at < maxAge) {
-      return cached.snapshot;
+      return cached.usage;
     }
     if (pending !== null) return pending;
     pending = loadSnapshot()
-      .then((snapshot) => {
-        cached = { at: Date.now(), snapshot, dirty: false };
-        bb.realtime.publish("usage-changed", { fetchedAt: snapshot.fetchedAt });
-        return snapshot;
+      .then((usage) => {
+        cached = { at: Date.now(), usage, dirty: false };
+        bb.realtime.publish("usage-changed", { fetchedAt: usage.snapshot.fetchedAt });
+        return usage;
       })
       .finally(() => {
         pending = null;
       });
     return pending;
+  }
+
+  async function getServerScope(usage: LoadedUsage) {
+    let serverHostId: string | null = null;
+    let serverHostError: string | null = null;
+    try {
+      serverHostId = (await bb.sdk.system.config()).primaryHostId;
+      if (serverHostId === null) {
+        serverHostError = "Server host is not available. Check bb's machine connection, then refresh.";
+      } else {
+        const host = (await bb.sdk.hosts.list()).find(host => host.id === serverHostId);
+        serverHostError = !host
+          ? "Server host is no longer available. Check bb's machine connection, then refresh."
+          : host.status === "disconnected"
+            ? "Server host is offline. Reconnect it, then refresh usage."
+            : usage.hostErrors.get(serverHostId) ?? usage.hostsError;
+      }
+    } catch {
+      serverHostError = "Could not identify the server host. Check bb's machine connection, then refresh.";
+    }
+    return { serverHostId, serverHostError };
   }
 
   const markDirty = () => {
@@ -246,10 +290,11 @@ export default async function plugin(bb: BbPluginApi) {
     getBankedResets: (input) => getBankedResets(input.hostId, input.force, input.providerId),
     getTokens: (input) => getTokens(input.timeZone, input.force),
     getCardSettings: () => ({ hiddenProviders }),
-    getUsage: async (input) => ({
-      ...(await getUsage(input?.force === true)),
-      showStrip,
-    }),
+    getUsage: async (input) => {
+      const usage = await getUsage(input?.force === true);
+      const scope = await getServerScope(usage);
+      return { ...usage.snapshot, ...scope, showStrip, serverOnly };
+    },
   });
 
   function formatReset(resetsAt: string | null): string {
@@ -340,7 +385,7 @@ export default async function plugin(bb: BbPluginApi) {
       if (positional.length > 0 && positional[0] !== "show") {
         return { exitCode: 1, stderr: usageText };
       }
-      const snapshot = await getUsage(flags.has("--force"));
+      const { snapshot } = await getUsage(flags.has("--force"));
       if (flags.has("--json")) {
         const withPace = {
           ...snapshot,

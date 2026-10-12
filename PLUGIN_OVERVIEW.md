@@ -29,6 +29,11 @@ Provider usage card.
   countdown replace the percentages on one line. It uses the latest exhausted
   reset; missing times show “reset unknown.” Hover for details; click for the
   dialog and token totals. Unknown/stale pace is a dash.
+- **Server-only view.** An optional, shared setting limits Usage Pace's strip,
+  dialog, and saved-reset details to providers on the bb server machine.
+  It updates without a reload and never substitutes another host if the server
+  is unavailable. Off by default; the Provider Usage card, CLI, quota collection,
+  and global token totals stay unchanged.
 - **Codex and Claude saved resets in the footer.** The optional strip adds a
   `↺ 3` badge with the saved-reset count, earliest-expiry tooltip, and an amber
   warning within seven days of expiry. Click for read-only account details.

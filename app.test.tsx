@@ -2,10 +2,12 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { UsageProvider } from "./server";
-import { ProviderBlock, UsageBar } from "./app";
+import { ProviderBlock, UsageBar, UsageOverlay } from "./app";
 import * as usageStore from "./lib/usage-store";
 
+const rpc = vi.hoisted(() => vi.fn());
 vi.mock("@get-bb/plugin-sdk/app", () => ({
+  useRpc: () => ({ call: rpc }),
   useRealtime: () => {},
   definePluginApp: (factory: unknown) => factory,
   experimental_ProviderIcon: () => <span aria-hidden="true">C</span>,
@@ -45,16 +47,24 @@ beforeEach(() => {
   vi.spyOn(usageStore, "getUsageState").mockImplementation(() => state);
   vi.spyOn(usageStore, "refreshUsage").mockResolvedValue();
   onOpen.mockReset();
+  rpc.mockReset().mockResolvedValue({
+    status: "ok", availableCount: 3, credits: [], accountEmail: provider.accountEmail,
+    fetchedAt: new Date(NOW).toISOString(), message: null,
+  });
+  usageStore.setOverlayOpen(false);
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
 });
 afterEach(async () => {
   await act(async () => root.unmount());
+  await act(async () => { await vi.advanceTimersByTimeAsync(0); });
   expect(vi.getTimerCount()).toBe(0);
   container.remove();
   vi.useRealTimers();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  usageStore.setOverlayOpen(false);
 });
 
 it("renders a neutral W/S readout with a separately coloured pace glyph and accessible details", async () => {
@@ -251,4 +261,99 @@ it("does not mistake a provider error for no limits", async () => {
   state.data!.providers = [{ ...provider, windows: [], status: "error" }];
   await render();
   expect(container.textContent).toBe("Usage unavailable");
+});
+
+it("filters the strip before account deduplication so a remote duplicate cannot hide the server", async () => {
+  state.data = {
+    ...state.data!, serverOnly: true, serverHostId: provider.hostId, serverHostError: null,
+    providers: [{ ...provider, hostId: "remote", hostName: "Laptop" }, provider, { ...provider, hostId: "other", accountEmail: "remote@example.test" }],
+  };
+  await render();
+  const rows = container.querySelectorAll<HTMLButtonElement>('button[aria-label*="Open usage details."]');
+  expect(rows).toHaveLength(1);
+  expect(rows[0]?.title).toContain("one@example.test · One");
+  expect(rows[0]?.title).not.toContain("Laptop");
+  expect(container.textContent).not.toContain("remote@example.test");
+});
+
+it("shows a server-specific clickable empty state when only remote hosts report usage", async () => {
+  state.data = { ...state.data!, serverOnly: true, serverHostId: provider.hostId, providers: [{ ...provider, hostId: "remote" }] };
+  await render();
+  expect(container.textContent).toBe("No usage limits on server");
+  await act(async () => container.querySelector<HTMLButtonElement>("button")!.click());
+  expect(onOpen).toHaveBeenCalledExactlyOnceWith();
+});
+
+it.each([
+  [null, "Server host is not available. Check bb's machine connection, then refresh."],
+  ["one", "Server host is offline. Reconnect it, then refresh usage."],
+])("shows server usage unavailable without a remote fallback (%s)", async (serverHostId, serverHostError) => {
+  state.data = { ...state.data!, serverOnly: true, serverHostId, serverHostError, providers: [{ ...provider, hostId: "remote" }, provider] };
+  await render();
+  expect(container.textContent).toBe("Server usage unavailable");
+  expect(container.querySelector("button")?.title).toBe(serverHostError);
+  expect(container.querySelectorAll('button[aria-label*="Open usage details."]')).toHaveLength(0);
+});
+
+async function renderOverlay() {
+  vi.spyOn(usageStore, "getBarHost").mockReturnValue(container);
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ ok: true, result: {
+    day: 123, month: 456, timeZone: "UTC", fetchedAt: new Date(NOW).toISOString(), error: null,
+  } }))));
+  await act(async () => usageStore.setOverlayOpen(true));
+  await render(<UsageOverlay />);
+  return document.querySelector<HTMLElement>('[role="dialog"]')!;
+}
+
+it("updates the strip, dialog, and reset targets together when the display setting changes", async () => {
+  const remote = { ...provider, hostId: "remote", hostName: "Laptop", windows: [{ ...provider.windows[0]!, usedPercent: 80 }] };
+  const remoteOnly = { ...remote, hostId: "third", hostName: "Desktop", accountEmail: "remote@example.test" };
+  state.data = { ...state.data!, showStrip: true, serverOnly: false, serverHostId: provider.hostId, serverHostError: null, providers: [remote, provider, remoteOnly] };
+  const dialog = await renderOverlay();
+  expect(container.querySelectorAll('button[aria-label*="Open usage details."]')).toHaveLength(2);
+  expect(dialog.textContent).toContain("remote@example.test");
+  expect(dialog.textContent).toContain("80%");
+  expect(rpc).not.toHaveBeenCalledWith("getBankedResets", expect.objectContaining({ hostId: provider.hostId }));
+  rpc.mockClear();
+
+  state = { ...state, data: { ...state.data!, serverOnly: true } };
+  await render(<UsageOverlay />);
+  expect(container.querySelectorAll('button[aria-label*="Open usage details."]')).toHaveLength(1);
+  expect(dialog.textContent).toContain("Server machine · Updated");
+  expect(dialog.textContent).toContain("one@example.test");
+  expect(dialog.textContent).toContain("52%");
+  expect(dialog.textContent).not.toContain("remote@example.test");
+  expect(dialog.textContent).not.toContain("80%");
+  expect(dialog.querySelectorAll('section[aria-label="Claude limit resets"]')).toHaveLength(1);
+  expect(rpc).toHaveBeenCalledExactlyOnceWith("getBankedResets", { hostId: provider.hostId, providerId: provider.id, force: false });
+  expect(dialog.querySelector('[aria-label="Token usage across BB"]')?.textContent).toContain("Tokens · across BBToday123This month456");
+  rpc.mockClear();
+
+  state = { ...state, data: { ...state.data!, serverOnly: false } };
+  await render(<UsageOverlay />);
+  expect(container.querySelectorAll('button[aria-label*="Open usage details."]')).toHaveLength(2);
+  expect(dialog.textContent).toContain("remote@example.test");
+  expect(dialog.textContent).not.toContain("Server machine ·");
+  expect(rpc).toHaveBeenCalledTimes(2);
+  expect(rpc.mock.calls.map(([, input]) => input.hostId)).toEqual(["remote", "third"]);
+});
+
+it("does not read any resets or show another machine's details when the server is offline", async () => {
+  const error = "Server host is offline. Reconnect it, then refresh usage.";
+  state.data = { ...state.data!, showStrip: true, serverOnly: true, serverHostId: provider.hostId, serverHostError: error, providers: [provider, { ...provider, hostId: "remote" }] };
+  const dialog = await renderOverlay();
+  expect(container.textContent).toBe("Server usage unavailable");
+  expect(dialog.textContent).toContain(error);
+  expect(dialog.textContent?.split(error)).toHaveLength(2);
+  expect(dialog.textContent).not.toContain("one@example.test");
+  expect(dialog.querySelectorAll('section[aria-label="Claude limit resets"]')).toHaveLength(0);
+  expect(rpc).not.toHaveBeenCalled();
+});
+
+it("explains in the dialog when the server has no reporting providers", async () => {
+  state.data = { ...state.data!, showStrip: true, serverOnly: true, serverHostId: provider.hostId, providers: [{ ...provider, hostId: "remote" }] };
+  const dialog = await renderOverlay();
+  expect(dialog.textContent).toContain("No providers with usage reporting on the server.");
+  expect(dialog.textContent).not.toContain("one@example.test");
+  expect(rpc).not.toHaveBeenCalled();
 });

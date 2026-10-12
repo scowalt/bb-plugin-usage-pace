@@ -5,7 +5,7 @@
 
 Tells you if the current burn rate lasts until each quota window resets. If the rate does not last, it tells you when the quota runs out and how long you will be without quota.
 
-This fork of [Usage Pace by Charles Lee](https://github.com/chug2k/bb-plugin-usage-pace) adds read-only Codex banked resets and Claude limit resets, with sidebar badges and account-specific details.
+This fork of [Usage Pace by Charles Lee](https://github.com/chug2k/bb-plugin-usage-pace) adds read-only Codex banked resets and Claude limit resets, with sidebar badges, account-specific details, and an optional server-only view.
 
 Originally a fork of [Usage Bar](https://github.com/dmitriikapustin/bb-plugins-by-kapustin/tree/main/plugins/usage-bar) by Dmitrii Kapustin (MIT). The pace calculation and the usage-card integration are new. The optional footer strip, the dialog, the token totals and the CLI come from Usage Bar. The Grok Build usage comes from [Grok Build Usage](https://github.com/MacHatter1/bb-plugin-grok-build-usage) by MacHatter1 (MIT).
 
@@ -65,6 +65,18 @@ Weekly limit                    resets in 5d 2h   44%
 
 `budget` is the rate per day (or per hour, for windows shorter than two days) that lasts exactly until the reset.
 
+## Server-only view
+
+Turn on **Only show providers on the server machine** in Settings → Installed plugins → Usage Pace to limit the compact strip, dialog provider rows, and saved-reset details to the machine running the bb server—not the browser machine or the selected thread's host.
+
+```sh
+bb plugin config usage-pace set serverOnly true
+```
+
+The setting is off by default, persists across reloads, is shared across browsers, and updates the view without a plugin reload. Filtering uses bb's server-host ID before account deduplication, so the same account on another machine cannot replace the server's entry. If the server host is missing or offline, the view says it is unavailable; if no providers report usage there, it shows an empty state. It never falls back to another machine.
+
+This is a display filter: all-host quota collection, bb's separately owned Provider Usage card, `bb usage-pace` output, and **Tokens · across BB** remain unchanged. Saved-reset inventory reads in the strip/dialog follow the displayed accounts. To restore the all-machines view, set `serverOnly` to `false`.
+
 ## How pace is calculated
 
 Providers report only `usedPercent` and `resetsAt` for each window. The window length comes from the label: `5h`, `7d`, `Weekly`, `5-hour window`, or `session` (5 hours). A window with no length in its label, for example `Fable`, takes the length of a window that resets at the same time. Then:
@@ -110,12 +122,12 @@ Turn this off with the *Add Grok Build usage to bb's usage card* setting, then r
 ## Install
 
 ```sh
-bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.3.5'
+bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.3.6'
 # Enable the compact footer rows (off by default), including Codex and Claude resets:
 bb plugin config usage-pace set showStrip true
 ```
 
-Use `@^0.3.5` instead of `@v0.3.5` to track compatible releases with `bb plugin update usage-pace`. **Use 0.3.1 or newer for Git installs**: 0.3.0 fails when development dependencies are absent. Release tags include prebuilt bundles, but BB's Git installer rebuilds source with its own build tooling after installing production dependencies. The required SDK runtime is installed automatically; you do not need to install it manually. Sign into Codex with a ChatGPT account or Claude Code with a Claude subscription on each host where you want that provider's reset information.
+Use `@^0.3.6` instead of `@v0.3.6` to track compatible releases with `bb plugin update usage-pace`. **Use 0.3.1 or newer for Git installs**: 0.3.0 fails when development dependencies are absent. Release tags include prebuilt bundles, but BB's Git installer rebuilds source with its own build tooling after installing production dependencies. The required SDK runtime is installed automatically; you do not need to install it manually. Sign into Codex with a ChatGPT account or Claude Code with a Claude subscription on each host where you want that provider's reset information.
 
 From a local checkout:
 

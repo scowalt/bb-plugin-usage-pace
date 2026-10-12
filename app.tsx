@@ -41,6 +41,7 @@ import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { mountCardPace } from "@/lib/card-pace";
 import { compactUsageRows, type CompactUsageRow } from "@/lib/compact-usage";
+import { usageForDisplay } from "@/lib/usage-scope";
 import { BankedResetsBadge, BankedResetsSection } from "./banked-resets";
 import { supportsBankedResets } from "./lib/banked-resets-contract";
 import { BankedResetsProvider, useRefreshBankedResets, type BankedResetTarget } from "./hooks/use-banked-resets";
@@ -114,7 +115,7 @@ function useUsage(): UsageState {
   useRealtime("usage-changed", () => {
     void refreshUsage();
   });
-  return state;
+  return usageForDisplay(state);
 }
 
 function useMinuteTick() {
@@ -214,9 +215,10 @@ export function UsageBar({ onOpen }: { onOpen: (target?: BankedResetTarget) => v
   const rows = compactUsageRows(state, now);
   useResetRefresh(rows, state.loading, now);
   const open = () => onOpen();
+  const serverOnly = state.data?.serverOnly === true;
   const empty = state.error || state.data?.error || state.data?.providers.some(provider => provider.status !== "ok" && provider.status !== "not_installed")
-    ? "Usage unavailable"
-    : state.loading ? "Loading usage…" : "No usage limits";
+    ? serverOnly ? "Server usage unavailable" : "Usage unavailable"
+    : state.loading ? "Loading usage…" : serverOnly ? "No usage limits on server" : "No usage limits";
   return (
     <div
       data-bb-plugin={PLUGIN_ID}
@@ -225,7 +227,7 @@ export function UsageBar({ onOpen }: { onOpen: (target?: BankedResetTarget) => v
       className="mb-1 flex w-full min-w-0 flex-col gap-0.5 py-1 text-[11px] leading-none text-sidebar-foreground"
     >
       {rows.length === 0 ? (
-        <button type="button" onClick={open} aria-haspopup="dialog" className="truncate rounded px-1.5 py-1 text-left text-muted-foreground hover:bg-sidebar-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">{empty}</button>
+        <button type="button" onClick={open} aria-haspopup="dialog" title={state.error ?? state.data?.error ?? undefined} className="truncate rounded px-1.5 py-1 text-left text-muted-foreground hover:bg-sidebar-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">{empty}</button>
       ) : rows.map(({ key, provider, windows, status, countdown, title }) => (
         <div key={key} className="flex min-w-0 items-center">
           <button
@@ -424,7 +426,7 @@ function UsageDialog({ tokens, bankedTarget }: { tokens: TokenTotals | null; ban
           </DialogTitle>
           <DialogDescription>
             {state.data
-              ? `Updated ${new Date(state.data.fetchedAt).toLocaleTimeString()}`
+              ? `${state.data.serverOnly ? "Server machine · " : ""}Updated ${new Date(state.data.fetchedAt).toLocaleTimeString()}`
               : "Loading usage…"}
           </DialogDescription>
         </DialogHeader>
@@ -441,7 +443,7 @@ function UsageDialog({ tokens, bankedTarget }: { tokens: TokenTotals | null; ban
           </section>
           {providers.length === 0 ? (
             <p className="text-xs text-muted-foreground">
-              {state.error ?? (state.loading ? "Loading…" : "No providers with usage reporting.")}
+              {state.error ?? state.data?.error ?? (state.loading ? "Loading…" : state.data?.serverOnly ? "No providers with usage reporting on the server." : "No providers with usage reporting.")}
             </p>
           ) : (
             providers.map((provider) => (
@@ -459,7 +461,7 @@ function UsageDialog({ tokens, bankedTarget }: { tokens: TokenTotals | null; ban
               Showing the last update. {state.error}
             </p>
           ) : null}
-          {state.data?.error ? (
+          {state.data?.error && providers.length > 0 ? (
             <p role="status" className="text-[11px] text-muted-foreground">
               {state.data.error}
             </p>
@@ -470,7 +472,7 @@ function UsageDialog({ tokens, bankedTarget }: { tokens: TokenTotals | null; ban
   );
 }
 
-function UsageOverlay() {
+export function UsageOverlay() {
   const tokens = useTokenTotals();
   const host = useSyncExternalStore(subscribeBarHost, getBarHost);
   const state = useUsage();
