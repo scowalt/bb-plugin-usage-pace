@@ -124,12 +124,12 @@ Turn this off with the *Add Grok Build usage to bb's usage card* setting, then r
 ## Install
 
 ```sh
-bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.3.8'
+bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.3.9'
 # Enable the compact footer rows (off by default), including Codex and Claude resets:
 bb plugin config usage-pace set showStrip true
 ```
 
-Use `@^0.3.8` instead of `@v0.3.8` to track compatible releases with `bb plugin update usage-pace`. **Use 0.3.1 or newer for Git installs**: 0.3.0 fails when development dependencies are absent. Release tags include prebuilt bundles, but BB's Git installer rebuilds source with its own build tooling after installing production dependencies. The required SDK runtime is installed automatically; you do not need to install it manually. Sign into Codex with a ChatGPT account or Claude Code with a Claude subscription on each host where you want that provider's reset information.
+Use `@^0.3.9` instead of `@v0.3.9` to track compatible releases with `bb plugin update usage-pace`. **Use 0.3.1 or newer for Git installs**: 0.3.0 fails when development dependencies are absent. Release tags include prebuilt bundles, but BB's Git installer rebuilds source with its own build tooling after installing production dependencies. The required SDK runtime is installed automatically; you do not need to install it manually. Sign into Codex with a ChatGPT account or Claude Code with a Claude subscription on each host where you want that provider's reset information.
 
 From a local checkout:
 
