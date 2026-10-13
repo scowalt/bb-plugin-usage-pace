@@ -27,7 +27,7 @@ The first line is the difference from even pace, in percentage points and in tim
 
 The card belongs to another plugin. Usage Pace only adds nodes to it, and reads the card's own data (`provider-usage` `getUsage`, from its cache), so the labels always match. If a bb update changes the card's markup, the tick and the delta stop showing, and nothing else breaks.
 
-**Optional compact footer.** Turn on *Also show the Usage Pace strip* in the plugin settings. The pace-first layout below is an unreleased source change: build this checkout before loading it. Tagged v0.3.6 and its prebuilt bundles retain the previous strip. Each provider account leads with pace, with one compact line per displayed quota window (provider icons represented by letters here):
+**Optional compact footer.** Turn on *Also show the Usage Pace strip* in the plugin settings. The pace-first layout is available in v0.3.7 and newer. Each provider account leads with pace, with one compact line per displayed quota window (provider icons represented by letters here):
 
 ```
 C  W 0.7× pace · 52% used  ↺1
@@ -124,12 +124,12 @@ Turn this off with the *Add Grok Build usage to bb's usage card* setting, then r
 ## Install
 
 ```sh
-bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.3.6'
+bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.3.7'
 # Enable the compact footer rows (off by default), including Codex and Claude resets:
 bb plugin config usage-pace set showStrip true
 ```
 
-Use `@^0.3.6` instead of `@v0.3.6` to track compatible releases with `bb plugin update usage-pace`. **Use 0.3.1 or newer for Git installs**: 0.3.0 fails when development dependencies are absent. Release tags include prebuilt bundles, but BB's Git installer rebuilds source with its own build tooling after installing production dependencies. The required SDK runtime is installed automatically; you do not need to install it manually. Sign into Codex with a ChatGPT account or Claude Code with a Claude subscription on each host where you want that provider's reset information.
+Use `@^0.3.7` instead of `@v0.3.7` to track compatible releases with `bb plugin update usage-pace`. **Use 0.3.1 or newer for Git installs**: 0.3.0 fails when development dependencies are absent. Release tags include prebuilt bundles, but BB's Git installer rebuilds source with its own build tooling after installing production dependencies. The required SDK runtime is installed automatically; you do not need to install it manually. Sign into Codex with a ChatGPT account or Claude Code with a Claude subscription on each host where you want that provider's reset information.
 
 From a local checkout:
 
@@ -176,6 +176,8 @@ bb plugin reload usage-pace
 Keep `@get-bb/plugin-sdk` pinned in **dependencies**, not devDependencies: the Grok host bridge imports its runtime during install-time bundling. Do not let SDK type-sync tooling move it back to devDependencies. Browser-shared data must not import the backend SDK; host RPC wiring lives separately in `lib/banked-resets-host-contract.ts`.
 
 `check:install` defaults to Bun. Set `BB_INSTALL_NPM_CLI` to the absolute `npm-cli.js` shipped with the BB version under test for exact dependency-install parity (`--ignore-scripts --omit=dev --omit=optional`). Both modes invoke `bb plugin build` in a disposable checkout and make no provider requests. `check:release` honors the same setting.
+
+Build release artifacts with the toolchain matching the SDK dependency pin: currently BB 0.44.0 / SDK 0.5.29. Set `BB_CLI` to that build toolchain's binary without changing the running BB instance. Newer BB versions can build local development previews, but their SDK metadata does not satisfy this release baseline; never rewrite generated metadata to conceal a mismatch.
 
 Before a release, update the version in `package.json` and `package-lock.json`, run the checks and build (including `check:release` with BB's bundled npm), and commit the generated `dist/` bundles alongside their sources. Every artifact's `pluginVersion` must match the package version. Create a new `vX.Y.Z` tag; never move a published tag.
 
