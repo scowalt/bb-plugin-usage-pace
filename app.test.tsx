@@ -85,6 +85,33 @@ it("leads with weekly pace while retaining used quota and the saved reset balanc
   expect(container.querySelector('button[aria-label^="Codex:"]')?.textContent).toBe("↺2");
 });
 
+it.each([false, true])("does not call early-week usage near limit at 5% used (details and resets: %s)", async fullScenario => {
+  const codex = { ...provider, id: "codex", displayName: "Codex", windows: [{
+    ...provider.windows[0]!, usedPercent: 5,
+    resetsAt: new Date(NOW + (168 - 168 * 5 / 95.1) * 3_600_000).toISOString(),
+  }] };
+  state.data!.providers = [codex];
+  if (fullScenario) {
+    rpc.mockResolvedValue({ status: "ok", availableCount: 2, credits: [], accountEmail: codex.accountEmail,
+      fetchedAt: new Date(NOW).toISOString(), message: null });
+    await render(<>
+      <BankedResetsProvider providers={[codex]} active><UsageBar onOpen={onOpen} /></BankedResetsProvider>
+      <ProviderBlock provider={codex} showHost={false} showBankedResets={false} focusBankedResets={false} />
+    </>);
+    expect(container.textContent).toContain("on track for 95%");
+    expect(container.querySelector('button[aria-label^="Codex:"]')?.textContent).toBe("↺2");
+  } else {
+    await render();
+  }
+  const button = container.querySelector<HTMLButtonElement>('button[aria-label*="Open usage details."]')!;
+  expect(button.textContent).toContain("1.0× pace");
+  expect(button.textContent).toContain("5% used");
+  expect(button.textContent).not.toContain("near limit");
+  expect(button.textContent).toContain("high projected use");
+  expect(button.getAttribute("aria-label")).toContain("high projected use");
+  expect(button.title).not.toContain("nearing a quota limit");
+});
+
 it("shows labelled weekly then session pace with accessible quota details", async () => {
   state.data!.providers = [{ ...provider, windows: [...provider.windows].reverse() }];
   await render();
@@ -115,7 +142,7 @@ it.each([
   const button = container.querySelector("button")!;
   expect(button.textContent).toContain(readout);
   expect(button.textContent).toContain(`${Math.round(usedPercent)}% used`);
-  expect(button.textContent!.includes("out in")).toBe(runsOut);
+  expect(button.textContent!.includes("short")).toBe(runsOut);
   if (runsOut) expect(button.title).toContain("runs out before reset");
 });
 
@@ -134,32 +161,49 @@ it.each([
   expect(button.getAttribute("aria-label")).toContain(`${label}: 20% used`);
 });
 
-it("shows an accessible run-out countdown below the compact quota values", async () => {
+it("shows 4h short instead of a far-away run-out countdown", async () => {
+  state.data!.providers = [{ ...provider, windows: [{
+    ...provider.windows[0]!, usedPercent: 100 * 13 / 164,
+    resetsAt: new Date(NOW + 155 * 3_600_000).toISOString(),
+  }] }];
+  await render();
+  const button = container.querySelector("button")!;
+  expect(button.textContent).toContain("4h short");
+  expect(button.textContent).not.toContain("out in");
+  expect(button.title).toContain("projected to run out 4h before reset");
+  expect(button.title).toContain("out in 6d 7h");
+  expect(button.getAttribute("aria-label")).toContain("projected to run out 4h before reset");
+});
+
+it("shows an accessible forecast shortfall below the compact quota values", async () => {
   state.data!.providers = [{ ...provider, windows: [{
     ...provider.windows[0]!, usedPercent: 11, resetsAt: "2026-10-08T07:00:00Z",
   }] }];
   await render();
   const button = container.querySelector("button")!;
   expect(button.textContent).toContain("W3.7× pace· 11% used");
-  expect(button.textContent).toContain("out in 1d 16h");
-  expect(button.title).toContain("Weekly limit: out in 1d 16h at the last reported pace");
-  expect(button.getAttribute("aria-label")).toContain("out in 1d 16h");
+  expect(button.textContent).toContain("5d 2h short");
+  expect(button.title).toContain("Weekly limit: projected to run out 5d 2h before reset");
+  expect(button.title).toContain("out in 1d 16h at the last reported pace");
+  expect(button.getAttribute("aria-label")).toContain("projected to run out 5d 2h before reset");
   await act(async () => button.click());
   expect(onOpen).toHaveBeenCalledExactlyOnceWith();
 });
 
-it("keeps pace snapshot-anchored while countdowns tick and accepts a refreshed rate", async () => {
+it("keeps pace and shortfall snapshot-anchored and accepts a refreshed rate", async () => {
   state.data!.providers = [{ ...provider, windows: [{ ...provider.windows[1]!, usedPercent: 90 }] }];
   await render();
   expect(container.querySelector("button")?.textContent).toContain("1.5× pace");
   await act(async () => { vi.advanceTimersByTime(60_000); });
   expect(container.querySelector("button")?.textContent).toContain("1.5× pace");
-  expect(container.textContent).toContain("out in 19m");
+  expect(container.textContent).toContain("1h 40m short");
+  expect(container.querySelector("button")?.title).toContain("out in 19m");
   state = { ...state, data: { ...state.data!, fetchedAt: new Date(Date.now()).toISOString(), providers: [{ ...provider,
     windows: [{ ...provider.windows[1]!, usedPercent: 95 }] }] } };
   await render();
   expect(container.querySelector("button")?.textContent).toContain("1.6× pace");
   expect(container.querySelector("button")?.textContent).toContain("95% used");
+  expect(container.querySelector("button")?.textContent).toContain("1h 49m short");
 });
 
 it("keeps an undisplayed model's projected exhaustion visible despite selected-window headroom", async () => {
@@ -170,20 +214,22 @@ it("keeps an undisplayed model's projected exhaustion visible despite selected-w
   const button = container.querySelector("button")!;
   expect(button.textContent).toContain("W0.7× pace");
   expect(button.textContent).toContain("S0.5× pace");
-  expect(button.textContent).toContain("out in 20m");
-  expect(button.getAttribute("aria-label")).toContain("Session model quota: out in 20m");
+  expect(button.textContent).toContain("1h 40m short");
+  expect(button.getAttribute("aria-label")).toContain("Session model quota: projected to run out 1h 40m before reset");
   expect(button.getAttribute("aria-label")).toContain("Session model quota: 90% used");
 });
 
-it("ticks the footer countdown and removes it if refresh fails", async () => {
+it("ticks the tooltip countdown without changing shortfall and removes it if refresh fails", async () => {
   state.data!.providers = [{ ...provider, windows: [{ ...provider.windows[1]!, usedPercent: 90 }] }];
   await render();
-  expect(container.textContent).toContain("out in 20m");
+  expect(container.textContent).toContain("1h 40m short");
+  expect(container.querySelector("button")?.title).toContain("out in 20m");
   await act(async () => { vi.advanceTimersByTime(60_000); });
-  expect(container.textContent).toContain("out in 19m");
+  expect(container.textContent).toContain("1h 40m short");
+  expect(container.querySelector("button")?.title).toContain("out in 19m");
   state = { ...state, error: "Offline" };
   await render();
-  expect(container.textContent).not.toContain("out in");
+  expect(container.textContent).not.toContain("short");
   expect(container.querySelector("button")?.textContent).toContain("unknown");
 });
 
@@ -325,8 +371,22 @@ it("withdraws numeric pace and estimates for an incomplete snapshot", async () =
   const button = container.querySelector("button")!;
   expect(button.textContent).toContain("Sunknown· 90% used");
   expect(button.textContent).not.toContain("× pace");
-  expect(button.textContent).not.toContain("out in");
+  expect(button.textContent).not.toContain("short");
   expect(button.getAttribute("aria-label")).toContain("One host failed");
+});
+
+it("keeps a hidden forecast warning distinct from current usage", async () => {
+  state.data!.providers = [{ ...provider, windows: [...provider.windows, {
+    label: "Weekly model limit", usedPercent: 5,
+    resetsAt: new Date(NOW + (168 - 168 * 5 / 95.1) * 3_600_000).toISOString(),
+  }] }];
+  await render();
+  const button = container.querySelector("button")!;
+  expect(button.textContent).toContain("W0.7× pace");
+  expect(button.textContent).toContain("S0.5× pace");
+  expect(button.textContent).toContain("high projected use");
+  expect(button.textContent).not.toContain("near limit");
+  expect(button.getAttribute("aria-label")).toContain("Weekly model limit: 5% used");
 });
 
 it("keeps a hidden near-limit window visible even when the selected windows have headroom", async () => {
@@ -338,7 +398,7 @@ it("keeps a hidden near-limit window visible even when the selected windows have
   expect(button.textContent).toContain("W0.7× pace");
   expect(button.textContent).toContain("S0.5× pace");
   expect(button.textContent).toContain("near limit");
-  expect(button.textContent).not.toContain("out in");
+  expect(button.textContent).not.toContain("short");
   expect(button.getAttribute("aria-label")).toContain("Weekly model limit: 96% used");
   expect(button.textContent).not.toContain("●");
 });
@@ -352,7 +412,7 @@ it.each([null, "invalid"])("warns about hidden reported usage near a limit even 
   expect(button.textContent).toContain("W0.7× pace");
   expect(button.textContent).toContain("other pace unknown");
   expect(button.textContent).toContain("near limit");
-  expect(button.textContent).not.toContain("out in");
+  expect(button.textContent).not.toContain("short");
   expect(button.getAttribute("aria-label")).toContain("Weekly model limit: 96% used");
 });
 
@@ -380,7 +440,7 @@ it("distinguishes a too-early session from known weekly pace without claiming al
   expect(button.textContent).toContain("Stoo early· 1% used");
   expect(button.title).not.toContain("All quota windows last");
   expect(button.getAttribute("aria-label")).toContain("too early to judge pace");
-  expect(button.textContent).not.toContain("out in");
+  expect(button.textContent).not.toContain("short");
 });
 
 it("marks a passed reset unknown on the minute tick without another fetch", async () => {

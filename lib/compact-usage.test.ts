@@ -87,11 +87,25 @@ describe("compact usage rows", () => {
     expect(row([weekly, { ...session, usedPercent: 70 }]).status.glyph).toBe("▲");
   });
 
-  it("shows time until the weekly quota runs out", () => {
+  it("shows how far short of reset the weekly quota falls", () => {
     const result = row([{ ...weekly, usedPercent: 11, resetsAt: "2026-10-08T07:00:00Z" }]);
-    expect(result.countdown?.label).toBe("out in 1d 16h");
-    expect(result.countdown?.detail).toContain("Weekly limit");
+    expect(result.countdown?.label).toBe("5d 2h short");
+    expect(result.countdown?.detail).toContain("Weekly limit: projected to run out 5d 2h before reset");
     expect(result.title).toContain("out in 1d 16h");
+  });
+
+  it.each([
+    [30_000, "<1m short"],
+    [60_000, "1m short"],
+    [4 * 3_600_000, "4h short"],
+    [4.25 * 3_600_000, "4h 15m short"],
+    [24 * 3_600_000, "1d short"],
+    [25 * 3_600_000, "1d 1h short"],
+  ])("formats a projected shortfall of %sms as %s", (shortfallMs, label) => {
+    const result = row([{ ...weekly, usedPercent: 50,
+      resetsAt: new Date(NOW + (168 * 3_600_000 + shortfallMs) / 2).toISOString() }]);
+    expect(result.countdown?.label).toBe(label);
+    expect(result.status).toMatchObject({ glyph: "▲", tone: "critical" });
   });
 
   it("uses the earliest run-out, including model windows hidden from the row", () => {
@@ -101,19 +115,23 @@ describe("compact usage rows", () => {
       { ...session, label: "Session model limit", usedPercent: 90 },
     ]);
     expect(result.windows).toHaveLength(2);
-    expect(result.countdown?.label).toBe("out in 20m");
+    expect(result.countdown?.label).toBe("1h 40m short");
     expect(result.countdown?.detail).toContain("Session model limit");
   });
 
-  it("counts down from the snapshot's pace between refreshes", () => {
+  it("keeps shortfall anchored to the snapshot while the tooltip counts down", () => {
     const snapshot = state([{ ...provider, windows: [{ ...session, usedPercent: 90 }] }]);
-    expect(compactUsageRows(snapshot, NOW)[0]?.countdown?.label).toBe("out in 20m");
-    expect(compactUsageRows(snapshot, NOW + 60_000)[0]?.countdown?.label).toBe("out in 19m");
-    expect(compactUsageRows(snapshot, NOW + 19.5 * 60_000)[0]?.countdown?.label).toBe("out in <1m");
+    expect(compactUsageRows(snapshot, NOW)[0]?.countdown?.label).toBe("1h 40m short");
+    expect(compactUsageRows(snapshot, NOW)[0]?.countdown?.detail).toContain("out in 20m");
+    expect(compactUsageRows(snapshot, NOW + 60_000)[0]?.countdown?.label).toBe("1h 40m short");
+    expect(compactUsageRows(snapshot, NOW + 60_000)[0]?.countdown?.detail).toContain("out in 19m");
+    expect(compactUsageRows(snapshot, NOW + 19.5 * 60_000)[0]?.countdown?.label).toBe("1h 40m short");
+    expect(compactUsageRows(snapshot, NOW + 19.5 * 60_000)[0]?.countdown?.detail).toContain("out in <1m");
     expect(compactUsageRows(snapshot, NOW + 21 * 60_000)[0]?.countdown?.label).toBe("out now (est.)");
     expect(compactUsageRows(snapshot, NOW + 21 * 60_000)[0]?.status).toMatchObject({ glyph: "▲", tone: "critical" });
     snapshot.data!.fetchedAt = new Date(NOW + 60_000).toISOString();
-    expect(compactUsageRows(snapshot, NOW + 60_000)[0]?.countdown?.label).toBe("out in 20m");
+    expect(compactUsageRows(snapshot, NOW + 60_000)[0]?.countdown?.label).toBe("1h 39m short");
+    expect(compactUsageRows(snapshot, NOW + 60_000)[0]?.countdown?.detail).toContain("out in 20m");
   });
 
   it("shows an amber hourglass and reset countdown for confirmed exhaustion even without a known duration", () => {
@@ -196,8 +214,52 @@ describe("compact usage rows", () => {
     expect(compactUsageRows(snapshot, NOW + 2 * 3_600_000)[0]?.countdown).toBeNull();
   });
 
-  it("uses an amber dot for a near-limit but sustainable rate", () => {
-    expect(row([{ ...weekly, usedPercent: 65 }]).status).toMatchObject({ glyph: "●", tone: "warning" });
+  it.each([
+    [5, 168 - 168 * 5 / 95.1, "high projected use", "warning"],
+    [42.5, 84, null, "ok"],
+    [42.51, 84, "high projected use", "warning"],
+    [65, 48, "high projected use", "warning"],
+    [79.99, 1, null, "ok"],
+    [80, 1, "near limit", "warning"],
+    [96, 1, "near limit", "warning"],
+  ])("distinguishes current quota from forecasts (%s%% used, %sh remaining)", (usedPercent, remainingHours, label, tone) => {
+    const result = row([{ ...weekly, usedPercent,
+      resetsAt: new Date(NOW + remainingHours * 3_600_000).toISOString() }]);
+    expect(result.status).toMatchObject({ glyph: "●", tone });
+    expect(result.countdown).toBeNull();
+    if (label === null) {
+      expect(result.notice).toBeNull();
+    } else {
+      expect(result.notice).toEqual({ label, tone: "warning" });
+      if (label === "high projected use") {
+        expect(result.status.detail).toContain("projected quota use is high");
+        expect(result.title).not.toContain("near limit");
+        expect(result.title).not.toContain("nearing a quota limit");
+      } else {
+        expect(result.status.detail).toContain("a quota window is near its limit");
+      }
+    }
+  });
+
+  it("keeps a hidden forecast warning visible alongside another window's uncertainty", () => {
+    const result = row([...provider.windows, {
+      label: "Weekly model limit", weekly: false, usedPercent: 5,
+      resetsAt: new Date(NOW + (168 - 168 * 5 / 95.1) * 3_600_000).toISOString(),
+    }, { label: "Model quota", weekly: false, usedPercent: 1, resetsAt: null }]);
+    expect(result.notice).toEqual({ label: "other pace unknown · high projected use", tone: "warning" });
+    expect(result.status.glyph).toBe("—");
+    expect(result.title).toContain("Weekly model limit: 5% used");
+    expect(result.title).not.toContain("near limit");
+  });
+
+  it("withdraws forecast notices for failed refreshes, incomplete snapshots, and elapsed resets", () => {
+    const snapshot = state([{ ...provider, windows: [{ ...weekly, usedPercent: 5,
+      resetsAt: new Date(NOW + (168 - 168 * 5 / 95.1) * 3_600_000).toISOString() }] }]);
+    expect(compactUsageRows({ ...snapshot, error: "offline" }, NOW)[0]?.notice).toBeNull();
+    snapshot.data!.error = "One host failed";
+    expect(compactUsageRows(snapshot, NOW)[0]?.notice).toBeNull();
+    snapshot.data!.error = null;
+    expect(compactUsageRows(snapshot, NOW + 168 * 3_600_000)[0]?.notice).toBeNull();
   });
 
   it("marks early and unknown pace as unknown, not healthy", () => {
@@ -215,7 +277,7 @@ describe("compact usage rows", () => {
     expect(result.status).toMatchObject({ glyph: "▲", tone: "critical" });
     expect(result.title).toContain("3.7× pace");
     expect(result.status.detail).toContain("runs out before reset");
-    expect(result.countdown?.label).toBe("out in 1d 16h");
+    expect(result.countdown?.label).toBe("5d 2h short");
   });
 
   it("still warns for exhausted quotas during the early window", () => {

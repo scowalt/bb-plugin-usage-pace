@@ -60,7 +60,10 @@ function statusFor(windows: UsageWindow[], paces: (Pace | null)[], error: string
     return { glyph: "—", tone: null, detail: "Pace unavailable or too early to judge for a quota window." };
   }
   if (paces.some(pace => pace?.tone !== "ok")) {
-    return { glyph: "●", tone: "warning", detail: "Lasts to reset at this rate, but nearing a quota limit." };
+    const detail = windows.some(window => toneForUsed(window.usedPercent) !== "ok")
+      ? "Lasts to reset at this rate, but a quota window is near its limit."
+      : "Lasts to reset at this rate, but projected quota use is high.";
+    return { glyph: "●", tone: "warning", detail };
   }
   return { glyph: "●", tone: "ok", detail: "All quota windows last to reset at this rate." };
 }
@@ -83,18 +86,21 @@ function resetCountdownFor(windows: UsageWindow[], now: number): CompactUsageRow
 }
 
 function countdownFor(windows: UsageWindow[], paces: (Pace | null)[], now: number): CompactUsageRow["countdown"] {
-  let first: { window: UsageWindow; at: number } | null = null;
+  let first: { window: UsageWindow; at: number; shortfallMs: number } | null = null;
   for (const [index, pace] of paces.entries()) {
-    const at = pace?.runsOutAtMs;
-    if (at != null && (first === null || at < first.at)) {
-      first = { window: windows[index]!, at };
+    if (pace === null || pace.runsOutAtMs === null) continue;
+    const at = pace.runsOutAtMs;
+    if (first === null || at < first.at) {
+      first = { window: windows[index]!, at, shortfallMs: pace.lockoutMs };
     }
   }
   if (first === null) return null;
   const remaining = first.at - now;
-  const label = remaining <= 0 ? "out now (est.)"
+  const runOut = remaining <= 0 ? "out now (est.)"
     : remaining < 60_000 ? "out in <1m" : `out in ${formatDuration(remaining)}`;
-  return { label, detail: `${first.window.label}: ${label} at the last reported pace.` };
+  const shortfall = first.shortfallMs < 60_000 ? "<1m" : formatDuration(first.shortfallMs).replace(/ 0[hm]$/u, "");
+  const label = remaining <= 0 ? runOut : `${shortfall} short`;
+  return { label, detail: `${first.window.label}: projected to run out ${shortfall} before reset; ${runOut} at the last reported pace.` };
 }
 
 export function compactUsageRows(state: UsageState, now = Date.now()): CompactUsageRow[] {
@@ -130,13 +136,15 @@ export function compactUsageRows(state: UsageState, now = Date.now()): CompactUs
     const status = statusFor(provider.windows, paces, error, now, reset);
     const countdown = status.glyph === "⌛" ? reset
       : status.glyph === "▲" ? countdownFor(provider.windows, paces, now) : null;
-    const nearLimit = !unreliable && countdown === null && allWindows.some(entry =>
+    const quotaWarning = !unreliable && countdown === null && allWindows.some(entry =>
       (entry.pace?.tone ?? toneForUsed(entry.window.usedPercent)) !== "ok");
+    const warningLabel = allWindows.some(entry => toneForUsed(entry.window.usedPercent) !== "ok")
+      ? "near limit" : "high projected use";
     const noticeLabel = [
       !unreliable && allWindows.some(entry => !selected.includes(entry) && entry.paceState !== "known") ? "other pace unknown" : null,
-      nearLimit ? "near limit" : null,
+      quotaWarning ? warningLabel : null,
     ].filter(Boolean).join(" · ");
-    const notice: CompactUsageRow["notice"] = noticeLabel ? { label: noticeLabel, tone: nearLimit ? "warning" : null } : null;
+    const notice: CompactUsageRow["notice"] = noticeLabel ? { label: noticeLabel, tone: quotaWarning ? "warning" : null } : null;
     const identity = [provider.displayName, provider.accountEmail, provider.hostName].filter(Boolean).join(" · ");
     rows.push({ key, provider, windows: selected, status, notice, countdown,
       title: [identity, status.detail, notice?.label, countdown?.detail, ...allWindows.map(entry => entry.detail),
