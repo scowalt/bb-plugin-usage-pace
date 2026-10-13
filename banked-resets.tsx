@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { resetProviderName, type BankedResets, type SessionReset } from "./lib/banked-resets-contract";
 import { bankedResetBadge } from "./lib/banked-reset-badge";
+import { cn } from "./lib/utils";
 import { bankedResetSectionId, useBankedResets, type BankedResetTarget } from "./hooks/use-banked-resets";
 
 const DAY = 86_400_000;
@@ -98,8 +99,8 @@ export function BankedResetsSection({ id, hostId, hostName, accountEmail, focus 
   return <BankedResetsList id={bankedResetSectionId(target)} providerId={id} data={data} loading={loading} hostName={hostName} focusOnMount={focus} />;
 }
 
-export function BankedResetsBadge({ target, onOpen, now = Date.now() }: {
-  target: BankedResetTarget; onOpen: () => void; now?: number;
+export function BankedResetsBadge({ target, onOpen, now = Date.now(), className }: {
+  target: BankedResetTarget; onOpen: () => void; now?: number; className?: string;
 }) {
   const { data, loading } = useBankedResets(target);
   const label = target.id === "claude-code" ? "saved" : "banked";
@@ -111,6 +112,6 @@ export function BankedResetsBadge({ target, onOpen, now = Date.now() }: {
     title={title}
     aria-label={`${resetProviderName(target.id)}: ${title}`}
     aria-haspopup="dialog"
-    className={`ml-1 inline-flex shrink-0 items-center gap-0.5 rounded px-1 py-0.5 tabular-nums hover:bg-sidebar-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring ${badge.warning ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}${badge.empty ? " opacity-50" : ""}`}
+    className={cn("ml-1 inline-flex shrink-0 items-center gap-0.5 rounded px-1 py-0.5 tabular-nums hover:bg-sidebar-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring", badge.warning ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground", badge.empty && "opacity-50", className)}
   ><span aria-hidden="true">↺</span><span>{badge.text}</span></button>;
 }

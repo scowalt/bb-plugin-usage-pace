@@ -269,7 +269,7 @@ export function UsageBar({ onOpen }: { onOpen: (target?: BankedResetTarget) => v
               <span aria-hidden="true" className="col-start-2" style={{ color: notice.tone === null ? "var(--muted-foreground)" : toneColor(notice.tone) }}>{notice.label}</span>
             ) : null}
           </button>
-          {supportsBankedResets(provider.id) ? <BankedResetsBadge target={provider} onOpen={() => onOpen(provider)} /> : null}
+          {supportsBankedResets(provider.id) ? <BankedResetsBadge target={provider} onOpen={() => onOpen(provider)} className="min-h-5.5" /> : null}
         </div>
       ))}
     </div>
