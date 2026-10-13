@@ -24,6 +24,7 @@ import {
 import {
   describeRate,
   formatDuration,
+  formatRatio,
   formatRunsOut,
   paceForWindows,
   toneForUsed,
@@ -228,39 +229,44 @@ export function UsageBar({ onOpen }: { onOpen: (target?: BankedResetTarget) => v
     >
       {rows.length === 0 ? (
         <button type="button" onClick={open} aria-haspopup="dialog" title={state.error ?? state.data?.error ?? undefined} className="truncate rounded px-1.5 py-1 text-left text-muted-foreground hover:bg-sidebar-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">{empty}</button>
-      ) : rows.map(({ key, provider, windows, status, countdown, title }) => (
-        <div key={key} className="flex min-w-0 items-center">
+      ) : rows.map(({ key, provider, windows, status, notice, countdown, title }) => (
+        <div key={key} className="@container flex min-w-0 items-start">
           <button
             type="button"
             onClick={open}
             aria-label={`${title}\nOpen usage details.`}
             aria-haspopup="dialog"
-            className="grid min-w-0 grid-cols-[0.875rem_0.625rem_3.25rem_3.25rem] items-center gap-x-2 rounded px-1.5 py-1 text-left hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+            className="grid min-w-0 flex-1 grid-cols-[0.875rem_minmax(0,1fr)] items-center gap-x-0.5 gap-y-1 rounded px-0.5 py-1 text-left @[200px]:gap-x-1.5 @[200px]:px-1.5 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
             title={title}
           >
             <ProviderMark provider={provider} />
-            <span
-              aria-hidden="true"
-              className="text-center text-[9px]"
-              style={{ color: status.tone === null ? "var(--muted-foreground)" : status.tone === "ok" ? "var(--success, var(--primary, currentColor))" : toneColor(status.tone) }}
-            >{status.glyph === "⌛" ? <Icon name="Hourglass" className="size-2.5" aria-hidden /> : status.glyph}</span>
-            {status.glyph !== "⌛" && windows.map(({ window, label, detail }, index) => (
+            {status.glyph === "⌛" ? (
+              <span aria-hidden="true" title={countdown?.detail} className="col-start-2 flex items-center gap-2 text-muted-foreground tabular-nums">
+                <span style={{ color: toneColor("warning") }}><Icon name="Hourglass" className="size-2.5" aria-hidden /></span>
+                <span>{countdown?.label}</span>
+              </span>
+            ) : windows.map(({ window, label, detail, pace, paceState }, index) => (
               <span
                 key={index}
                 aria-hidden="true"
                 title={`${status.detail}\n${detail}`}
-                className={cn("flex min-w-0 items-center justify-between gap-1 whitespace-nowrap", label === "S" ? "col-start-4" : "col-start-3")}
+                className="col-start-2 flex min-w-0 flex-wrap items-baseline gap-x-0.5 gap-y-1 @[200px]:gap-x-1"
               >
-                <span className="truncate text-muted-foreground">{label}</span>
-                <span className="shrink-0 font-semibold tabular-nums">{Math.round(window.usedPercent)}%</span>
+                <span className="min-w-0 max-w-14 truncate text-muted-foreground">{label}</span>
+                <span
+                  className="shrink-0 font-semibold tabular-nums"
+                  style={{ color: pace?.ratio == null ? "var(--muted-foreground)" : pace.tone === "ok" ? "var(--success, var(--primary, currentColor))" : toneColor(pace.tone) }}
+                >{pace?.ratio == null ? paceState === "early" ? "too early" : "unknown" : <>{formatRatio(pace.ratio)} <span className="font-normal">pace</span></>}</span>
+                <span className="shrink-0 text-muted-foreground tabular-nums"><span className="hidden @[200px]:inline">· </span>{Math.round(window.usedPercent)}% used</span>
               </span>
             ))}
-            {countdown ? (
-              <span
-                aria-hidden="true"
-                title={countdown.detail}
-                className={cn("col-span-2 col-start-3 whitespace-nowrap text-muted-foreground tabular-nums", status.glyph === "⌛" ? "row-start-1" : "row-start-2 mt-1")}
-              >{countdown.label}</span>
+            {countdown && status.glyph !== "⌛" ? (
+              <span aria-hidden="true" title={countdown.detail} className="col-start-2 tabular-nums" style={{ color: toneColor("critical") }}>
+                ▲ {countdown.label}
+              </span>
+            ) : null}
+            {notice && status.glyph !== "⌛" ? (
+              <span aria-hidden="true" className="col-start-2" style={{ color: notice.tone === null ? "var(--muted-foreground)" : toneColor(notice.tone) }}>{notice.label}</span>
             ) : null}
           </button>
           {supportsBankedResets(provider.id) ? <BankedResetsBadge target={provider} onOpen={() => onOpen(provider)} /> : null}

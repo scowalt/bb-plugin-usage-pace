@@ -24,11 +24,15 @@ Provider usage card.
   tab. You can dismiss the message until the failure changes.
 - **Fewer tabs.** bb lists some providers, such as Cursor, on every
   machine. A setting hides the tabs you do not use.
-- **Compact footer rows.** One row per account shows weekly/session usage and
-  a projected run-out countdown. When exhausted, an amber hourglass and reset
-  countdown replace the percentages on one line. It uses the latest exhausted
-  reset; missing times show “reset unknown.” Hover for details; click for the
-  dialog and token totals. Unknown/stale pace is a dash.
+- **Pace-first compact footer.** Each account shows weekly/session pace on
+  separate compact lines, such as “W 0.5× pace · 11% used.” 1.0× is even pace;
+  lower means less quota used than even spending since window start, not an
+  exact agent-count recommendation. Used quota stays secondary. All windows,
+  including hidden model limits, still determine projected-exhaustion and
+  near-limit warnings. Unknown/stale or too-early pace replaces the multiplier.
+  When exhausted, an amber hourglass and reset countdown replace the ordinary
+  values on one line, using the latest exhausted reset; missing times show
+  “reset unknown.” Hover for details; click for the dialog and token totals.
 - **Server-only view.** An optional, shared setting limits Usage Pace's strip,
   dialog, and saved-reset details to providers on the bb server machine.
   It updates without a reload and never substitutes another host if the server

@@ -27,22 +27,24 @@ The first line is the difference from even pace, in percentage points and in tim
 
 The card belongs to another plugin. Usage Pace only adds nodes to it, and reads the card's own data (`provider-usage` `getUsage`, from its cache), so the labels always match. If a bb update changes the card's markup, the tick and the delta stop showing, and nothing else breaks.
 
-**Optional compact footer.** Turn on *Also show the Usage Pace strip* in the plugin settings. It shows one aligned row for each provider account (provider icons represented by letters here):
+**Optional compact footer.** Turn on *Also show the Usage Pace strip* in the plugin settings. The pace-first layout below is an unreleased source change: build this checkout before loading it. Tagged v0.3.6 and its prebuilt bundles retain the previous strip. Each provider account leads with pace, with one compact line per displayed quota window (provider icons represented by letters here):
 
 ```
-C  ●  W 52%  S 32%  ↺1
-X  ▲  W 78%  S 46%  ↺3
-      out in 1d 16h
-G  ⌛  resets in 2h 14m
+C  W 0.7× pace · 52% used  ↺1
+   S 0.5× pace · 32% used
+X  W 1.6× pace · 78% used  ↺3
+   ▲ out in 1d 16h
+G  ⌛ resets in 2h 14m
 ```
 
-- `W` and `S`: weekly and five-hour session quota **used**, not remaining. Missing windows stay blank. Providers with neither show their first window (`M` for monthly, `D` for daily, otherwise its label).
-- `●`: all reported windows last to reset at the current rate. An amber dot means nearing a quota limit (projected use above 85% or current use at least 80%).
-- `▲`: a window is projected to run out before reset. A second line shows time until the earliest projected exhaustion across all windows (`out in 1d 16h`). Hover to see which window. The estimate counts down each minute from the last usage snapshot and is recalculated on refresh; `out now (est.)` means the estimate has passed, not confirmed exhaustion.
-- `⌛` (amber hourglass): a window is confirmed exhausted. A countdown **replaces the quota percentages on the same line**, updating each minute to the **latest reset among exhausted windows**, including model-specific limits (`resets in 2h 14m`, or `resets in <1m`). Hover for individual window percentages and resets. If any exhausted window has a missing or invalid reset time, it shows `reset unknown`. When the countdown reaches zero, the plugin requests fresh usage once, bypassing its cache, and shows `awaiting refresh` until updated data establishes the new state—even if that refresh fails. The countdown describes scheduled quota renewal, not a guarantee of service availability.
-- `—`: pace is unknown, too early to judge, or the data may be stale/incomplete. Unknown/stale pace has no countdown. A reported exhausted or overshooting window still warns even if another window's pace is unknown.
+- **1.0× is even pace.** Below 1.0× means less quota consumed than even spending over the elapsed part of that window; above 1.0× means faster spending. For example, 11% used after about 21% of a week is `0.5× pace`. This is the account's average since window start, not recent burn or an exact agent-count recommendation. Shared account quotas can span machines, and session/model limits can override weekly headroom.
+- `W` and `S`: weekly and five-hour session windows, shown in that order when present. The secondary percentage is quota **used**, not remaining. Missing windows stay absent. Providers with neither show their first window (`M` for monthly, `D` for daily, otherwise its label).
+- Pace carries the existing risk colour; used percentages stay secondary and neutral. `near limit` retains a visible warning when a sustainable rate is approaching a limit (projected use above 85% or current use at least 80%). Rounding a multiplier to 1.0× does not change the unrounded forecast or risk verdict.
+- `▲ out in …`: a window is projected to run out before reset. An additional line shows time until the earliest projected exhaustion across **all** windows. Hover to see which window. The estimate counts down each minute from the last usage snapshot and is recalculated on refresh; `out now (est.)` means the estimate has passed, not confirmed exhaustion. Numeric pace stays anchored to the report between refreshes rather than drifting with the countdown clock.
+- `⌛` (amber hourglass): a window is confirmed exhausted. A countdown **replaces pace and quota percentages on the same line**, updating each minute to the **latest reset among exhausted windows**, including model-specific limits (`resets in 2h 14m`, or `resets in <1m`). Hover for individual window percentages and resets. If any exhausted window has a missing or invalid reset time, it shows `reset unknown`. When the countdown reaches zero, the plugin requests fresh usage once, bypassing its cache, and shows `awaiting refresh` until updated data establishes the new state—even if that refresh fails. The countdown describes scheduled quota renewal, not a guarantee of service availability.
+- `too early` or `unknown`: a multiplier cannot be judged or the data may be stale/incomplete. Trustworthy used percentages remain visible, without a numeric pace claim or a stale forecast. A reported exhausted or overshooting window still warns even if another window's pace is unknown. `other pace unknown` keeps uncertainty in an undisplayed window visible beside known selected windows.
 
-Numbers stay neutral; only the status glyph carries the pace colour. Status considers **all** reported windows, including model-specific limits not displayed in the row. Hover for full window names, pace multipliers, reset times, and run-out estimates; click for the full dialog. Token totals remain in the dialog, not the footer.
+Status considers **all** reported windows, including model-specific limits not displayed in the strip. Healthy weekly pace never removes their warnings. Hover for full window names, reset times and run-out estimates; click or keyboard-activate the row for the full dialog. Accessible descriptions explain the multiplier and account-level constraints without relying on colour. Token totals remain in the dialog, not the footer.
 
 **Saved resets (Codex and Claude).** Each supported row also shows `↺ 3` for three saved resets. Hover for the earliest reported expiration; the badge turns amber when a reset expires within seven days. Click the badge to open and focus that provider account's reset details. `↺ 0` is dimmed, `↺ …` is loading, and `↺ ?` means unavailable or expired-since-read data—not zero. Claude and Codex balances remain separate even when their account emails match.
 

@@ -196,13 +196,13 @@ it("shows compact provider rows, keeps hover details, and opens the reset accoun
   expect(container.querySelectorAll('button[aria-label^="Claude:"]')).toHaveLength(1);
   expect(container.querySelector("button button")).toBeNull();
   expect(container.textContent).toContain("52%");
-  expect(container.textContent).not.toContain("0.7×");
+  expect(container.textContent).toContain("0.7× pace");
   expect(container.textContent).not.toContain("today");
   expect(container.textContent).not.toContain("Σ");
   const claudeRow = container.querySelector<HTMLButtonElement>('button[aria-label^="Claude ·"]')!;
   expect(claudeRow.title).toContain("0.7× pace");
   expect(claudeRow.title).toContain("52% used");
-  expect(claudeRow.textContent).toBe("●W52%");
+  expect(claudeRow.textContent).toBe("W0.7× pace· 52% used");
   await click(claudeRow);
   expect(onOpen).toHaveBeenLastCalledWith();
   await click(badge());

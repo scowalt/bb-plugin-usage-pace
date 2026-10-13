@@ -29,6 +29,29 @@ describe("compact usage rows", () => {
     expect(result.title).toContain("5-hour limit: 32% used");
   });
 
+  it("exposes structured pace anchored to the report timestamp, capped at the current time", () => {
+    const snapshot = state();
+    const result = compactUsageRows(snapshot, NOW)[0]!;
+    expect(result.windows[0]?.paceState).toBe("known");
+    expect(result.windows[0]?.pace?.ratio).toBeCloseTo(0.728);
+    expect(result.windows[1]?.pace?.ratio).toBeCloseTo(0.533333);
+    expect(compactUsageRows(snapshot, NOW + 60_000)[0]?.windows[0]?.pace?.ratio).toBeCloseTo(0.728);
+    snapshot.data!.fetchedAt = new Date(NOW + 3_600_000).toISOString();
+    expect(compactUsageRows(snapshot, NOW)[0]?.windows[0]?.pace?.ratio).toBeCloseTo(0.728);
+  });
+
+  it("distinguishes early from unavailable pace and never exposes a stale numeric result", () => {
+    expect(row([{ ...session, usedPercent: 1, resetsAt: "2026-10-01T16:55:00Z" }]).windows[0]).toMatchObject({
+      paceState: "early", pace: { ratio: null },
+    });
+    expect(row([{ ...weekly, resetsAt: null }]).windows[0]).toMatchObject({ paceState: "unknown", pace: null });
+    for (const error of ["offline", "incomplete"]) {
+      const result = compactUsageRows({ ...state(), error }, NOW)[0]!;
+      expect(result.windows.every(entry => entry.paceState === "unknown" && entry.pace === null)).toBe(true);
+      expect(result.title).not.toContain("0.7× pace");
+    }
+  });
+
   it("deduplicates accounts across hosts but preserves distinct accounts and unknown accounts", () => {
     const providers = [provider, { ...provider, hostId: "two" }, { ...provider, accountEmail: "two@example.test" },
       { ...provider, accountEmail: null }, { ...provider, hostId: "two", accountEmail: null }];

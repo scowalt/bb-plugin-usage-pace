@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { UsageProvider } from "./server";
 import { ProviderBlock, UsageBar, UsageOverlay } from "./app";
 import * as usageStore from "./lib/usage-store";
+import { BankedResetsProvider } from "./hooks/use-banked-resets";
 
 const rpc = vi.hoisted(() => vi.fn());
 vi.mock("@get-bb/plugin-sdk/app", () => ({
@@ -67,20 +68,70 @@ afterEach(async () => {
   usageStore.setOverlayOpen(false);
 });
 
-it("renders a neutral W/S readout with a separately coloured pace glyph and accessible details", async () => {
+it("leads with weekly pace while retaining used quota and the saved reset balance", async () => {
+  const codex = { ...provider, id: "codex", displayName: "Codex", windows: [{
+    ...provider.windows[0]!, usedPercent: 11, resetsAt: new Date(NOW + 133.11451889 * 3_600_000).toISOString(),
+  }] };
+  state.data!.providers = [codex];
+  rpc.mockResolvedValue({ status: "ok", availableCount: 2, credits: [], accountEmail: codex.accountEmail,
+    fetchedAt: new Date(NOW).toISOString(), message: null });
+  await render(<BankedResetsProvider providers={[codex]} active><UsageBar onOpen={onOpen} /></BankedResetsProvider>);
+  const button = container.querySelector<HTMLButtonElement>('button[aria-label*="Open usage details."]')!;
+  expect(button.textContent).toContain("0.5× pace");
+  expect(button.textContent).toContain("11% used");
+  expect(button.textContent).not.toContain("●");
+  expect(button.getAttribute("aria-label")).toContain("Weekly limit: 11% used");
+  expect(button.getAttribute("aria-label")).toContain("1.0× is even pace");
+  expect(container.querySelector('button[aria-label^="Codex:"]')?.textContent).toBe("↺2");
+});
+
+it("shows labelled weekly then session pace with accessible quota details", async () => {
+  state.data!.providers = [{ ...provider, windows: [...provider.windows].reverse() }];
   await render();
   const button = container.querySelector("button")!;
-  expect(button.textContent).toBe("C●W52%S32%");
+  expect(button.textContent).toContain("W0.7× pace· 52% used");
+  expect(button.textContent).toContain("S0.5× pace· 32% used");
+  expect(button.textContent!.indexOf("W0.7×")).toBeLessThan(button.textContent!.indexOf("S0.5×"));
   expect(button.closest('[data-bb-plugin="usage-pace"]')).not.toBeNull();
   expect(button.getAttribute("aria-label")).toContain("Weekly limit: 52% used");
   expect(button.getAttribute("aria-label")).toContain("5-hour limit: 32% used");
   expect(button.title).toContain("All quota windows last to reset");
-  expect(button.querySelectorAll("[style]")).toHaveLength(1);
-  expect(button.querySelector(".col-start-3")?.textContent).toBe("W52%");
-  expect(button.querySelector(".col-start-4")?.textContent).toBe("S32%");
   expect(button.getAttribute("aria-haspopup")).toBe("dialog");
   await act(async () => button.click());
   expect(onOpen).toHaveBeenCalledExactlyOnceWith();
+});
+
+it.each([
+  [0, 84, "0.0× pace", false],
+  [20, 84, "0.4× pace", false],
+  [50, 84, "1.0× pace", false],
+  [50.05, 84, "1.0× pace", true],
+  [80, 84, "1.6× pace", true],
+  [11, 167.9, "185× pace", true],
+])("formats %s%% weekly usage without rounding away the risk verdict", async (usedPercent, remainingHours, readout, runsOut) => {
+  state.data!.providers = [{ ...provider, windows: [{ ...provider.windows[0]!, usedPercent,
+    resetsAt: new Date(NOW + remainingHours * 3_600_000).toISOString() }] }];
+  await render();
+  const button = container.querySelector("button")!;
+  expect(button.textContent).toContain(readout);
+  expect(button.textContent).toContain(`${Math.round(usedPercent)}% used`);
+  expect(button.textContent!.includes("out in")).toBe(runsOut);
+  if (runsOut) expect(button.title).toContain("runs out before reset");
+});
+
+it.each([
+  ["Daily limit", "2026-10-02T00:00:00Z", "D0.4× pace"],
+  ["Monthly credits", "2026-10-16T12:00:00Z", "M0.4× pace"],
+  ["Credit balance", "2026-10-02T00:00:00Z", "Credit balanceunknown"],
+  ["Weekly limit", null, "Wunknown"],
+  ["Weekly limit", "invalid", "Wunknown"],
+])("keeps fallback or unavailable pace attached to its quota window (%s)", async (label, resetsAt, readout) => {
+  state.data!.providers = [{ ...provider, windows: [{ label, resetsAt, usedPercent: 20, weekly: label === "Weekly limit" }] }];
+  await render();
+  const button = container.querySelector("button")!;
+  expect(button.textContent).toContain(readout);
+  expect(button.textContent).toContain("20% used");
+  expect(button.getAttribute("aria-label")).toContain(`${label}: 20% used`);
 });
 
 it("shows an accessible run-out countdown below the compact quota values", async () => {
@@ -89,12 +140,39 @@ it("shows an accessible run-out countdown below the compact quota values", async
   }] }];
   await render();
   const button = container.querySelector("button")!;
-  expect(button.textContent).toBe("C▲W11%out in 1d 16h");
+  expect(button.textContent).toContain("W3.7× pace· 11% used");
+  expect(button.textContent).toContain("out in 1d 16h");
   expect(button.title).toContain("Weekly limit: out in 1d 16h at the last reported pace");
   expect(button.getAttribute("aria-label")).toContain("out in 1d 16h");
-  expect(button.querySelector(".row-start-2")?.textContent).toBe("out in 1d 16h");
   await act(async () => button.click());
   expect(onOpen).toHaveBeenCalledExactlyOnceWith();
+});
+
+it("keeps pace snapshot-anchored while countdowns tick and accepts a refreshed rate", async () => {
+  state.data!.providers = [{ ...provider, windows: [{ ...provider.windows[1]!, usedPercent: 90 }] }];
+  await render();
+  expect(container.querySelector("button")?.textContent).toContain("1.5× pace");
+  await act(async () => { vi.advanceTimersByTime(60_000); });
+  expect(container.querySelector("button")?.textContent).toContain("1.5× pace");
+  expect(container.textContent).toContain("out in 19m");
+  state = { ...state, data: { ...state.data!, fetchedAt: new Date(Date.now()).toISOString(), providers: [{ ...provider,
+    windows: [{ ...provider.windows[1]!, usedPercent: 95 }] }] } };
+  await render();
+  expect(container.querySelector("button")?.textContent).toContain("1.6× pace");
+  expect(container.querySelector("button")?.textContent).toContain("95% used");
+});
+
+it("keeps an undisplayed model's projected exhaustion visible despite selected-window headroom", async () => {
+  state.data!.providers = [{ ...provider, windows: [...provider.windows, {
+    ...provider.windows[1]!, label: "Session model quota", usedPercent: 90,
+  }] }];
+  await render();
+  const button = container.querySelector("button")!;
+  expect(button.textContent).toContain("W0.7× pace");
+  expect(button.textContent).toContain("S0.5× pace");
+  expect(button.textContent).toContain("out in 20m");
+  expect(button.getAttribute("aria-label")).toContain("Session model quota: out in 20m");
+  expect(button.getAttribute("aria-label")).toContain("Session model quota: 90% used");
 });
 
 it("ticks the footer countdown and removes it if refresh fails", async () => {
@@ -106,7 +184,7 @@ it("ticks the footer countdown and removes it if refresh fails", async () => {
   state = { ...state, error: "Offline" };
   await render();
   expect(container.textContent).not.toContain("out in");
-  expect(container.querySelector(".row-start-2")).toBeNull();
+  expect(container.querySelector("button")?.textContent).toContain("unknown");
 });
 
 it("replaces all quota percentages with a single-line reset countdown when blocked", async () => {
@@ -117,14 +195,14 @@ it("replaces all quota percentages with a single-line reset countdown when block
   expect(icon).not.toBeNull();
   expect(icon?.parentElement?.style.color).toBe(usageStore.toneColor("warning"));
   expect(button.textContent).toBe("Cresets in 2h 0m");
-  expect(button.querySelector(".row-start-2")).toBeNull();
-  expect(button.querySelector(".row-start-1.col-span-2")?.textContent).toBe("resets in 2h 0m");
+  expect(button.textContent).not.toContain("% used");
+  expect(button.textContent).not.toContain("× pace");
   expect(button.getAttribute("aria-label")).toContain("quota window is exhausted");
   expect(button.getAttribute("aria-label")).toContain("resets in 2h 0m");
   expect(button.title).toContain("Weekly limit: 52% used");
   expect(button.title).toContain("5-hour limit: 100% used");
   await act(async () => { vi.advanceTimersByTime(60_000); });
-  expect(container.querySelector(".row-start-1")?.textContent).toBe("resets in 1h 59m");
+  expect(button.textContent).toBe("Cresets in 1h 59m");
   expect(usageStore.refreshUsage).not.toHaveBeenCalled();
   await act(async () => button.click());
   expect(onOpen).toHaveBeenCalledExactlyOnceWith();
@@ -139,7 +217,7 @@ it("refreshes once when the reset countdown reaches zero and awaits confirmation
   expect(usageStore.refreshUsage).not.toHaveBeenCalled();
   await act(async () => { vi.advanceTimersByTime(60_000); });
   expect(container.querySelector("button")?.textContent).toBe("Cawaiting refresh");
-  expect(container.querySelector(".row-start-2")).toBeNull();
+  expect(container.textContent).not.toContain("% used");
   expect(usageStore.refreshUsage).toHaveBeenCalledExactlyOnceWith({ force: true });
   state = { ...state, error: "Offline" };
   await render();
@@ -150,7 +228,8 @@ it("refreshes once when the reset countdown reaches zero and awaits confirmation
 
   state = { ...state, error: null, data: { ...state.data!, fetchedAt: new Date(Date.now()).toISOString(), providers: [provider] } };
   await render();
-  expect(container.querySelector("button")?.textContent).toBe("C●W52%S32%");
+  expect(container.querySelector("button")?.textContent).toContain("W0.7× pace· 52% used");
+  expect(container.querySelector("button")?.textContent).toContain("S0.5× pace· 32% used");
   expect(container.querySelector('[data-icon="Hourglass"]')).toBeNull();
 });
 
@@ -158,8 +237,8 @@ it("coalesces expired accounts into one refresh and waits for an existing reques
   const expired = { ...provider, windows: [{ ...provider.windows[1]!, usedPercent: 100, resetsAt: new Date(NOW).toISOString() }] };
   state = { ...state, loading: true, data: { ...state.data!, providers: [expired, { ...expired, accountEmail: "two@example.test" }] } };
   await render();
-  expect(container.querySelectorAll(".row-start-1.col-span-2")).toHaveLength(2);
-  expect(container.querySelector(".row-start-2")).toBeNull();
+  expect(container.querySelectorAll('button[aria-label*="Open usage details."]')).toHaveLength(2);
+  expect(container.textContent).not.toContain("% used");
   expect(container.textContent).toContain("awaiting refresh");
   expect(usageStore.refreshUsage).not.toHaveBeenCalled();
   state = { ...state, loading: false };
@@ -182,8 +261,7 @@ it("shows reset unknown without guessing or refreshing when an exhausted reset i
   await render();
   expect(container.querySelector('[data-icon="Hourglass"]')).not.toBeNull();
   expect(container.querySelector("button")?.textContent).toBe("Creset unknown");
-  expect(container.querySelector(".row-start-1")?.textContent).toBe("reset unknown");
-  expect(container.querySelector(".row-start-2")).toBeNull();
+  expect(container.textContent).not.toContain("% used");
   await act(async () => { vi.advanceTimersByTime(60_000); });
   expect(usageStore.refreshUsage).not.toHaveBeenCalled();
 });
@@ -220,28 +298,98 @@ it("still shows Lasts to reset for a known sustainable pace", async () => {
   expect(container.textContent).toContain("Lasts to reset");
 });
 
-it("keeps session-only values in the session column", async () => {
+it("shows only the reported session window without fabricating weekly usage", async () => {
   state.data!.providers = [{ ...provider, windows: [provider.windows[1]!] }];
   await render();
-  expect(container.querySelector(".col-start-3")).toBeNull();
-  expect(container.querySelector(".col-start-4")?.textContent).toBe("S32%");
+  expect(container.querySelector("button")?.textContent).toContain("S0.5× pace· 32% used");
+  expect(container.querySelector("button")?.getAttribute("aria-label")).not.toContain("Weekly limit");
 });
 
-it("replaces reassuring status and window tooltips when refresh fails", async () => {
+it("withdraws numeric pace and reassuring tooltips when refresh fails", async () => {
   await render();
   state = { ...state, error: "Offline" };
   await render();
-  expect(container.querySelector("button")?.textContent).toBe("C—W52%S32%");
-  expect(container.querySelector("button")?.title).toContain("stale or incomplete. Offline");
-  expect(container.querySelector(".col-start-3")?.getAttribute("title")).toContain("stale or incomplete. Offline");
+  const button = container.querySelector("button")!;
+  expect(button.textContent).toContain("Wunknown· 52% used");
+  expect(button.textContent).toContain("Sunknown· 32% used");
+  expect(button.textContent).not.toContain("× pace");
+  expect(button.title).toContain("stale or incomplete. Offline");
+  expect(button.title).not.toContain("0.7× pace");
+  expect(button.querySelector("span[title]")?.title).toContain("stale or incomplete. Offline");
+});
+
+it("withdraws numeric pace and estimates for an incomplete snapshot", async () => {
+  state = { ...state, data: { ...state.data!, error: "One host failed", providers: [{ ...provider,
+    windows: [{ ...provider.windows[1]!, usedPercent: 90 }] }] } };
+  await render();
+  const button = container.querySelector("button")!;
+  expect(button.textContent).toContain("Sunknown· 90% used");
+  expect(button.textContent).not.toContain("× pace");
+  expect(button.textContent).not.toContain("out in");
+  expect(button.getAttribute("aria-label")).toContain("One host failed");
+});
+
+it("keeps a hidden near-limit window visible even when the selected windows have headroom", async () => {
+  state.data!.providers = [{ ...provider, windows: [...provider.windows, {
+    label: "Weekly model limit", usedPercent: 96, resetsAt: "2026-10-01T13:00:00Z",
+  }] }];
+  await render();
+  const button = container.querySelector("button")!;
+  expect(button.textContent).toContain("W0.7× pace");
+  expect(button.textContent).toContain("S0.5× pace");
+  expect(button.textContent).toContain("near limit");
+  expect(button.textContent).not.toContain("out in");
+  expect(button.getAttribute("aria-label")).toContain("Weekly model limit: 96% used");
+  expect(button.textContent).not.toContain("●");
+});
+
+it.each([null, "invalid"])("warns about hidden reported usage near a limit even when its reset is unknown (%s)", async resetsAt => {
+  state.data!.providers = [{ ...provider, windows: [...provider.windows, {
+    label: "Weekly model limit", usedPercent: 96, resetsAt,
+  }] }];
+  await render();
+  const button = container.querySelector("button")!;
+  expect(button.textContent).toContain("W0.7× pace");
+  expect(button.textContent).toContain("other pace unknown");
+  expect(button.textContent).toContain("near limit");
+  expect(button.textContent).not.toContain("out in");
+  expect(button.getAttribute("aria-label")).toContain("Weekly model limit: 96% used");
+});
+
+it.each([
+  { label: "Model quota", usedPercent: 1, resetsAt: null },
+  { label: "Weekly model limit", usedPercent: 1, resetsAt: "2026-10-08T11:00:00Z" },
+])("shows hidden pace uncertainty alongside known selected windows ($label)", async hidden => {
+  state.data!.providers = [{ ...provider, windows: [...provider.windows, hidden] }];
+  await render();
+  const button = container.querySelector("button")!;
+  expect(button.textContent).toContain("W0.7× pace");
+  expect(button.textContent).toContain("S0.5× pace");
+  expect(button.textContent).toContain("other pace unknown");
+  expect(button.title).not.toContain("All quota windows last");
+  expect(button.getAttribute("aria-label")).toContain(`${hidden.label}: 1% used`);
+});
+
+it("distinguishes a too-early session from known weekly pace without claiming all windows are healthy", async () => {
+  state.data!.providers = [{ ...provider, windows: [provider.windows[0]!, {
+    ...provider.windows[1]!, usedPercent: 1, resetsAt: "2026-10-01T16:55:00Z",
+  }] }];
+  await render();
+  const button = container.querySelector("button")!;
+  expect(button.textContent).toContain("W0.7× pace· 52% used");
+  expect(button.textContent).toContain("Stoo early· 1% used");
+  expect(button.title).not.toContain("All quota windows last");
+  expect(button.getAttribute("aria-label")).toContain("too early to judge pace");
+  expect(button.textContent).not.toContain("out in");
 });
 
 it("marks a passed reset unknown on the minute tick without another fetch", async () => {
   state.data!.providers = [{ ...provider, windows: [{ ...provider.windows[1]!, resetsAt: "2026-10-01T12:00:30Z" }] }];
   await render();
-  expect(container.textContent).toContain("●");
+  expect(container.querySelector("button")?.textContent).toContain("0.3× pace");
   await act(async () => { vi.advanceTimersByTime(60_000); });
-  expect(container.textContent).toContain("—");
+  expect(container.querySelector("button")?.textContent).toContain("unknown");
+  expect(container.querySelector("button")?.textContent).not.toContain("× pace");
   expect(container.querySelector("button")?.title).toContain("Reset passed");
 });
 
@@ -336,6 +484,24 @@ it("updates the strip, dialog, and reset targets together when the display setti
   expect(dialog.textContent).not.toContain("Server machine ·");
   expect(rpc).toHaveBeenCalledTimes(2);
   expect(rpc.mock.calls.map(([, input]) => input.hostId)).toEqual(["remote", "third"]);
+});
+
+it("honours the optional strip setting without reading saved resets while hidden", async () => {
+  vi.spyOn(usageStore, "getBarHost").mockReturnValue(container);
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ ok: true, result: {
+    day: 0, month: 0, timeZone: "UTC", fetchedAt: new Date(NOW).toISOString(), error: null,
+  } }))));
+  state.data!.showStrip = false;
+  await render(<UsageOverlay />);
+  expect(container.querySelector('[aria-label="BB usage limits"]')).toBeNull();
+  expect(rpc).not.toHaveBeenCalled();
+  state = { ...state, data: { ...state.data!, showStrip: true } };
+  await render(<UsageOverlay />);
+  expect(container.querySelector('[aria-label="BB usage limits"]')).not.toBeNull();
+  expect(container.textContent).toContain("0.7× pace");
+  state = { ...state, data: { ...state.data!, showStrip: false } };
+  await render(<UsageOverlay />);
+  expect(container.querySelector('[aria-label="BB usage limits"]')).toBeNull();
 });
 
 it("does not read any resets or show another machine's details when the server is offline", async () => {

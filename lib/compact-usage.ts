@@ -1,7 +1,7 @@
 import type { UsageProvider, UsageWindow } from "../server";
 import type { UsageState } from "./usage-store";
 import { formatReset } from "./usage-store";
-import { describePace, formatDuration, paceForWindows, windowDurationMs, type Pace, type Tone } from "./pace";
+import { describePace, formatDuration, paceForWindows, toneForUsed, windowDurationMs, type Pace, type Tone } from "./pace";
 
 const HOUR = 3_600_000;
 
@@ -9,6 +9,8 @@ export interface CompactWindow {
   window: UsageWindow;
   label: string;
   detail: string;
+  pace: Pace | null;
+  paceState: "known" | "early" | "unknown";
 }
 
 interface CompactStatus {
@@ -22,6 +24,7 @@ export interface CompactUsageRow {
   provider: UsageProvider;
   windows: CompactWindow[];
   status: CompactStatus;
+  notice: { label: string; tone: Tone | null } | null;
   countdown: {
     label: string;
     detail: string;
@@ -105,28 +108,39 @@ export function compactUsageRows(state: UsageState, now = Date.now()): CompactUs
     if (seen.has(key)) continue;
     seen.add(key);
     const paces = paceForWindows(provider.windows, paceAt);
+    const error = state.error ?? state.data?.error ?? null;
+    const unreliable = error !== null || provider.windows.some(window => window.resetsAt !== null && Date.parse(window.resetsAt) <= now);
     const allWindows = provider.windows.map((window, index): CompactWindow => {
       const reset = formatReset(window.resetsAt, now);
-      const pace = paces[index]!;
+      const pace = unreliable ? null : paces[index]!;
       const expired = window.resetsAt !== null && Date.parse(window.resetsAt) <= now;
       const detail = [
         `${window.label}: ${Math.round(window.usedPercent)}% used`,
         reset ? (expired ? "reset passed; refresh usage" : `resets in ${reset}`) : "reset unavailable",
         expired ? "" : describePace(pace, now) || "pace unavailable",
       ].filter(Boolean).join(" · ");
-      return { window, label: shortLabel(window), detail };
+      return { window, label: shortLabel(window), detail, pace,
+        paceState: pace === null ? "unknown" : pace.ratio === null ? "early" : "known" };
     });
     const weekly = allWindows.find(entry => entry.window.weekly);
     const session = allWindows.find(entry => windowDurationMs(entry.window.label) === 5 * HOUR);
     const selected = [weekly, session].filter((entry): entry is CompactWindow => entry !== undefined);
     if (selected.length === 0) selected.push(allWindows[0]!);
     const reset = resetCountdownFor(provider.windows, now);
-    const status = statusFor(provider.windows, paces, state.error ?? state.data?.error ?? null, now, reset);
+    const status = statusFor(provider.windows, paces, error, now, reset);
     const countdown = status.glyph === "⌛" ? reset
       : status.glyph === "▲" ? countdownFor(provider.windows, paces, now) : null;
+    const nearLimit = !unreliable && countdown === null && allWindows.some(entry =>
+      (entry.pace?.tone ?? toneForUsed(entry.window.usedPercent)) !== "ok");
+    const noticeLabel = [
+      !unreliable && allWindows.some(entry => !selected.includes(entry) && entry.paceState !== "known") ? "other pace unknown" : null,
+      nearLimit ? "near limit" : null,
+    ].filter(Boolean).join(" · ");
+    const notice: CompactUsageRow["notice"] = noticeLabel ? { label: noticeLabel, tone: nearLimit ? "warning" : null } : null;
     const identity = [provider.displayName, provider.accountEmail, provider.hostName].filter(Boolean).join(" · ");
-    rows.push({ key, provider, windows: selected, status, countdown,
-      title: [identity, status.detail, countdown?.detail, ...allWindows.map(entry => entry.detail)].filter(Boolean).join("\n") });
+    rows.push({ key, provider, windows: selected, status, notice, countdown,
+      title: [identity, status.detail, notice?.label, countdown?.detail, ...allWindows.map(entry => entry.detail),
+        "1.0× is even pace. Below 1.0× uses less quota than even pace; above uses more. Average since window start, not an agent-count recommendation."].filter(Boolean).join("\n") });
   }
   return rows;
 }
