@@ -1,5 +1,17 @@
 # CI
 
+## Native Linux routing
+
+The workflow selects `ci_os: linux`, matching the supported Woodpecker 3.19
+agent setting `WOODPECKER_AGENT_LABELS=ci_os=linux`. Before merging this change,
+the parent must configure and read back that label and actual Linux ARM64
+platform on the current agent, then verify the label and Linux AMD64 platform
+on its replacement. Include no other OS or unsupported CPU; retain native platform
+reporting. This routing label is not a security boundary or hardware attestation.
+The original image index supports both targets, without a matrix or emulation.
+ARM64 rollout guidance below is historical, not native AMD64 proof. Commands,
+pins and status layout stay unchanged; actual AMD64 acceptance is separate.
+
 ## Authored contract
 
 `.woodpecker.yaml` ports only `.github/workflows/no-comments.yml`: job
@@ -15,7 +27,7 @@ The original Actions job uses `ubuntu-latest`, a 10-minute timeout, read-only
 contents permission, checkout `11d5960a326750d5838078e36cf38b85af677262`,
 and setup-uv `d0d8abe699bfb85fec6de9f7adb5ae17292296ff` with uv `0.11.32`
 and caching keyed by `.comment-policy/requirements.txt`.
-Woodpecker uses the approved Linux ARM64-capable Python 3.14 / uv 0.11.32
+Woodpecker uses the approved Linux ARM64/AMD64-capable Python 3.14 / uv 0.11.32
 Trixie image pinned by digest in the pipeline. Its disposable environment uses
 uv's normal dependency cache, not the Actions cache service.
 The five unchanged requirement pins are tree-sitter `0.25.2`,
