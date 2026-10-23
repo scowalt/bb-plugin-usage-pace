@@ -19,7 +19,7 @@ const DISMISSED_KEY = "usage-pace:dismissed-failure";
 const FAILURE_MESSAGE = /couldn.t (refresh|load) usage/iu;
 const STYLE_ID = "usage-pace-card-style";
 const MACHINE_PREFIX = "Usage machine: ";
-const CARD_RPC_URL = "/api/v1/plugins/provider-usage/rpc/getUsage";
+const CARD_RPC_URL = "/api/v1/plugins/bb--provider-usage/rpc/getUsage";
 const CARD_MAX_AGE_MS = 5 * 60_000;
 const REFETCH_MS = 60_000;
 
@@ -115,7 +115,11 @@ button:has(> [${DETAIL_ATTR}]) > :not(:first-child):not([${DETAIL_ATTR}]) {
 
 export interface CardProvider {
   machine: string;
+  machineId?: string;
   provider: string;
+  providerId?: string;
+  accountLabel?: string | null;
+  accountEmail?: string | null;
   windows: PaceInput[];
 }
 
@@ -132,7 +136,11 @@ export function parseCardUsage(body: unknown): CardProvider[] {
       if (!Array.isArray(usage.windows)) continue;
       out.push({
         machine: machine.displayName,
+        machineId: typeof machine.id === "string" ? machine.id : undefined,
         provider: provider.displayName,
+        providerId: typeof provider.providerId === "string" ? provider.providerId : undefined,
+        accountLabel: typeof provider.accountLabel === "string" ? provider.accountLabel : null,
+        accountEmail: typeof usage.accountEmail === "string" ? usage.accountEmail : null,
         windows: usage.windows.filter(
           (window: unknown): window is PaceInput =>
             typeof (window as PaceInput)?.label === "string" &&
@@ -151,6 +159,17 @@ export function parseCardSettings(body: unknown): string[] {
     : [];
 }
 
+export function cardUsageRequest(body: unknown, tabs: string[]) {
+  const result = (body as { result?: { accounts?: unknown; providers?: unknown } } | null)?.result;
+  const accounts = result?.accounts ?? result?.providers;
+  const ids = new Map<string, string>([["Claude Code", "claude-code"], ["Codex", "codex"], ["Grok Build (usage)", "usage-pace-grok"]]);
+  if (Array.isArray(accounts)) for (const account of accounts) {
+    if (typeof account?.id === "string" && typeof account.displayName === "string") ids.set(account.displayName, account.id);
+  }
+  const providerIds = tabs.length ? tabs.flatMap(tab => ids.has(tab) ? [ids.get(tab)!] : []) : [...ids.values()];
+  return { force: false, machineIds: null, providerIds: [...new Set(providerIds)], maxAgeMs: CARD_MAX_AGE_MS };
+}
+
 export interface RowMatch {
   pace: Pace;
   usedPercent: number;
@@ -162,14 +181,16 @@ export function matchRow(
   machine: string | null,
   ariaLabel: string,
   now = Date.now(),
+  account: string | null = null,
 ): RowMatch | null {
-  const named = providers.filter(
-    (candidate) => provider === null || candidate.provider === provider,
-  );
-  const onMachine = named.filter(
-    (candidate) => machine === null || candidate.machine === machine,
-  );
-  for (const candidate of onMachine.length > 0 ? onMachine : named) {
+  const candidates = providers.filter(candidate => {
+    if (provider !== null && candidate.provider !== provider && candidate.providerId !== provider) return false;
+    if (machine !== null && candidate.machine !== machine && candidate.machineId !== machine) return false;
+    const title = candidate.accountLabel ?? candidate.accountEmail ?? candidate.provider;
+    return account === null || account === title || account === `${candidate.provider} ${title}`;
+  });
+  if (candidates.length !== 1) return null;
+  for (const candidate of candidates) {
     const index = candidate.windows.findIndex((window) =>
       ariaLabel.startsWith(`${window.label}: `),
     );
@@ -278,10 +299,11 @@ export interface ProviderFailure {
 }
 
 export function parseFailures(body: unknown): ProviderFailure[] {
-  const providers = (body as { result?: { providers?: unknown } } | null)?.result?.providers;
+  const result = (body as { result?: { accounts?: unknown; providers?: unknown } } | null)?.result;
+  const providers = result?.accounts ?? result?.providers;
   if (!Array.isArray(providers)) return [];
   return providers
-    .filter((provider) => provider?.status === "error" && typeof provider.displayName === "string")
+    .filter((provider) => (provider?.status === "error" || provider?.stale === true) && typeof provider.displayName === "string")
     .map((provider) => ({
       provider: provider.displayName as string,
       machine: typeof provider.hostName === "string" ? provider.hostName : "",
@@ -411,10 +433,8 @@ function decorateCard(
   hovered: HTMLElement | null,
   decorated: WeakSet<HTMLElement>,
 ) {
-  const provider =
-    header
-      .querySelector('[role="tab"][aria-selected="true"]')
-      ?.getAttribute("aria-label") ?? null;
+  const tab = header.querySelector('[role="tab"][aria-selected="true"]')?.getAttribute("aria-label") ?? null;
+  const provider = tab === "All accounts" ? null : tab;
   const machineLabel =
     header.querySelector(`[aria-label^="${MACHINE_PREFIX}"]`)?.getAttribute("aria-label") ??
     null;
@@ -422,7 +442,9 @@ function decorateCard(
   for (const row of cardRows(header)) {
     const label = row.getAttribute("aria-label");
     if (label === null) continue;
-    const match = matchRow(providers, provider, machine, label, now);
+    const section = row.closest('section[aria-label]');
+    const account = section?.getAttribute("aria-label") ?? null;
+    const match = matchRow(providers, provider, machine, label, now, account);
     if (decorateRow(row, match, now, row === hovered)) decorated.add(row);
     else decorated.delete(row);
   }
@@ -441,6 +463,7 @@ export function mountCardPace({ signal }: { signal: AbortSignal }) {
   let failures: ProviderFailure[] = [];
   let fetchedAt = 0;
   let fetching = false;
+  let loadedTabs = "";
   const decorated = new WeakSet<HTMLElement>();
   let hovered: HTMLElement | null = null;
 
@@ -450,7 +473,8 @@ export function mountCardPace({ signal }: { signal: AbortSignal }) {
     const headers = document.querySelectorAll(HEADER_SELECTOR);
     if (headers.length === 0) return;
     const now = Date.now();
-    if (now - fetchedAt > REFETCH_MS) void load();
+    const tabs = [...headers].flatMap(header => [...header.querySelectorAll('[role="tab"]')].map(tab => tab.getAttribute("aria-label") ?? ""));
+    if (now - fetchedAt > REFETCH_MS || JSON.stringify(tabs) !== loadedTabs) void load(tabs);
     for (const header of headers) {
       hideTabs(header, hiddenProviders);
       decorateFailure(header, failures, cardMachine(header), safeStorage());
@@ -496,10 +520,11 @@ export function mountCardPace({ signal }: { signal: AbortSignal }) {
   document.addEventListener("mouseover", onOver);
   document.addEventListener("mouseout", onOut);
 
-  async function load() {
+  async function load(tabs: string[]) {
     if (fetching) return;
     fetching = true;
     fetchedAt = Date.now();
+    loadedTabs = JSON.stringify(tabs);
     const post = (url: string, body: unknown) =>
       fetch(url, {
         method: "POST",
@@ -507,15 +532,16 @@ export function mountCardPace({ signal }: { signal: AbortSignal }) {
         body: JSON.stringify(body),
         signal,
       }).then((response) => response.json());
-    const [card, settings, own] = await Promise.allSettled([
-      post(CARD_RPC_URL, { force: false, machineIds: null, providerId: null, maxAgeMs: CARD_MAX_AGE_MS }),
-      post(SETTINGS_RPC_URL, {}),
-      post(OWN_USAGE_RPC_URL, { force: false }),
-    ]);
     try {
-      if (card.status === "fulfilled") providers = parseCardUsage(card.value);
+      const [settings, own] = await Promise.allSettled([
+        post(SETTINGS_RPC_URL, {}), post(OWN_USAGE_RPC_URL, { force: false }),
+      ]);
       if (settings.status === "fulfilled") hiddenProviders = parseCardSettings(settings.value);
       if (own.status === "fulfilled") failures = parseFailures(own.value);
+      const request = cardUsageRequest(own.status === "fulfilled" ? own.value : null, tabs.filter(tab => !hiddenProviders.includes(tab.toLowerCase())));
+      providers = request.providerIds.length ? parseCardUsage(await post(CARD_RPC_URL, request)) : [];
+    } catch {
+      providers = [];
     } finally {
       fetching = false;
       schedule();
@@ -523,7 +549,7 @@ export function mountCardPace({ signal }: { signal: AbortSignal }) {
   }
 
   const observer = new MutationObserver(schedule);
-  observer.observe(document.body, { childList: true, subtree: true });
+  observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["aria-label", "aria-selected", "aria-expanded"] });
   const minute = window.setInterval(schedule, REFETCH_MS);
   schedule();
 

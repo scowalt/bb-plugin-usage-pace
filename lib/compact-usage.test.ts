@@ -9,11 +9,13 @@ const session: UsageWindow = { label: "5-hour limit", weekly: false, usedPercent
 const provider: UsageProvider = {
   id: "claude-code", displayName: "Claude Code", hostId: "one", hostName: "One",
   accountEmail: "one@example.test", status: "ok", message: null,
+  accountKey: "one", accountLabel: "one", observedAt: NOW, plan: null, weight: null, stale: false,
+  sources: [], hosts: [{ id: "one", name: "One" }],
   logoUrl: null, icon: null, iconTint: null, planLabel: null,
   windows: [session, weekly],
 };
 function state(providers = [provider]): UsageState {
-  return { data: { providers, fetchedAt: new Date(NOW).toISOString(), error: null, showStrip: true }, loading: false, error: null };
+  return { data: { providers: providers.map(account => ({ ...account })), fetchedAt: new Date(NOW).toISOString(), error: null, showStrip: true }, loading: false, error: null };
 }
 function row(windows = provider.windows) {
   return compactUsageRows(state([{ ...provider, windows }]), NOW)[0]!;
@@ -36,6 +38,7 @@ describe("compact usage rows", () => {
     expect(result.windows[0]?.pace?.ratio).toBeCloseTo(0.728);
     expect(result.windows[1]?.pace?.ratio).toBeCloseTo(0.533333);
     expect(compactUsageRows(snapshot, NOW + 60_000)[0]?.windows[0]?.pace?.ratio).toBeCloseTo(0.728);
+    snapshot.data!.providers[0]!.observedAt = NOW + 3_600_000;
     snapshot.data!.fetchedAt = new Date(NOW + 3_600_000).toISOString();
     expect(compactUsageRows(snapshot, NOW)[0]?.windows[0]?.pace?.ratio).toBeCloseTo(0.728);
   });
@@ -53,8 +56,8 @@ describe("compact usage rows", () => {
   });
 
   it("deduplicates accounts across hosts but preserves distinct accounts and unknown accounts", () => {
-    const providers = [provider, { ...provider, hostId: "two" }, { ...provider, accountEmail: "two@example.test" },
-      { ...provider, accountEmail: null }, { ...provider, hostId: "two", accountEmail: null }];
+    const providers = [provider, { ...provider, hostId: "two" }, { ...provider, accountKey: "two", accountEmail: "two@example.test" },
+      { ...provider, accountKey: null, accountEmail: null }, { ...provider, accountKey: null, hostId: "two", accountEmail: null }];
     expect(compactUsageRows(state(providers), NOW)).toHaveLength(4);
   });
 
@@ -129,6 +132,7 @@ describe("compact usage rows", () => {
     expect(compactUsageRows(snapshot, NOW + 19.5 * 60_000)[0]?.countdown?.detail).toContain("out in <1m");
     expect(compactUsageRows(snapshot, NOW + 21 * 60_000)[0]?.countdown?.label).toBe("out now (est.)");
     expect(compactUsageRows(snapshot, NOW + 21 * 60_000)[0]?.status).toMatchObject({ glyph: "▲", tone: "critical" });
+    snapshot.data!.providers[0]!.observedAt = NOW + 60_000;
     snapshot.data!.fetchedAt = new Date(NOW + 60_000).toISOString();
     expect(compactUsageRows(snapshot, NOW + 60_000)[0]?.countdown?.label).toBe("1h 39m short");
     expect(compactUsageRows(snapshot, NOW + 60_000)[0]?.countdown?.detail).toContain("out in 20m");
@@ -172,7 +176,7 @@ describe("compact usage rows", () => {
     const result = compactUsageRows(snapshot, NOW + 3 * 3_600_000)[0]!;
     expect(result.status.glyph).toBe("⌛");
     expect(result.countdown?.label).toBe("resets in 1d 21h");
-    expect(result.title).toContain("5-hour limit: 100% used · reset passed; refresh usage");
+    expect(result.title).toContain("5-hour limit: usage unknown · reset passed; refresh usage");
   });
 
   it("counts down each minute and awaits refresh at zero, including after a failed refresh", () => {
@@ -192,7 +196,7 @@ describe("compact usage rows", () => {
 
   it("hides a future reset countdown if usage becomes stale or incomplete", () => {
     const snapshot = state([{ ...provider, windows: [{ ...session, usedPercent: 100 }] }]);
-    for (const failed of [{ ...snapshot, error: "offline" }, { ...snapshot, data: { ...snapshot.data!, error: "One host failed" } }]) {
+    for (const failed of [{ ...snapshot, error: "offline" }, { ...snapshot, data: { ...snapshot.data!, providers: snapshot.data!.providers.map(account => ({ ...account, stale: true, message: "One host failed" })) } }]) {
       const result = compactUsageRows(failed, NOW)[0]!;
       expect(result.status.glyph).toBe("—");
       expect(result.countdown).toBeNull();
@@ -208,9 +212,9 @@ describe("compact usage rows", () => {
   it("hides run-out estimates after failed refreshes, partial snapshots, or resets", () => {
     const snapshot = state([{ ...provider, windows: [{ ...session, usedPercent: 90 }] }]);
     expect(compactUsageRows({ ...snapshot, error: "offline" }, NOW)[0]?.countdown).toBeNull();
-    snapshot.data!.error = "One host failed";
+    snapshot.data!.providers[0]!.stale = true;
     expect(compactUsageRows(snapshot, NOW)[0]?.countdown).toBeNull();
-    snapshot.data!.error = null;
+    snapshot.data!.providers[0]!.stale = false;
     expect(compactUsageRows(snapshot, NOW + 2 * 3_600_000)[0]?.countdown).toBeNull();
   });
 
@@ -256,9 +260,9 @@ describe("compact usage rows", () => {
     const snapshot = state([{ ...provider, windows: [{ ...weekly, usedPercent: 5,
       resetsAt: new Date(NOW + (168 - 168 * 5 / 95.1) * 3_600_000).toISOString() }] }]);
     expect(compactUsageRows({ ...snapshot, error: "offline" }, NOW)[0]?.notice).toBeNull();
-    snapshot.data!.error = "One host failed";
+    snapshot.data!.providers[0]!.stale = true;
     expect(compactUsageRows(snapshot, NOW)[0]?.notice).toBeNull();
-    snapshot.data!.error = null;
+    snapshot.data!.providers[0]!.stale = false;
     expect(compactUsageRows(snapshot, NOW + 168 * 3_600_000)[0]?.notice).toBeNull();
   });
 
@@ -286,8 +290,7 @@ describe("compact usage rows", () => {
 
   it("marks failed refreshes, partial snapshots, and elapsed resets as unknown", () => {
     expect(compactUsageRows({ ...state(), error: "offline" }, NOW)[0]?.status).toMatchObject({ glyph: "—", tone: null });
-    const partial = state();
-    partial.data!.error = "One host failed";
+    const partial = state([{ ...provider, stale: true, message: "One host failed" }]);
     expect(compactUsageRows(partial, NOW)[0]?.title).toContain("Usage may be stale or incomplete. One host failed");
     const expired = row([{ ...weekly, resetsAt: new Date(NOW).toISOString() }]);
     expect(expired.status.glyph).toBe("—");

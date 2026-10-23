@@ -15,6 +15,7 @@ export type SessionReset = z.infer<typeof sessionResetSchema>;
 export const bankedResetsSchema = z.object({
   status: z.enum(["ok", "unauthenticated", "unsupported", "error"]),
   accountEmail: z.string().nullable(),
+  accountKey: z.string().nullable().optional(),
   fetchedAt: z.string().nullable(),
   availableCount: z.number().int().nonnegative().nullable(),
   credits: z.array(z.object({

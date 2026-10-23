@@ -11,6 +11,7 @@ export interface PaceInput {
   label: string;
   usedPercent: number;
   resetsAt: string | null;
+  kind?: "five-hour" | "daily" | "weekly" | "custom";
 }
 
 export interface Pace {
@@ -100,7 +101,8 @@ export function windowLengths(windows: readonly PaceInput[]): (number | null)[] 
     window.resetsAt === null ? Number.NaN : new Date(window.resetsAt).getTime(),
   );
   const fromLabels = windows.map((window, index) =>
-    windowDurationMs(window.label, resets[index]),
+    window.kind === "weekly" ? 7 * DAY_MS : window.kind === "five-hour" ? 5 * HOUR_MS
+      : window.kind === "daily" ? DAY_MS : windowDurationMs(window.label, resets[index]),
   );
   return fromLabels.map((length, index) => {
     if (length !== null || !Number.isFinite(resets[index]!)) return length;
@@ -150,7 +152,7 @@ export function paceFor(
   const resetsAtMs = new Date(window.resetsAt).getTime();
   if (!Number.isFinite(resetsAtMs)) return null;
 
-  const used = Math.max(0, Math.min(100, window.usedPercent));
+  const used = Math.max(0, window.usedPercent);
   const remainingMs = Math.max(0, Math.min(windowMs, resetsAtMs - now));
   const elapsedMs = windowMs - remainingMs;
   const elapsedFraction = elapsedMs / windowMs;
@@ -169,7 +171,7 @@ export function paceFor(
   }
 
   const budgetPerHour =
-    remainingMs > 0 ? ((100 - used) * HOUR_MS) / remainingMs : 0;
+    remainingMs > 0 ? (Math.max(0, 100 - used) * HOUR_MS) / remainingMs : 0;
 
   return {
     windowMs,
@@ -181,7 +183,7 @@ export function paceFor(
     lockoutMs: runsOutAtMs === null ? 0 : Math.max(0, resetsAtMs - runsOutAtMs),
     budgetPerHour,
     remainingMs,
-    leftPercent: 100 - used,
+    leftPercent: Math.max(0, 100 - used),
     tone: worse(toneForUsed(used), toneForProjection(projectedPercent)),
   };
 }

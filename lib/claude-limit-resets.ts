@@ -160,7 +160,7 @@ export function createClaudeLimitResetsReader(deps: {
   const now = deps.now ?? Date.now;
   let latestKey: string | null = null;
   let cache: { key: string; until: number; data: BankedResets } | null = null;
-  let identity: { key: string; email: string } | null = null;
+  let identity: { key: string; email: string; accountKey: string } | null = null;
   let pending: { key: string; work: Promise<BankedResets> } | null = null;
   const invalidate = () => { latestKey = null; cache = null; identity = null; };
 
@@ -193,20 +193,26 @@ export function createClaudeLimitResetsReader(deps: {
         const version = /^(\d+\.\d+\.\d+)(?:\s|$)/u.exec((await readVersion(readSignal)).trim())?.[1];
         if (!version) throw new ReadFailure("unsupported", "Could not identify the installed Claude Code version. Update Claude Code on this host, then refresh.");
         const userAgent = `claude-cli/${version} (external, cli) bb-usage-pace`;
-        const [raw, email] = await Promise.all([
+        const [raw, profile] = await Promise.all([
           readJson("/api/oauth/usage?at_wall=1&skip_spend=1", auth.accessToken, userAgent, readSignal, request),
-          identity?.key === key ? identity.email : readJson("/api/oauth/profile", auth.accessToken, userAgent, readSignal, request).then(value => profileSchema.parse(value).account.email),
+          identity?.key === key ? identity : readJson("/api/oauth/profile", auth.accessToken, userAgent, readSignal, request).then(value => {
+            const account = profileSchema.parse(value).account;
+            const verified = { key, email: account.email, accountKey: `anthropic:account:${account.uuid}` };
+            if (!readSignal.aborted && latestKey === key) identity = verified;
+            return verified;
+          }),
         ]);
-        const result = normalize(raw, email, now());
+        const result = normalize(raw, profile.email, now());
+        result.data.accountKey = profile.accountKey;
         if (!readSignal.aborted && latestKey === key) {
-          identity = { key, email };
           cache = { key, ...result };
         }
         if (readSignal.aborted) return bankedResetsUnavailable("Claude reset read cancelled.");
         return result.data;
       } catch (error) {
-        if (error instanceof ReadFailure) return bankedResetsUnavailable(error.message, error.status);
-        return bankedResetsUnavailable("Could not read Claude resets. The request failed or Claude returned an unfamiliar response. Try refreshing.");
+        const data = error instanceof ReadFailure ? bankedResetsUnavailable(error.message, error.status)
+          : bankedResetsUnavailable("Could not read Claude resets. The request failed or Claude returned an unfamiliar response. Try refreshing.");
+        return { ...data, ...(identity?.key === key ? { accountKey: identity.accountKey, accountEmail: identity.email } : {}) };
       } finally { controller.abort(); }
     })();
     pending = { key, work };

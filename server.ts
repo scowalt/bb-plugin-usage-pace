@@ -7,32 +7,17 @@ import { createTokenTotals } from "./lib/token-totals";
 import { bankedResetsSchema, bankedResetsUnavailable, resetProviderSchema, type BankedResets, type ResetProviderId } from "./lib/banked-resets-contract";
 import { bankedResetsHostContract } from "./lib/banked-resets-host-contract";
 
-const windowSchema = z.object({
-  label: z.string(),
-  usedPercent: z.number(),
-  resetsAt: z.string().nullable(),
-  weekly: z.boolean(),
-});
-export type UsageWindow = z.infer<typeof windowSchema>;
-
-const providerSchema = z.object({
-  id: z.string(),
-  displayName: z.string(),
-  hostId: z.string(),
-  hostName: z.string(),
-  logoUrl: z.string().nullable(),
-  icon: z.object({ glyph: z.string() }).nullable(),
-  iconTint: z.object({ light: z.string(), dark: z.string() }).nullable(),
-  status: z.enum(["ok", "not_installed", "unauthenticated", "expired", "error"]),
-  message: z.string().nullable(),
-  accountEmail: z.string().nullable(),
-  planLabel: z.string().nullable(),
-  windows: z.array(windowSchema),
-});
-export type UsageProvider = z.infer<typeof providerSchema>;
+import { accountSchema, observationTime, parsePairs, usageIsStale, withAccountSettings, type UsageAccount } from "./lib/usage-accounts";
+import { createUsageCollector } from "./lib/usage-collector";
+import { accountWithPace, usageCliSchema } from "./lib/usage-cli";
+import { describePool, poolSchema, usagePools } from "./lib/usage-pools";
+export { isWeeklyLabel } from "./lib/usage-accounts";
+export type { UsageAccount, UsageProvider, UsageWindow } from "./lib/usage-accounts";
 
 const snapshotSchema = z.object({
-  providers: z.array(providerSchema),
+  accounts: z.array(accountSchema).optional(),
+  providers: z.array(accountSchema),
+  pools: z.array(poolSchema).optional(),
   fetchedAt: z.string(),
   error: z.string().nullable(),
   showStrip: z.boolean().optional(),
@@ -68,63 +53,6 @@ export function parseProviderList(value: string): string[] {
     .filter((name) => name !== "");
 }
 
-const WEEKLY_PATTERN = /(week|7\s*[-‑]?\s*day|7d\b|weekly)/iu;
-
-export function isWeeklyLabel(label: string): boolean {
-  return WEEKLY_PATTERN.test(label);
-}
-
-type Host = Awaited<ReturnType<BbPluginApi["sdk"]["hosts"]["list"]>>[number];
-type Provider = Awaited<
-  ReturnType<BbPluginApi["sdk"]["providers"]["list"]>
->[number];
-type UsageResponse = Awaited<
-  ReturnType<BbPluginApi["sdk"]["system"]["usageLimits"]>
->;
-
-function normalizeProvider(
-  host: Host,
-  provider: Provider,
-  usage: UsageResponse[string] | undefined,
-): UsageProvider {
-  const tint = provider.strings?.iconTint;
-  const base = {
-    id: provider.id,
-    displayName: provider.displayName,
-    hostId: host.id,
-    hostName: host.name,
-    logoUrl: provider.logoUrl ?? null,
-    icon: provider.icon?.glyph ? { glyph: provider.icon.glyph } : null,
-    iconTint: tint ? { light: tint.light, dark: tint.dark } : null,
-    accountEmail: null,
-    planLabel: null,
-    message: null,
-    windows: [] as UsageWindow[],
-  };
-  if (usage === undefined) {
-    return { ...base, status: "error", message: "No usage reported." };
-  }
-  switch (usage.status) {
-    case "ok":
-      return {
-        ...base,
-        status: "ok",
-        accountEmail: usage.accountEmail,
-        planLabel: usage.planLabel,
-        windows: usage.windows.map((window) => ({
-          label: window.label,
-          usedPercent: Math.max(0, Math.min(100, window.usedPercent)),
-          resetsAt: window.resetsAt,
-          weekly: isWeeklyLabel(window.label),
-        })),
-      };
-    case "error":
-      return { ...base, status: "error", message: usage.message };
-    default:
-      return { ...base, status: usage.status };
-  }
-}
-
 export default async function plugin(bb: BbPluginApi) {
   const getTokens = createTokenTotals(bb);
   const bankedHost = bb.hosts.experimental_client({ contract: bankedResetsHostContract });
@@ -150,10 +78,18 @@ export default async function plugin(bb: BbPluginApi) {
       label: "Also show the Usage Pace strip above the sidebar footer",
       default: false,
     },
+    accountAliases: {
+      type: "string", label: "Account aliases",
+      description: "email=Alias pairs, separated by commas or newlines.", default: "",
+    },
+    poolWeights: {
+      type: "string", label: "Pool weight overrides",
+      description: "email=positive weight pairs. Defaults to the plan multiplier; weekly pool numbers are estimates.", default: "",
+    },
     serverOnly: {
       type: "boolean",
       label: "Only show providers on the server machine",
-      description: "Filters the Usage Pace strip, dialog, and saved-reset details. Shared across browsers. The Provider Usage card, CLI, and token totals stay unchanged.",
+      description: "Keeps server-local and shared-source accounts in the strip and dialog. Reset reads stay on the server. Shared across browsers; the Provider Usage card, CLI, and token totals stay global.",
       default: false,
     },
     hiddenCardProviders: {
@@ -172,12 +108,16 @@ export default async function plugin(bb: BbPluginApi) {
   let showStrip = false;
   let serverOnly = false;
   let hiddenProviders: string[] = [];
+  let aliases = new Map<string, string>();
+  let weights = new Map<string, string>();
   const applySettings = async () => {
     const values = await settings.get();
     cacheMs = Math.max(0.5, Number(values.cacheMinutes) || 5) * 60_000;
     showStrip = values.showStrip === true;
     serverOnly = values.serverOnly === true;
     hiddenProviders = parseProviderList(String(values.hiddenCardProviders ?? ""));
+    aliases = parsePairs(String(values.accountAliases ?? ""));
+    weights = parsePairs(String(values.poolWeights ?? ""));
   };
   await applySettings();
   if ((await settings.get()).grokUsage !== false) {
@@ -201,44 +141,14 @@ export default async function plugin(bb: BbPluginApi) {
   let cached: { at: number; usage: LoadedUsage; dirty: boolean } | null = null;
   let pending: Promise<LoadedUsage> | null = null;
 
-  async function loadSnapshot(): Promise<LoadedUsage> {
-    const providers: UsageProvider[] = [];
-    const hostErrors = new Map<string, string>();
-    let error: string | null = null;
-    let hostsError: string | null = null;
-    let hosts: Host[] = [];
-    try {
-      hosts = await bb.sdk.hosts.list();
-    } catch (cause) {
-      error = cause instanceof Error ? cause.message : String(cause);
-      hostsError = error;
-    }
-    await Promise.all(
-      hosts.map(async (host) => {
-        if (host.status === "disconnected") return;
-        try {
-          const [list, usage] = await Promise.all([
-            bb.sdk.providers.list({ hostId: host.id, capability: "usage" }),
-            bb.sdk.system.usageLimits({ hostId: host.id }),
-          ]);
-          for (const provider of list) {
-            providers.push(normalizeProvider(host, provider, usage[provider.id]));
-          }
-        } catch (cause) {
-          const message = `${host.name}: ${
-            cause instanceof Error ? cause.message : String(cause)
-          }`;
-          hostErrors.set(host.id, message);
-          error ??= message;
-        }
-      }),
-    );
-    providers.sort((a, b) => a.displayName.localeCompare(b.displayName));
-    return {
-      snapshot: { providers, fetchedAt: new Date().toISOString(), error },
-      hostErrors,
-      hostsError,
-    };
+  const collect = createUsageCollector(bb, bankedController.signal);
+  async function loadSnapshot(force: boolean): Promise<LoadedUsage> {
+    const { accounts, error, hostErrors, hostsError } = await collect(force);
+    return { snapshot: { accounts, providers: accounts, fetchedAt: new Date().toISOString(), error }, hostErrors, hostsError };
+  }
+  function configuredSnapshot(snapshot: UsageSnapshot): UsageSnapshot {
+    const accounts = (snapshot.accounts ?? snapshot.providers).map(account => withAccountSettings({ ...account, stale: usageIsStale(account, Date.now()) }, aliases, weights));
+    return { ...snapshot, accounts, providers: accounts, pools: usagePools(accounts, snapshot.fetchedAt) };
   }
 
   async function getUsage(force: boolean): Promise<LoadedUsage> {
@@ -247,10 +157,12 @@ export default async function plugin(bb: BbPluginApi) {
       return cached.usage;
     }
     if (pending !== null) return pending;
-    pending = loadSnapshot()
+    pending = loadSnapshot(force)
       .then((usage) => {
-        cached = { at: Date.now(), usage, dirty: false };
-        bb.realtime.publish("usage-changed", { fetchedAt: usage.snapshot.fetchedAt });
+        if (!bankedController.signal.aborted) {
+          cached = { at: Date.now(), usage, dirty: false };
+          bb.realtime.publish("usage-changed", { fetchedAt: usage.snapshot.fetchedAt });
+        }
         return usage;
       })
       .finally(() => {
@@ -293,7 +205,7 @@ export default async function plugin(bb: BbPluginApi) {
     getUsage: async (input) => {
       const usage = await getUsage(input?.force === true);
       const scope = await getServerScope(usage);
-      return { ...usage.snapshot, ...scope, showStrip, serverOnly };
+      return { ...configuredSnapshot(usage.snapshot), ...scope, showStrip, serverOnly };
     },
   });
 
@@ -312,29 +224,36 @@ export default async function plugin(bb: BbPluginApi) {
 
   function formatSnapshot(snapshot: UsageSnapshot, weeklyOnly: boolean): string {
     const lines: string[] = [];
-    for (const provider of snapshot.providers) {
-      if (provider.status !== "ok") {
+    const groups = new Map<string, UsageAccount[]>();
+    for (const account of snapshot.accounts ?? snapshot.providers) {
+      const group = groups.get(account.id) ?? [];
+      group.push(account); groups.set(account.id, group);
+    }
+    for (const [providerId, accounts] of groups) {
+      const pool = snapshot.pools?.find(pool => pool.providerId === providerId);
+      if (pool) lines.push(`${accounts[0]!.displayName} ∑ ${describePool(pool)}`);
+      for (const provider of accounts) {
+        if (provider.status !== "ok") {
+          lines.push(`${provider.displayName} · ${provider.accountLabel} (${provider.hostName}): ${provider.status}${provider.message ? ` — ${provider.message}` : ""}`);
+          continue;
+        }
+        const stale = usageIsStale(provider, Date.now());
+        const paces = stale ? provider.windows.map(() => null)
+          : paceForWindows(provider.windows, observationTime(provider, snapshot.fetchedAt, Date.now()));
+        const shown = provider.windows
+          .map((window, index) => ({ window, pace: paces[index]! }))
+          .filter(({ window }) => !weeklyOnly || window.weekly);
+        if (shown.length === 0) continue;
         lines.push(
-          `${provider.displayName} (${provider.hostName}): ${provider.status}${
-            provider.message ? ` — ${provider.message}` : ""
-          }`,
+          `${provider.displayName} · ${provider.accountLabel}${provider.planLabel ? ` · ${provider.planLabel}` : ""} (${provider.hosts.map(host => host.name).join(", ") || provider.hostName})`,
+          `  via ${[...new Set(provider.sources.map(source => source.label))].join(", ")} · observed ${provider.observedAt === null ? "unknown" : new Date(provider.observedAt).toISOString()}`,
+          ...(stale ? [`  stale: ${provider.message ?? "measurement unavailable or reset passed"}`] : []),
         );
-        continue;
-      }
-      const paces = paceForWindows(provider.windows);
-      const shown = provider.windows
-        .map((window, index) => ({ window, pace: paces[index]! }))
-        .filter(({ window }) => !weeklyOnly || window.weekly);
-      if (shown.length === 0) continue;
-      lines.push(
-        `${provider.displayName}${provider.planLabel ? ` · ${provider.planLabel}` : ""} (${provider.hostName})`,
-      );
-      for (const { window, pace } of shown) {
-        lines.push(
-          `  ${window.label.padEnd(18)} ${String(Math.round(window.usedPercent)).padStart(3)}%  ${formatReset(window.resetsAt)}`,
-        );
-        const paceText = describePace(pace);
-        if (paceText) lines.push(`  ${"".padEnd(18)} ${paceText}`);
+        for (const { window, pace } of shown) {
+          lines.push(`  ${window.label.padEnd(18)} ${stale ? "unknown" : `${String(Math.round(window.usedPercent)).padStart(3)}%`}  ${formatReset(window.resetsAt)}`);
+          const paceText = describePace(pace);
+          if (paceText) lines.push(`  ${"".padEnd(18)} ${paceText}`);
+        }
       }
     }
     if (snapshot.error) lines.push(`warning: ${snapshot.error}`);
@@ -349,7 +268,7 @@ export default async function plugin(bb: BbPluginApi) {
     "  --tokens total tokens across BB for today and this month (JSON)",
     "  --all    show every window, not only weekly ones",
     "  --force  bypass the cache and query providers now",
-    "  --json   machine-readable output; each window has a `pace` field",
+    "  --json   accounts, pools, and per-window pace; providers is a deprecated accounts alias",
   ].join("\n");
 
   bb.cli.register({
@@ -385,22 +304,11 @@ export default async function plugin(bb: BbPluginApi) {
       if (positional.length > 0 && positional[0] !== "show") {
         return { exitCode: 1, stderr: usageText };
       }
-      const { snapshot } = await getUsage(flags.has("--force"));
+      const loaded = await getUsage(flags.has("--force"));
+      const snapshot = configuredSnapshot(loaded.snapshot);
       if (flags.has("--json")) {
-        const withPace = {
-          ...snapshot,
-          providers: snapshot.providers.map((provider) => {
-            const paces = paceForWindows(provider.windows);
-            return {
-              ...provider,
-              windows: provider.windows.map((window, index) => ({
-                ...window,
-                pace: paces[index]!,
-              })),
-            };
-          }),
-        };
-        return { exitCode: 0, stdout: JSON.stringify(withPace) };
+        const accounts = (snapshot.accounts ?? snapshot.providers).map(account => accountWithPace(account, snapshot.fetchedAt));
+        return { exitCode: 0, stdout: JSON.stringify(usageCliSchema.parse({ ...snapshot, accounts, providers: accounts })) };
       }
       return {
         exitCode: 0,

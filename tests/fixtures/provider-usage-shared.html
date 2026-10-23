@@ -1,0 +1,25 @@
+<div class="flex max-h-80 flex-col">
+  <div data-provider-usage-header="">
+    <div role="tablist" aria-label="Usage provider">
+      <button role="tab" aria-label="Claude Code" aria-selected="true"></button>
+      <button role="tab" aria-label="Codex" aria-selected="false"></button>
+    </div>
+    <button aria-expanded="false" aria-label="Usage machine: Claude Accounts">Claude Accounts</button>
+  </div>
+  <div role="tabpanel" aria-label="Claude Accounts Claude Code usage">
+    <div class="grid grid-cols-4 gap-y-2">
+      <section aria-label="a@example.test" class="col-span-full grid grid-cols-subgrid">
+        <div><h3 title="a@example.test">a@example.test</h3><span>Max 20x</span></div>
+        <button aria-expanded="false" aria-label="Weekly limit: 44% used. Resets Tue 3:59 PM">
+          <span class="grid"><span>Weekly limit</span><span class="bar"><span style="width:44%"></span></span><span>44%</span><span>5d 2h</span></span>
+        </button>
+      </section>
+      <section aria-label="b@example.test" class="col-span-full grid grid-cols-subgrid">
+        <div><h3 title="b@example.test">b@example.test</h3><span>Max 5x</span></div>
+        <button aria-expanded="false" aria-label="Weekly limit: 71% used. Resets Sun 3:59 PM">
+          <span class="grid"><span>Weekly limit</span><span class="bar"><span style="width:71%"></span></span><span>71%</span><span>2d 2h</span></span>
+        </button>
+      </section>
+    </div>
+  </div>
+</div>

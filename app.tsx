@@ -1,11 +1,13 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { Fragment, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import {
   definePluginApp,
   experimental_ProviderIcon as ProviderIcon,
   useRealtime,
 } from "@get-bb/plugin-sdk/app";
-import type { UsageProvider, UsageWindow } from "./server";
+import type { UsageAccount, UsageWindow } from "./server";
+import { accountId, mergeAccounts, observationTime, usageIsStale } from "./lib/usage-accounts";
+import { describePool, usagePools, type UsagePool } from "./lib/usage-pools";
 import {
   formatReset,
   getBarHost,
@@ -116,7 +118,10 @@ function useUsage(): UsageState {
   useRealtime("usage-changed", () => {
     void refreshUsage();
   });
-  return usageForDisplay(state);
+  const display = usageForDisplay(state);
+  if (!display.error || !display.data) return display;
+  const accounts = (display.data.accounts ?? display.data.providers).map(account => ({ ...account, stale: true, message: display.error }));
+  return { ...display, data: { ...display.data, accounts, providers: accounts } };
 }
 
 function useMinuteTick() {
@@ -151,7 +156,7 @@ function ProviderMark({
   provider,
   className,
 }: {
-  provider: UsageProvider;
+  provider: UsageAccount;
   className?: string;
 }) {
   return (
@@ -214,6 +219,7 @@ export function UsageBar({ onOpen }: { onOpen: (target?: BankedResetTarget) => v
   useMinuteTick();
   const now = Date.now();
   const rows = compactUsageRows(state, now);
+  const pools = usagePools(rows.map(row => row.provider), state.data?.fetchedAt ?? "", now);
   useResetRefresh(rows, state.loading, now);
   const open = () => onOpen();
   const serverOnly = state.data?.serverOnly === true;
@@ -229,23 +235,27 @@ export function UsageBar({ onOpen }: { onOpen: (target?: BankedResetTarget) => v
     >
       {rows.length === 0 ? (
         <button type="button" onClick={open} aria-haspopup="dialog" title={state.error ?? state.data?.error ?? undefined} className="truncate rounded px-1.5 py-1 text-left text-muted-foreground hover:bg-sidebar-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">{empty}</button>
-      ) : rows.map(({ key, provider, windows, status, notice, countdown, title }) => (
-        <div key={key} className="@container flex min-w-0 items-start">
+      ) : rows.map(({ key, provider, windows, status, notice, countdown, title }, index) => (
+        <Fragment key={key}>
+        <div className="@container flex min-w-0 items-start">
           <button
             type="button"
             onClick={open}
             aria-label={`${title}\nOpen usage details.`}
             aria-haspopup="dialog"
-            className="grid min-w-0 flex-1 grid-cols-[0.875rem_minmax(0,1fr)] items-center gap-x-0.5 gap-y-1 rounded px-0.5 py-1 text-left @[200px]:gap-x-1.5 @[200px]:px-1.5 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+            className="grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-0.5 gap-y-1 rounded px-0.5 py-1 text-left @[200px]:gap-x-1.5 @[200px]:px-1.5 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
             title={title}
           >
-            <ProviderMark provider={provider} />
+            <span className="flex min-w-0 items-center gap-1">
+              <ProviderMark provider={provider} />
+              {pools.some(pool => pool.providerId === provider.id) ? <span className="max-w-12 truncate font-medium">{provider.accountLabel}</span> : null}
+            </span>
             {status.glyph === "⌛" ? (
               <span aria-hidden="true" title={countdown?.detail} className="col-start-2 flex items-center gap-2 text-muted-foreground tabular-nums">
                 <span style={{ color: toneColor("warning") }}><Icon name="Hourglass" className="size-2.5" aria-hidden /></span>
                 <span>{countdown?.label}</span>
               </span>
-            ) : windows.map(({ window, label, detail, pace, paceState }, index) => (
+            ) : windows.map(({ window, label, detail, pace, paceState, usageKnown }, index) => (
               <span
                 key={index}
                 aria-hidden="true"
@@ -257,7 +267,7 @@ export function UsageBar({ onOpen }: { onOpen: (target?: BankedResetTarget) => v
                   className="shrink-0 font-semibold tabular-nums"
                   style={{ color: pace?.ratio == null ? "var(--muted-foreground)" : pace.tone === "ok" ? "var(--success, var(--primary, currentColor))" : toneColor(pace.tone) }}
                 >{pace?.ratio == null ? paceState === "early" ? "too early" : "unknown" : <>{formatRatio(pace.ratio)} <span className="font-normal">pace</span></>}</span>
-                <span className="shrink-0 text-muted-foreground tabular-nums"><span className="hidden @[200px]:inline">· </span>{Math.round(window.usedPercent)}% used</span>
+                <span className="shrink-0 text-muted-foreground tabular-nums"><span className="hidden @[200px]:inline">· </span>{usageKnown ? `${Math.round(window.usedPercent)}% used` : "usage unknown"}</span>
               </span>
             ))}
             {countdown && status.glyph !== "⌛" ? (
@@ -271,13 +281,31 @@ export function UsageBar({ onOpen }: { onOpen: (target?: BankedResetTarget) => v
           </button>
           {supportsBankedResets(provider.id) ? <BankedResetsBadge target={provider} onOpen={() => onOpen(provider)} className="min-h-5.5" /> : null}
         </div>
+        {rows[index + 1]?.provider.id !== provider.id && pools.find(pool => pool.providerId === provider.id) ? (
+          <PoolSummary pool={pools.find(pool => pool.providerId === provider.id)!} provider={provider} onOpen={open} />
+        ) : null}
+        </Fragment>
       ))}
     </div>
   );
 }
 
+function PoolSummary({ pool, provider, onOpen }: { pool: UsagePool; provider: UsageAccount; onOpen?: () => void }) {
+  const description = describePool(pool);
+  return onOpen ? (
+    <button type="button" onClick={onOpen} aria-haspopup="dialog" aria-label={`${provider.displayName} pool: ${description}. Open pool details.`}
+      title="Plan-weighted weekly estimates, not a pool run-out forecast. Unknown accounts are excluded from weighted numbers."
+      className="flex min-w-0 items-start gap-1.5 rounded px-1.5 py-1 text-left text-muted-foreground hover:bg-sidebar-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">
+      <ProviderMark provider={provider} /><span aria-hidden="true">∑</span><span className="min-w-0 text-wrap leading-snug tabular-nums">{description}</span>
+    </button>
+  ) : <section aria-label={`${provider.displayName} pool`} className="border-b border-border pb-3 text-xs">
+    <h3 className="font-medium">{provider.displayName} pool</h3>
+    <p className="mt-1 tabular-nums">{description}</p>
+    <p className="mt-1 text-[11px] text-muted-foreground">Plan-weighted estimates; weekly limits may not scale with the session multiplier. No pool run-out forecast.</p>
+  </section>;
+}
 
-function WindowRow({ window, pace }: { window: UsageWindow; pace: Pace | null }) {
+function WindowRow({ window, pace, usageKnown }: { window: UsageWindow; pace: Pace | null; usageKnown: boolean }) {
   const tone = pace?.tone ?? toneForUsed(window.usedPercent);
   const reset = formatReset(window.resetsAt);
   return (
@@ -289,12 +317,12 @@ function WindowRow({ window, pace }: { window: UsageWindow; pace: Pace | null })
         </span>
         <span
           className="w-10 shrink-0 text-right font-semibold tabular-nums"
-          style={{ color: toneColor(tone) }}
+          style={{ color: usageKnown ? toneColor(tone) : "var(--muted-foreground)" }}
         >
-          {Math.round(window.usedPercent)}%
+          {usageKnown ? `${Math.round(window.usedPercent)}%` : "—"}
         </span>
       </div>
-      <div className="relative h-1.5 rounded-full bg-border">
+      {usageKnown ? <div className="relative h-1.5 rounded-full bg-border">
         <div
           className="h-full rounded-full transition-[width]"
           style={{
@@ -310,7 +338,7 @@ function WindowRow({ window, pace }: { window: UsageWindow; pace: Pace | null })
             style={{ left: `${pace.elapsedFraction * 100}%` }}
           />
         ) : null}
-      </div>
+      </div> : <p className="text-[11px] text-muted-foreground">Usage unknown. Refresh to check this account.</p>}
       {pace !== null ? <PaceVerdict pace={pace} /> : null}
     </div>
   );
@@ -343,12 +371,13 @@ export function ProviderBlock({
   showBankedResets,
   focusBankedResets,
 }: {
-  provider: UsageProvider;
+  provider: UsageAccount;
   showHost: boolean;
   showBankedResets: boolean;
   focusBankedResets: boolean;
 }) {
-  const paces = paceForWindows(provider.windows);
+  const reliable = provider.status === "ok" && !usageIsStale(provider, Date.now());
+  const paces = reliable ? paceForWindows(provider.windows, observationTime(provider, "", Date.now())) : provider.windows.map(() => null);
   const subtitle = [
     provider.planLabel,
     provider.accountEmail,
@@ -361,7 +390,7 @@ export function ProviderBlock({
       <div className="flex items-center gap-2">
         <ProviderMark provider={provider} className="size-4" />
         <div className="flex min-w-0 flex-col">
-          <span className="text-sm font-medium">{provider.displayName}</span>
+          <span className="text-sm font-medium">{provider.displayName} · {provider.accountLabel}</span>
           {subtitle ? (
             <span className="truncate text-[11px] text-muted-foreground">
               {subtitle}
@@ -369,12 +398,15 @@ export function ProviderBlock({
           ) : null}
         </div>
       </div>
+      <p className="text-[11px] text-muted-foreground">Available on: {provider.hosts.map(host => host.name).join(", ") || "shared"} · via {[...new Set(provider.sources.map(source => source.label))].join(", ")}
+        {provider.observedAt === null ? " · observation unknown" : ` · observed ${formatDuration(Math.max(0, Date.now() - provider.observedAt))} ago`}</p>
+      {provider.stale ? <p role="status" className="text-xs text-muted-foreground">Showing stale usage. {provider.message ?? "Refresh to check this account."}</p> : provider.message ? <p role="status" className="text-xs text-muted-foreground">{provider.message}</p> : null}
       {provider.status === "ok" ? (
         provider.windows.length === 0 ? (
           <p className="text-xs text-muted-foreground">No limit windows reported.</p>
         ) : (
           provider.windows.map((window, index) => (
-            <WindowRow key={window.label} window={window} pace={paces[index]!} />
+            <WindowRow key={window.label} window={window} pace={paces[index]!} usageKnown={reliable} />
           ))
         )
       ) : (
@@ -398,14 +430,8 @@ function UsageDialog({ tokens, bankedTarget }: { tokens: TokenTotals | null; ban
   const refreshBankedResets = useRefreshBankedResets();
   const state = useUsage();
   useMinuteTick();
-  const seenAccounts = new Set<string>();
-  const providers = (state.data?.providers ?? []).filter((provider) => {
-    if (provider.status !== "ok" || provider.accountEmail === null) return true;
-    const key = `${provider.id}/${provider.accountEmail}`;
-    if (seenAccounts.has(key)) return false;
-    seenAccounts.add(key);
-    return true;
-  });
+  const providers = mergeAccounts(state.data?.accounts ?? state.data?.providers ?? []);
+  const pools = usagePools(providers, state.data?.fetchedAt ?? "");
   const hostCount = new Set(providers.map((provider) => provider.hostId)).size;
   return (
     <Dialog open={open} onOpenChange={setOverlayOpen}>
@@ -452,14 +478,16 @@ function UsageDialog({ tokens, bankedTarget }: { tokens: TokenTotals | null; ban
               {state.error ?? state.data?.error ?? (state.loading ? "Loading…" : state.data?.serverOnly ? "No providers with usage reporting on the server." : "No providers with usage reporting.")}
             </p>
           ) : (
-            providers.map((provider) => (
+            providers.map((provider, index) => (
+              <Fragment key={`${accountId(provider)}/${index}`}>
+              {providers[index - 1]?.id !== provider.id && pools.find(pool => pool.providerId === provider.id) ? <PoolSummary pool={pools.find(pool => pool.providerId === provider.id)!} provider={provider} /> : null}
               <ProviderBlock
-                key={`${provider.hostId}/${provider.id}`}
                 provider={provider}
                 showHost={hostCount > 1}
                 showBankedResets={open}
-                focusBankedResets={bankedTarget?.id === provider.id && bankedTarget.hostId === provider.hostId && bankedTarget.accountEmail === provider.accountEmail}
+                focusBankedResets={bankedTarget?.id === provider.id && bankedTarget.accountKey === provider.accountKey}
               />
+              </Fragment>
             ))
           )}
           {state.error !== null && providers.length > 0 ? (
@@ -490,7 +518,7 @@ export function UsageOverlay() {
     setOverlayOpen(true);
   };
   return (
-    <BankedResetsProvider providers={state.data?.providers ?? []} active={(showStrip && host !== null) || open}>
+    <BankedResetsProvider providers={state.data?.accounts ?? state.data?.providers ?? []} scopeHostId={state.data?.serverOnly ? state.data.serverHostId ?? null : undefined} active={(showStrip && host !== null) || open}>
       {host === null || !showStrip
         ? null
         : createPortal(<UsageBar onOpen={openDetails} />, host)}

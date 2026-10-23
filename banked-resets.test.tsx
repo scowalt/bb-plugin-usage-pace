@@ -18,14 +18,16 @@ vi.mock("@get-bb/plugin-sdk/app", () => ({
 }));
 
 const NOW = Date.parse("2026-10-01T12:00:00Z");
-const target = { hostId: "host-one", accountEmail: "one@example.test" };
+const target = { hostId: "host-one", accountEmail: "one@example.test", accountKey: "one" };
 const provider: UsageProvider = {
   ...target, id: "codex", displayName: "Codex", hostName: "One", status: "ok",
+  accountLabel: "one", observedAt: NOW, plan: null, weight: null, stale: false,
+  sources: [], hosts: [{ id: "host-one", name: "One" }],
   logoUrl: null, icon: null, iconTint: null, message: null, planLabel: null,
   windows: [{ label: "Weekly", weekly: true, usedPercent: 52, resetsAt: "2026-10-03T12:00:00Z" }],
 };
 function inventory(count = 3, accountEmail = target.accountEmail): BankedResets {
-  return { status: "ok", accountEmail, fetchedAt: new Date(NOW).toISOString(), availableCount: count, message: null,
+  return { status: "ok", accountEmail, accountKey: accountEmail === target.accountEmail ? "one" : "other", fetchedAt: new Date(NOW).toISOString(), availableCount: count, message: null,
     credits: [{ id: "credit", title: "Saved reset", supported: true, expiresAt: "2026-10-03T12:00:00Z" }] };
 }
 function deferred<T>() {
@@ -94,10 +96,8 @@ describe("shared footer/dialog inventory", () => {
   it("treats a read failure as unknown, then recovers on focus", async () => {
     rpc.mockRejectedValueOnce(new Error("offline"));
     await render(surfaces());
-    expect(badge().textContent).toBe("↺?");
-    expect(badge().title).toContain("Could not refresh");
-    expect(container.querySelector("section")?.textContent).toContain(provider.hostName);
-    expect(container.querySelector("section")?.textContent).not.toContain("Checked");
+    expect(badge()).toBeNull();
+    expect(container.querySelector("section")).toBeNull();
     await act(async () => { window.dispatchEvent(new Event("focus")); });
     expect(badge().textContent).toBe("↺3");
   });
@@ -114,11 +114,11 @@ describe("shared footer/dialog inventory", () => {
     const second = deferred<BankedResets>();
     rpc.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
     await render(surfaces());
-    expect(badge().textContent).toBe("↺…");
-    const switched = { ...provider, accountEmail: "two@example.test" };
+    expect(badge()).toBeNull();
+    const switched = { ...provider, accountKey: "other", accountEmail: "two@example.test" };
     await render(surfaces([switched]));
     await act(async () => first.resolve(inventory(9)));
-    expect(badge().textContent).toBe("↺…");
+    expect(badge()).toBeNull();
     await act(async () => second.resolve(inventory(2, switched.accountEmail)));
     expect(badge().textContent).toBe("↺2");
   });
@@ -126,8 +126,24 @@ describe("shared footer/dialog inventory", () => {
   it("does not attach another account's balance to the quota chip", async () => {
     rpc.mockResolvedValue(inventory(9, "different@example.test"));
     await render(surfaces());
+    expect(badge()).toBeNull();
+  });
+
+  it("uses provider-issued identity rather than email for accounts sharing a host", async () => {
+    const other = { ...provider, accountKey: "other" };
+    await render(<BankedResetsProvider providers={[provider, other]} active>
+      <div data-account="one"><BankedResetsBadge target={provider} onOpen={() => {}} /></div>
+      <div data-account="other"><BankedResetsBadge target={other} onOpen={() => {}} /></div>
+    </BankedResetsProvider>);
+    expect(container.querySelector('[data-account="one"] button')?.textContent).toBe("↺3");
+    expect(container.querySelector('[data-account="other"] button')).toBeNull();
+  });
+
+  it("keeps a verified failed inventory read unknown, not zero", async () => {
+    rpc.mockResolvedValue({ ...inventory(), status: "error", availableCount: null, credits: [], message: "Inventory read failed" });
+    await render(surfaces());
     expect(badge().textContent).toBe("↺?");
-    expect(badge().title).toContain("account changed");
+    expect(badge().title).toContain("Inventory read failed");
   });
 
   it("pauses while hidden or disabled and disposes its polling", async () => {
@@ -262,11 +278,10 @@ describe("Claude limit resets", () => {
     expect(document.getElementById(bankedResetSectionId(provider))?.textContent).toContain("3 banked");
   });
   it("rejects another account's session status even when the saved inventory is unavailable", async () => {
-    rpc.mockResolvedValue({ ...claudeInventory(), status: "unsupported", availableCount: null, credits: [], accountEmail: "other@example.test", sessionReset: { availability: "available", reason: null, nextAvailableAt: null } });
+    rpc.mockResolvedValue({ ...claudeInventory(), status: "unsupported", availableCount: null, credits: [], accountKey: "other", accountEmail: "other@example.test", sessionReset: { availability: "available", reason: null, nextAvailableAt: null } });
     await render(surfaces([claude]));
-    expect(claudeBadge().textContent).toBe("↺?");
-    expect(claudeBadge().title).toContain("Claude account changed");
-    expect(container.textContent).toContain("Availability unknown");
+    expect(claudeBadge()).toBeNull();
+    expect(container.querySelector("section")).toBeNull();
     expect(container.textContent).not.toContain("Available at last update");
   });
   it("does not invent expiry or availability when a session availability time passes", async () => {

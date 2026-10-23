@@ -40,10 +40,19 @@ it("reads the verified full-reset grant and keeps conditional availability separ
   const result = await read();
   expect(bankedResetsSchema.parse(result)).toEqual(result);
   expect(result).toMatchObject({
-    status: "ok", accountEmail: "one@example.test", availableCount: 1, fetchedAt: new Date(NOW).toISOString(),
+    status: "ok", accountEmail: "one@example.test", accountKey: "anthropic:account:account", availableCount: 1, fetchedAt: new Date(NOW).toISOString(),
     credits: [{ title: "Model launch reset", remaining: 1, scope: "full", expiresAt: "2026-10-22T16:00:00.000Z", usableNow: true }],
     sessionReset: { availability: "unavailable", reason: "not_at_wall", nextAvailableAt: null },
   });
+});
+
+it("returns the profile UUID even if the email stays identical after a login switch", async () => {
+  const { read, request, setAuth } = setup();
+  expect((await read()).accountKey).toBe("anthropic:account:account");
+  setAuth(credentials("replacement-token"));
+  request.mockImplementation(async input => String(input).endsWith("/profile")
+    ? Response.json({ ...profile(), account: { uuid: "replacement", email: "one@example.test" } }) : Response.json(usage()));
+  expect(await read()).toMatchObject({ accountEmail: "one@example.test", accountKey: "anthropic:account:replacement" });
 });
 
 it("only makes bounded read-only requests to fixed first-party endpoints, with the compatibility user agent", async () => {

@@ -3,12 +3,14 @@ import { createFakePluginHost, makeHostResponse } from "@get-bb/plugin-sdk/testi
 import plugin, { rpcContract } from "./server";
 import { bankedResetsHostContract } from "./lib/banked-resets-host-contract";
 import type { BankedResets } from "./lib/banked-resets-contract";
+import { usageCliSchema } from "./lib/usage-cli";
 
 const inventory: BankedResets = { status: "ok", availableCount: 0, credits: [], accountEmail: "one@example.test", fetchedAt: "2026-10-07T20:00:00Z", message: null };
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
   for (const dispose of cleanups.splice(0)) await dispose();
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 async function setup() {
@@ -76,13 +78,39 @@ async function setupUsage(settings: { serverOnly?: boolean } = {}) {
   }));
   const { bb, harness } = createFakePluginHost({
     pluginId: "usage-pace", settings: { grokUsage: false, ...settings },
-    sdk: { hosts: { list: listHosts }, providers: { list: listProviders }, system: { config, usageLimits } },
+    sdk: { hosts: { list: listHosts }, providers: { list: listProviders }, system: { config, usageLimits }, plugins: {
+      experimental_discoverRpc: async () => [{ pluginId: "provider-claude-code", displayName: "Claude Code provider" }],
+      callRpc: async ({ method, input }: { method: string; input: { resourceId?: string } }) => {
+        if (method.endsWith("listResources")) return { resources: scope.hosts.map(host => ({
+          id: host.id, providerId: "claude-code", accountKey: null, label: "Claude Code", scope: { kind: "host", hostId: host.id, hostName: host.name },
+        })) };
+        const usage = (await usageLimits({ hostId: input.resourceId! }))["claude-code"];
+        return { accountKey: null, observedAt: Date.now(), usage: { ...usage, plan: null, windows: usage.windows.map((window, index) => ({ ...window, id: String(index), kind: "weekly", model: null })) } };
+      },
+    } },
   });
   cleanups.push(() => harness.lifecycle.dispose());
   await plugin(bb);
   const getUsage = async () => rpcContract.getUsage.output.parse(await harness.behavior.callRpc("getUsage", {}));
   return { harness, scope, listHosts, config, listProviders, usageLimits, getUsage };
 }
+
+describe("account CLI schema", () => {
+  it("validates accounts, per-window pace, pools, and the deprecated providers alias", async () => {
+    vi.useFakeTimers({ now: Date.parse("2026-10-12T12:00:00Z") });
+    const { harness } = await setupUsage();
+    const result = await harness.behavior.runCli(["--json"]);
+    const output = usageCliSchema.parse(JSON.parse(result.stdout ?? ""));
+    expect(output.accounts).toEqual(output.providers);
+    expect(output.accounts).toHaveLength(2);
+    expect(output.accounts[0]).toMatchObject({ accountKey: null, sources: [expect.objectContaining({ pluginId: "provider-claude-code" })], hosts: [expect.any(Object)], observedAt: expect.any(Number) });
+    expect(output.accounts[0]?.windows[0]?.pace?.ratio).toBeGreaterThan(0);
+    expect(output.pools[0]).toMatchObject({ providerId: "claude-code", accounts: 2, available: 2, usedPercent: null, partial: true });
+    const text = (await harness.behavior.runCli([])).stdout ?? "";
+    expect(text.indexOf("Claude Code ∑")).toBeLessThan(text.indexOf("Claude Code · shared"));
+    expect(usageCliSchema.safeParse({ providers: output.providers }).success).toBe(false);
+  });
+});
 
 describe("server-only display setting", () => {
   it("defaults off and sends the server's stable ID alongside unfiltered collection", async () => {
@@ -166,7 +194,7 @@ describe("server-only display setting", () => {
     });
     const snapshot = await getUsage();
     expect(snapshot.error).toContain("read failed");
-    expect(snapshot.serverHostError).toBe(failedHostId === "server" ? "Server: read failed" : null);
+    expect(snapshot.serverHostError).toBe(failedHostId === "server" ? "Claude Code provider: read failed" : null);
   });
 
   it("reports identity lookup failure without breaking collection or the CLI", async () => {

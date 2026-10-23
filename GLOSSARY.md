@@ -4,6 +4,15 @@ Usage Pace distinguishes reported quota exhaustion from forecasts of future exha
 
 ## Language
 
+**Account**:
+A provider-issued quota identity. One account can be signed in on several machines and reported by several usage sources; matching email addresses alone do not establish identity.
+
+**Usage source**:
+A plugin that reports quota accounts and their usage measurements.
+
+**Pool**:
+The accounts Usage Pace shows for one provider. Its availability describes shared quota, with model-family restrictions reported separately.
+
 **Quota window**:
 A provider-reported usage allowance that renews at a scheduled reset. An account may have overlapping session, weekly, or model-specific windows.
 
@@ -28,4 +37,4 @@ _Avoid_: Estimated exhaustion
 The forecast time when a quota window would be fully consumed at the observed usage rate. Passing that time does not establish confirmed exhaustion.
 
 **Reset countdown**:
-The time until the latest scheduled reset among an account's exhausted quota windows. It describes reported quota renewal, not a guarantee that every model or service will become available.
+The time until the latest scheduled reset among an account's exhausted quota windows, or the earliest account renewal in a fully exhausted pool. It describes reported quota renewal, not a guarantee that every model or service will become available.

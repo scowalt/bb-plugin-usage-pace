@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   decorateFailure,
@@ -91,9 +92,9 @@ describe("matchRow", () => {
     expect(match.pace.projectedPercent).toBeCloseTo(44 / (46 / 168));
   });
 
-  it("picks the machine by name, and falls back when no machine matches", () => {
+  it("picks the machine by name and never falls back to another machine", () => {
     expect(matchRow(providers, "Claude Code", "Studio", "Weekly limit: 90% used. x", NOW)!.usedPercent).toBe(90);
-    expect(matchRow(providers, "Claude Code", "Renamed Mac", "Weekly limit: 42% used. x", NOW)).not.toBeNull();
+    expect(matchRow(providers, "Claude Code", "Renamed Mac", "Weekly limit: 42% used. x", NOW)).toBeNull();
   });
 
   it("returns null for another provider or an unknown label", () => {
@@ -180,11 +181,12 @@ describe("mountCardPace", () => {
 
   it("reads the card's own RPC", async () => {
     await mount([{ label: "Weekly limit", used: 42 }]);
-    expect(fetchMock.mock.calls[0]![0]).toBe("/api/v1/plugins/provider-usage/rpc/getUsage");
-    expect(JSON.parse(fetchMock.mock.calls[0]![1].body)).toEqual({
+    const call = fetchMock.mock.calls.find(([url]) => url === "/api/v1/plugins/bb--provider-usage/rpc/getUsage")!;
+    expect(call).toBeDefined();
+    expect(JSON.parse(call[1].body)).toEqual({
       force: false,
       machineIds: null,
-      providerId: null,
+      providerIds: ["claude-code", "codex"],
       maxAgeMs: 300_000,
     });
   });
@@ -340,6 +342,25 @@ describe("mountCardPace", () => {
     expect(getComputedStyle(status).display).not.toBe("none");
     status.querySelector<HTMLButtonElement>("[data-usage-pace-dismiss]")!.click();
     expect(getComputedStyle(status).display).toBe("none");
+  });
+
+  it("matches current shared-account sections, never another account's reset", async () => {
+    const accounts = [
+      { providerId: "claude-code", displayName: "Claude Code", accountLabel: "a@example.test", usage: { status: "ok", windows: [{ label: "Weekly limit", usedPercent: 44, resetsAt: at(122) }] } },
+      { providerId: "claude-code", displayName: "Claude Code", accountLabel: "b@example.test", usage: { status: "ok", windows: [{ label: "Weekly limit", usedPercent: 71, resetsAt: at(50) }] } },
+    ];
+    fetchMock.mockImplementation(async (url: string) => Response.json(url.includes("bb--provider-usage") ? { ok: true, result: { machines: [{ id: "source:claude-accounts", displayName: "Claude Accounts", providers: accounts }] } } : { ok: true, result: {} }));
+    document.body.innerHTML = readFileSync("tests/fixtures/provider-usage-shared.html", "utf8");
+    unmount = mountCardPace({ signal: controller.signal });
+    await settle();
+    const sections = [...document.querySelectorAll("section")];
+    const ticks = sections.map(section => section.querySelector<HTMLElement>("[data-usage-pace-tick]"));
+    expect(Number.parseFloat(ticks[0]!.style.left)).toBeCloseTo(46 / 168 * 100, 1);
+    expect(Number.parseFloat(ticks[1]!.style.left)).toBeCloseTo(118 / 168 * 100, 1);
+    sections[1]!.removeAttribute("aria-label");
+    await frame();
+    expect(sections[1]!.querySelector("[data-usage-pace-tick]")).toBeNull();
+    expect(sections[0]!.querySelector("[data-usage-pace-tick]")).not.toBeNull();
   });
 
   it("does not add anything twice when the card changes", async () => {
