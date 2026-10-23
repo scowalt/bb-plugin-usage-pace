@@ -1,4 +1,4 @@
-# Multi-account verification — 0.4.0 and 0.4.1
+# Multi-account verification — 0.4.0 through 0.4.2
 
 ## 0.4.0 automated checks
 
@@ -71,3 +71,52 @@ Each code regression (1–5 and 7) was run red before its fix, then green, using
 See [draft release notes](../releases/0.4.1.md) for installation and upgrade guidance.
 
 The installed plugins and settings on both bb servers remain unchanged. No plugin installation, update, reload, reconfiguration, reset redemption, or thread creation/messaging is part of this verification. A live check of 0.4.1 on the other server remains a separate follow-up. The future per-account reset-source RPC remains out of scope.
+
+## 0.4.1 follow-up and remaining identity-merging gap
+
+The user reports that the main server now runs 0.4.1: Codex is visible again in server-only mode, the Claude pool is 2/2, and the OpenCode error stays on its own row. These are user-reported observations; preparing 0.4.2 does not change either server.
+
+Problem 7's regression used `observedAt: null` for a keyless error. In bb 0.46.1, bundled `provider-claude-code` instead reports its cached last successful `observedAt` when a usage read fails, with null `accountKey`, `accountEmail`, `plan`, and `planLabel`. Retaining the key alone was insufficient:
+
+- The collector replaced cached email and plan metadata with the error's null fields.
+- Merging preferred the newest timestamp, even if that row was stale. A failed source whose last success was newer than all healthy sources could therefore hide healthy quota, drop an email-based alias and pool weight, and produce `1/2 available · 1 unknown`.
+
+## 0.4.2 fix and before/after regression evidence
+
+The collector now fills null error email, plan, and plan label from that exact resource's prior row only when it retains the same known identity. Supplied fields still win; an explicit identity change still discards the former account's windows and metadata. Never-known identities remain null and separate.
+
+`mergeAccounts` now prefers `status: "ok"` rows that are not stale, then the newest `observedAt`. Without a healthy row, the existing timestamp selection is unchanged. Merged hosts, sources, and messages are still accumulated, so a failing source's message remains visible beside healthy quota.
+
+The collector regression uses two connected hosts (`beelink` and `mac`) reporting synthetic account `a`, plus shared Claude Accounts resources `a` and `b`. Last-success timestamps are shared `NOW - 120s`, beelink `NOW - 90s`, and mac `NOW - 30s`. The next forced Mac read returns a keyless `fetch failed` with `observedAt: NOW - 30s`, not null.
+
+Reproducible command:
+
+```sh
+bunx --no-install vitest run lib/usage-collector.test.ts lib/usage-accounts.test.ts
+```
+
+**Before:** an isolated archive of pristine `origin/main` (`0ca4fe4180e290f2e183bf8dbbbbf8acedd1d137`, v0.4.1), with only the final test files overlaid, produced **7 failures / 15 passes**. The reproduction retained two accounts but changed availability from 2 to 1, unknown from 0 to 1, and partial from false to true. Both sole-source variants lost email, plan, and plan label. The all-stale timestamp test and explicit login-change test already passed.
+
+**After:** the identical command against the fixed source passed **22/22 tests**:
+
+- Repeated keyless Mac failures retain two accounts and `2/2 available`, zero unknown, and a complete weighted pool. Account `a` remains `status: "ok"`, `stale: false`, with beelink's newest healthy timestamp (`NOW - 90s`), email, Max 20x plan/label, email-based alias, both hosts, all three sources, and the Mac failure message. Recovery and a later successful identity change remain covered.
+- An account with only one reporting source stays stale/unknown after repeated failures with its last-success timestamp, but retains its email, plan, plan label, historical windows, and alias. Both null and explicit unchanged account keys are tested. Another account remains available; retaining plan metadata does not make stale quota available.
+- Explicitly supplied error metadata replaces the corresponding cached fields while null fields retain their prior values. An error for a replacement identity cannot inherit the old account's plan or windows.
+- Newer stale rows and non-stale failed-status rows cannot displace an older healthy row, in either input order. When every row is stale, the newest last-success timestamp still wins in either input order.
+- A failed shared-source inventory no longer makes an account stale when a healthy machine-local duplicate remains; its source-list warning and account message are preserved.
+
+Only synthetic identities and `example.test` addresses are used. Before/after logs are retained outside the repository in the preparing thread's temporary evidence directory. No live provider or reset API is part of these tests.
+
+## 0.4.2 release-preparation verification
+
+- `bun install` and `bun install --frozen-lockfile` passed without dependency changes. Package and npm-lock versions are 0.4.2; the Bun lockfile, SDK production dependency pin, minimum requirements, hooks, and CI configuration are unchanged.
+- `bun run check` passed. `bun run test` passed **390 Vitest tests across 17 files plus all 3 token-total tests**.
+- Both exact CI.md commands passed independently: **96 files, zero comment-policy violations; all 13 policy regression tests passed**. The full staged-index policy check and Lefthook pre-commit check passed too; redacted staged Gitleaks found no leaks. `git diff --check` and `git diff --cached --check` passed.
+- `bun run build` rebuilt the committed bundles with the separate **BB 0.44.0 / SDK 0.5.29** toolchain selected through `BB_CLI`, without changing the running BB installation. All three artifact metadata files report plugin 0.4.2 and that baseline.
+- `bun run check:install` passed its isolated production-only Bun source rebuild without devDependencies or provider requests.
+- `bun run check:release` passed using **BB's npm 11.16.0** through `BB_INSTALL_NPM_CLI`: production-only source rebuild, package/lock and artifact versions, SDK metadata, host digest, and isolated backend/host smoke loading. No provider requests were made.
+- Woodpecker CLI **3.19.0**, verified against the official release SHA-256 checksum, accepted `lint --strict .woodpecker.yaml` under `env -i` with a temporary HOME. This is local schema validation, not hosted platform acceptance or CI reconfiguration.
+- The frontend detector found no issues in the existing UI targets and account helpers. No authored frontend layout or styling was changed.
+- An isolated Chromium file fixture rendered the real components and rebuilt CSS with synthetic account/RPC data. In server-only and all-machine modes, all four account rows remained, including healthy Codex beside failed OpenCode; the Claude pool stayed 2/2, the Work alias remained, and only the matching account had a saved-reset badge. Strip buttons had positive bounds and no horizontal overflow at **172/212/252px**. Desktop/mobile dialog checks and screenshots at **1200/375px** retained the source-error message, distinct headings, correct view-specific account locations, and the actual reset-reader footer, without horizontal overflow. The session was closed; no development server was started. This checks fixture rendering, not a live BB theme or provider integration.
+
+See [draft 0.4.2 release notes](../releases/0.4.2.md). Preparing this release stops at an open PR for review; do not merge, tag, or publish yet. Both bb servers' installed plugins and configuration remain untouched. README's live `plugin reload` command is deliberately excluded under this boundary. No threads were started or messaged, and no reset was redeemed.

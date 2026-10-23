@@ -18,9 +18,28 @@ describe("quota account identities", () => {
     expect(mergeAccounts([makeAccount({ accountKey: null }), makeAccount({ accountKey: null }), makeAccount(), makeAccount({ accountKey: "anthropic:account:b" })])).toHaveLength(4);
     expect(accountId(makeAccount())).not.toBe(accountId(makeAccount({ accountKey: "anthropic:account:b" })));
   });
-  it("keeps a healthy duplicate authoritative when another source has failed", () => {
-    const stale = makeAccount({ stale: true, message: "source offline" });
-    expect(mergeAccounts([stale, makeAccount()])[0]).toMatchObject({ stale: false, message: "source offline" });
+  it.each(["stale", "failed"])("keeps an older healthy duplicate authoritative when another source is %s, regardless of row order", state => {
+    const healthy = makeAccount({ observedAt: NOW - 90_000 });
+    const unusable = makeAccount({
+      status: state === "failed" ? "error" : "ok", stale: state === "stale", observedAt: NOW - 30_000,
+      accountEmail: null, plan: null, planLabel: null, message: "source offline", windows: [],
+    });
+    for (const rows of [[unusable, healthy], [healthy, unusable]]) {
+      expect(mergeAccounts(rows)[0]).toMatchObject({
+        status: "ok", stale: false, observedAt: NOW - 90_000, message: "source offline",
+        accountEmail: "a@example.test", plan: { id: "max", multiplier: 20 }, planLabel: "Max 20x", windows: healthy.windows,
+      });
+    }
+  });
+  it("uses the newest last-success timestamp when every source is stale, regardless of row order", () => {
+    const older = makeAccount({ stale: true, observedAt: NOW - 90_000 });
+    const newer = makeAccount({ stale: true, status: "error", observedAt: NOW - 30_000,
+      windows: [{ ...older.windows[1]!, usedPercent: 71 }], message: "source offline" });
+    for (const rows of [[older, newer], [newer, older]]) {
+      expect(mergeAccounts(rows)[0]).toMatchObject({
+        stale: true, status: "error", observedAt: NOW - 30_000, windows: newer.windows, message: "source offline",
+      });
+    }
   });
 });
 

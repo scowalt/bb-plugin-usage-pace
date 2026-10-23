@@ -127,9 +127,11 @@ export function createUsageCollector(bb: Pick<BbPluginApi, "sdk">, signal: Abort
               const prior = old.get(resource.id);
               const accountKey = measurement.accountKey ?? prior?.accountKey ?? null;
               const sameAccount = accountKey !== null && prior?.accountKey === accountKey;
-              account = { ...(sameAccount ? prior : base), stale: true, message,
+              const retained = sameAccount ? prior : base;
+              account = { ...retained, stale: true, message,
                 accountKey, observedAt: measurement.observedAt,
-                accountEmail: usage.accountEmail, plan: usage.plan, planLabel: usage.planLabel };
+                accountEmail: usage.accountEmail ?? retained.accountEmail,
+                plan: usage.plan ?? retained.plan, planLabel: usage.planLabel ?? retained.planLabel };
             } else account = { ...base, accountKey: measurement.accountKey, observedAt: measurement.observedAt,
               status: usage.status, plan: usage.plan, accountEmail: usage.accountEmail, planLabel: usage.planLabel,
               windows: usage.status === "ok" ? usage.windows.map(window => ({ ...window, weekly: isWeeklyWindow(window) })) : [],
