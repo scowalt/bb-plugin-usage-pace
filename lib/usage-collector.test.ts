@@ -74,35 +74,46 @@ describe("discoverable usage collection", () => {
     lists.set("machine", { resources: [resource("beelink", false)] });
     await collect(false);
     callRpc.mockImplementation(async args => args.method.endsWith("listResources") ? lists.get("machine") : {
-      accountKey: "anthropic:account:replacement", observedAt: null,
+      accountKey: "anthropic:account:replacement", observedAt: NOW,
       usage: { status: "error", plan: null, accountEmail: "replacement@example.test", planLabel: null, message: "usage unavailable" },
     });
     const result = await collect(true);
-    expect(result.accounts[0]).toMatchObject({ accountKey: "anthropic:account:replacement", observedAt: null, windows: [], stale: true });
+    expect(result.accounts[0]).toMatchObject({
+      accountKey: "anthropic:account:replacement", observedAt: NOW, windows: [], stale: true,
+      accountEmail: "replacement@example.test", plan: null, planLabel: null,
+    });
   });
 
   it("keeps a known resource merged through keyless errors, recovery, and a later successful identity change", async () => {
     const { collect, callRpc, lists } = await setup();
     lists.set("pool", { resources: [resource("a"), resource("b")] });
+    callRpc.mockImplementation(async args => args.method.endsWith("listResources") ? lists.get(args.pluginId)
+      : measurement(args.pluginId === "machine" ? "a" : args.input.resourceId,
+        NOW - (args.pluginId === "pool" ? 120_000 : args.input.resourceId === "beelink" ? 90_000 : 30_000)));
     const pool = (accounts: Awaited<ReturnType<typeof collect>>["accounts"]) => usagePools(
       accounts.map(account => withAccountSettings(account, new Map(), new Map())), new Date(NOW).toISOString(), NOW,
     )[0];
     const before = await collect(false);
     expect(before.accounts).toHaveLength(2);
     expect(pool(before.accounts)).toMatchObject({ accounts: 2, available: 2, unknown: 0, partial: false });
+    expect(before.accounts.find(account => account.accountKey === "anthropic:account:a")).toMatchObject({ observedAt: NOW - 30_000 });
     const original = callRpc.getMockImplementation()!;
     callRpc.mockImplementation(async args => args.pluginId === "machine" && args.method.endsWith("getResource") && args.input.resourceId === "mac"
-      ? { accountKey: null, observedAt: null, usage: { status: "error", plan: null, accountEmail: null, planLabel: null, message: "fetch failed" } }
+      ? { accountKey: null, observedAt: NOW - 30_000, usage: { status: "error", plan: null, accountEmail: null, planLabel: null, message: "fetch failed" } }
       : original(args));
     for (let refresh = 0; refresh < 2; refresh++) {
       const failed = await collect(true);
       expect(failed.accounts).toHaveLength(2);
-      expect(pool(failed.accounts)).toEqual(pool(before.accounts));
-      expect(failed.accounts.find(account => account.accountKey === "anthropic:account:a")).toMatchObject({
-        status: "ok", stale: false, hosts: expect.arrayContaining([{ id: "beelink", name: "beelink" }, { id: "mac", name: "mac" }]),
+      expect(pool(failed.accounts)).toMatchObject({ accounts: 2, available: 2, unknown: 0, usedPercent: 52, partial: false });
+      const account = failed.accounts.find(account => account.accountKey === "anthropic:account:a")!;
+      expect(account).toMatchObject({
+        status: "ok", stale: false, observedAt: NOW - 90_000, accountEmail: "a@example.test",
+        plan: { id: "max", multiplier: 20 }, planLabel: "Max 20x",
+        hosts: expect.arrayContaining([{ id: "beelink", name: "beelink" }, { id: "mac", name: "mac" }]),
         message: "Machine source: fetch failed",
       });
-      expect(failed.accounts[0]?.sources).toHaveLength(3);
+      expect(withAccountSettings(account, new Map([["a@example.test", "Work"]]), new Map())).toMatchObject({ accountLabel: "Work", weight: 20 });
+      expect(account.sources).toHaveLength(3);
       expect(failed.error).toBeNull();
     }
     callRpc.mockImplementation(original);
@@ -115,6 +126,48 @@ describe("discoverable usage collection", () => {
       status: "ok", stale: false, hosts: [{ id: "mac", name: "mac" }],
     });
     expect(changed.accounts.find(account => account.accountKey === "anthropic:account:a")?.hosts).toEqual([{ id: "beelink", name: "beelink" }]);
+  });
+
+  it.each([null, "anthropic:account:a"])("keeps a sole source's account metadata and alias through errors with its last successful timestamp (%s key)", async accountKey => {
+    const { collect, callRpc, lists } = await setup();
+    lists.set("machine", { resources: [resource("beelink", false)] });
+    lists.set("pool", { resources: [resource("b")] });
+    callRpc.mockImplementation(async args => args.method.endsWith("listResources") ? lists.get(args.pluginId)
+      : measurement(args.pluginId === "machine" ? "a" : "b", NOW - (args.pluginId === "machine" ? 30_000 : 120_000)));
+    await collect(false);
+    const original = callRpc.getMockImplementation()!;
+    callRpc.mockImplementation(async args => args.pluginId === "machine" && args.method.endsWith("getResource")
+      ? { accountKey, observedAt: NOW - 30_000, usage: { status: "error", plan: null, accountEmail: null, planLabel: null, message: "fetch failed" } }
+      : original(args));
+    for (let refresh = 0; refresh < 2; refresh++) {
+      const result = await collect(true);
+      expect(result.accounts).toHaveLength(2);
+      const account = result.accounts.find(account => account.accountKey === "anthropic:account:a")!;
+      expect(account).toMatchObject({
+        stale: true, observedAt: NOW - 30_000, accountEmail: "a@example.test",
+        plan: { id: "max", multiplier: 20 }, planLabel: "Max 20x", message: "Machine source: fetch failed",
+      });
+      expect(account.sources).toHaveLength(1);
+      expect(account.windows).toHaveLength(3);
+      expect(withAccountSettings(account, new Map([["a@example.test", "Work"]]), new Map())).toMatchObject({ accountLabel: "Work", weight: 20 });
+      expect(usagePools(result.accounts.map(account => withAccountSettings(account, new Map(), new Map())),
+        new Date(NOW).toISOString(), NOW)[0]).toMatchObject({ accounts: 2, available: 1, unknown: 1, partial: true });
+      expect(result.error).toBeNull();
+    }
+  });
+
+  it("uses supplied error metadata for the same identity while retaining omitted fields", async () => {
+    const { collect, callRpc, sources, lists } = await setup();
+    sources.splice(1);
+    lists.set("machine", { resources: [resource("beelink", false)] });
+    await collect(false);
+    callRpc.mockImplementation(async args => args.method.endsWith("listResources") ? lists.get("machine") : {
+      accountKey: null, observedAt: NOW,
+      usage: { status: "error", accountEmail: null, plan: { id: "pro", multiplier: null }, planLabel: "Pro", message: "fetch failed" },
+    });
+    expect((await collect(true)).accounts[0]).toMatchObject({
+      accountKey: "anthropic:account:a", stale: true, accountEmail: "a@example.test", plan: { id: "pro", multiplier: null }, planLabel: "Pro",
+    });
   });
 
   it("never invents or merges identities for resources whose first reads are keyless errors", async () => {
@@ -150,7 +203,7 @@ describe("discoverable usage collection", () => {
     const result = await collect(true);
     expect(result.accounts).toHaveLength(3);
     expect(result.accounts.find(account => account.accountKey?.endsWith(":b"))).toMatchObject({ stale: true, observedAt: NOW + 1000, message: expect.stringContaining("pool offline") });
-    expect(result.accounts.find(account => account.accountKey?.endsWith(":a"))).toMatchObject({ stale: true });
+    expect(result.accounts.find(account => account.accountKey?.endsWith(":a"))).toMatchObject({ stale: false, message: expect.stringContaining("pool offline") });
     expect(result.error).toContain("pool offline");
   });
   it("never falls back to host-local usage when no sources exist or discovery fails", async () => {

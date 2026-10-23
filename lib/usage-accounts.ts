@@ -62,8 +62,12 @@ export function mergeAccounts(accounts: UsageAccount[]): UsageAccount[] {
       continue;
     }
     const prior = merged[index]!;
-    const freshest = (account.observedAt ?? -1) > (prior.observedAt ?? -1) ||
-      (account.observedAt === prior.observedAt && prior.stale && !account.stale) ? account : prior;
+    const healthy = account.status === "ok" && !account.stale;
+    const priorHealthy = prior.status === "ok" && !prior.stale;
+    const preferAccount = healthy !== priorHealthy ? healthy :
+      (account.observedAt ?? -1) > (prior.observedAt ?? -1) ||
+      (account.observedAt === prior.observedAt && prior.stale && !account.stale);
+    const freshest = preferAccount ? account : prior;
     const sources = [...prior.sources, ...account.sources].filter((source, i, all) =>
       all.findIndex(other => other.pluginId === source.pluginId && other.resourceId === source.resourceId) === i);
     const hosts = [...prior.hosts, ...account.hosts].filter((host, i, all) => all.findIndex(other => other.id === host.id) === i);
