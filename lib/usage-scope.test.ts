@@ -8,10 +8,12 @@ const NOW = Date.parse("2026-10-01T12:00:00Z");
 const server: UsageProvider = {
   id: "claude-code", displayName: "Claude Code", hostId: "server", hostName: "Server",
   accountEmail: "shared@example.test", status: "ok", message: null,
+  accountKey: "one", accountLabel: "shared", observedAt: NOW, plan: null, weight: null, stale: false,
+  sources: [], hosts: [{ id: "server", name: "Server" }],
   logoUrl: null, icon: null, iconTint: null, planLabel: null,
   windows: [{ label: "Weekly limit", weekly: true, usedPercent: 52, resetsAt: "2026-10-03T12:00:00Z" }],
 };
-const remote: UsageProvider = { ...server, hostId: "remote", hostName: "Remote" };
+const remote: UsageProvider = { ...server, hostId: "remote", hostName: "Remote", hosts: [{ id: "remote", name: "Remote" }] };
 function state(overrides: Partial<UsageSnapshot> = {}): UsageState {
   return { data: {
     providers: [remote, server, { ...remote, accountEmail: "remote@example.test" }],

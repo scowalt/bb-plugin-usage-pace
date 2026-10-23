@@ -5,7 +5,7 @@
 
 Tells you if the current burn rate lasts until each quota window resets. If the rate does not last, it tells you when the quota runs out and how long you will be without quota.
 
-This fork of [Usage Pace by Charles Lee](https://github.com/chug2k/bb-plugin-usage-pace) adds read-only Codex banked resets and Claude limit resets, with sidebar badges, account-specific details, and an optional server-only view.
+This fork of [Usage Pace by Charles Lee](https://github.com/chug2k/bb-plugin-usage-pace) adds multiple quota accounts, provider pools, read-only Codex banked resets and Claude limit resets, with account-specific details and an optional server-only view.
 
 Originally a fork of [Usage Bar](https://github.com/dmitriikapustin/bb-plugins-by-kapustin/tree/main/plugins/usage-bar) by Dmitrii Kapustin (MIT). The pace calculation and the usage-card integration are new. The optional footer strip, the dialog, the token totals and the CLI come from Usage Bar. The Grok Build usage comes from [Grok Build Usage](https://github.com/MacHatter1/bb-plugin-grok-build-usage) by MacHatter1 (MIT).
 
@@ -25,7 +25,7 @@ Originally a fork of [Usage Bar](https://github.com/dmitriikapustin/bb-plugins-b
 
 The first line is the difference from even pace, in percentage points and in time. The second line is the time without quota before the reset, or the daily budget that lasts.
 
-The card belongs to another plugin. Usage Pace only adds nodes to it, and reads the card's own data (`provider-usage` `getUsage`, from its cache), so the labels always match. If a bb update changes the card's markup, the tick and the delta stop showing, and nothing else breaks.
+The card belongs to another plugin. Usage Pace only adds nodes to it, and reads the card's own data (`bb--provider-usage` `getUsage`, with the visible provider IDs and cached measurements), so the labels always match. If a bb update changes the card's markup, the tick and the delta stop showing, and nothing else breaks.
 
 **Optional compact footer.** Turn on *Also show the Usage Pace strip* in the plugin settings. The pace-first layout is available in v0.3.7 and newer. Each provider account leads with pace, with one compact line per displayed quota window (provider icons represented by letters here):
 
@@ -42,11 +42,26 @@ G  ⌛ resets in 2h 14m
 - Pace carries the existing risk colour; used percentages stay secondary and neutral. `near limit` means current use is at least 80%. `high projected use` means the forecast exceeds 85% by reset, without current usage being near a limit—for example, 5% used early in the week with 95% projected. Both retain a visible warning when no exhaustion countdown is shown. Rounding a multiplier to 1.0× does not change the unrounded forecast or risk verdict.
 - `▲ 4h short`: at the reported pace, a window is projected to run out **four hours before reset**. The warning uses the earliest projected exhaustion across **all** windows, including hidden model limits. Hover for the window name and time until it runs out. Shortfall and numeric pace stay anchored to the last usage snapshot and are recalculated on refresh; the tooltip's run-out countdown ticks each minute. `out now (est.)` replaces the shortfall when the run-out estimate has passed, without implying confirmed exhaustion.
 - `⌛` (amber hourglass): a window is confirmed exhausted. A countdown **replaces pace and quota percentages on the same line**, updating each minute to the **latest reset among exhausted windows**, including model-specific limits (`resets in 2h 14m`, or `resets in <1m`). Hover for individual window percentages and resets. If any exhausted window has a missing or invalid reset time, it shows `reset unknown`. When the countdown reaches zero, the plugin requests fresh usage once, bypassing its cache, and shows `awaiting refresh` until updated data establishes the new state—even if that refresh fails. The countdown describes scheduled quota renewal, not a guarantee of service availability.
-- `too early` or `unknown`: a multiplier cannot be judged or the data may be stale/incomplete. Trustworthy used percentages remain visible, without a numeric pace claim or a stale forecast. A reported exhausted or overshooting window still warns even if another window's pace is unknown. `other pace unknown` keeps uncertainty in an undisplayed window visible beside known selected windows.
+- `too early` or `unknown`: a multiplier cannot be judged or the data may be stale/incomplete. Fresh reported percentages remain visible; stale or unobserved quota shows “usage unknown,” without a numeric pace claim, a zero-usage implication, or a stale forecast. A reported exhausted or overshooting window still warns even if another window's pace is unknown. `other pace unknown` keeps uncertainty in an undisplayed window visible beside known selected windows.
 
 Status considers **all** reported windows, including model-specific limits not displayed in the strip. Healthy weekly pace never removes their warnings. Hover for full window names, reset times and run-out estimates; click or keyboard-activate the row for the full dialog. Accessible descriptions explain the multiplier and account-level constraints without relying on colour. Token totals remain in the dialog, not the footer.
 
-**Saved resets (Codex and Claude).** Each supported row also shows `↺ 3` for three saved resets. Hover for the earliest reported expiration; the badge turns amber when a reset expires within seven days. Click the badge to open and focus that provider account's reset details. `↺ 0` is dimmed, `↺ …` is loading, and `↺ ?` means unavailable or expired-since-read data—not zero. Claude and Codex balances remain separate even when their account emails match.
+### Multiple accounts and pools (0.4.0)
+
+Usage Pace discovers every `provider-usage.v1` source, including machine-local providers, Account Pooler, Claude Accounts, and its own Grok source. Accounts merge only by the provider-issued `accountKey`, never by email, label, or plan. A merged account uses the freshest measurement and lists all reporting sources and machines. Unknown identities stay separate. Failed sources keep their last measurements, marked stale; healthy sources still show pace. Measurements are fetched at most three at a time, with five-second source timeouts.
+
+Each account has a strip row. With two or more accounts, the provider also has a pool row; the dialog places the pool before that provider's accounts. Account labels use **Account aliases** (`email=Alias` pairs, separated by commas or newlines), then the email prefix, then the resource label.
+
+Pool weekly use and pace are plan-weighted: Max 20x weighs 20, Max 5x weighs 5, and Pro weighs 1. **Pool weight overrides** accepts `email=weight` pairs. Unknown plans, stale measurements, and missing weekly windows are excluded from weighted values and mark the result **partial**. Pool pace divides weighted consumption by weighted elapsed budget, rather than averaging the account multipliers. Weekly pool figures say **est.** because session plan multipliers do not establish weekly quota sizes. There is no pool run-out forecast.
+
+Pool availability requires readable shared session/weekly quota; unknown accounts are shown separately. Model-family exhaustion does not block shared availability and is listed separately. A pool is exhausted only when every account is confirmed exhausted; it counts down to the earliest account renewal. Each individual account still counts down to its latest exhausted reset.
+
+```sh
+bb plugin config usage-pace set accountAliases 'a@example.test=Work,b@example.test=Personal'
+bb plugin config usage-pace set poolWeights 'a@example.test=20,b@example.test=5'
+```
+
+**Saved resets (Codex and Claude).** A supported account whose host login identity matches also shows `↺ 3` for three saved resets. Hover for the earliest reported expiration; the badge turns amber when a reset expires within seven days. Click the badge to open and focus that provider account's reset details. `↺ 0` is dimmed, `↺ …` is refreshing a previously verified inventory, and `↺ ?` means a verified inventory read failed or expired since reading—not zero. Unread inventories and mismatched account identities have no badge. Claude matches the profile account UUID; identical email addresses never share a balance. Claude and Codex balances remain separate even when their account emails match.
 
 Codex calls these **banked resets**; its count is provider-reported and details may be incomplete. Claude's **limit resets** are classified by the quota windows they affect: Full, 5-hour, or other saved resets. The Claude badge sums remaining uses in current, unpaused grants, not the number of grant records. A saved grant can count even when it is not currently redeemable. An explicit `no_grant` response with an empty grant list confirms zero saved resets; absent, gated, or malformed inventory remains unknown.
 
@@ -75,13 +90,13 @@ Turn on **Only show providers on the server machine** in Settings → Installed 
 bb plugin config usage-pace set serverOnly true
 ```
 
-The setting is off by default, persists across reloads, is shared across browsers, and updates the view without a plugin reload. Filtering uses bb's server-host ID before account deduplication, so the same account on another machine cannot replace the server's entry. If the server host is missing or offline, the view says it is unavailable; if no providers report usage there, it shows an empty state. It never falls back to another machine.
+The setting is off by default, persists across reloads, is shared across browsers, and updates without a reload. Machine-scoped accounts must be available on bb's server-host ID. Shared-scope accounts remain visible because the server serves them. Merged accounts retain the freshest measurement and their availability on every host. If the server is missing or offline, machine-only rows disappear with an actionable error; shared rows remain. Saved-reset reads are limited to the server host and require a matching account identity. The view never substitutes another machine.
 
 This is a display filter: all-host quota collection, bb's separately owned Provider Usage card, `bb usage-pace` output, and **Tokens · across BB** remain unchanged. Saved-reset inventory reads in the strip/dialog follow the displayed accounts. To restore the all-machines view, set `serverOnly` to `false`.
 
 ## How pace is calculated
 
-Providers report only `usedPercent` and `resetsAt` for each window. The window length comes from the label: `5h`, `7d`, `Weekly`, `5-hour window`, or `session` (5 hours). A window with no length in its label, for example `Fable`, takes the length of a window that resets at the same time. Then:
+Sources report each window's kind, used percentage, model family, and reset time. The kind supplies the duration for five-hour, daily, and weekly windows. For older sources without a kind, the duration comes from the label: `5h`, `7d`, `Weekly`, `5-hour window`, or `session` (5 hours). A window with no length in its label, for example `Fable`, takes the length of a window that resets at the same time. Then:
 
 - start of window = reset − length
 - pace = used ÷ (elapsed ÷ length)
@@ -124,12 +139,12 @@ Turn this off with the *Add Grok Build usage to bb's usage card* setting, then r
 ## Install
 
 ```sh
-bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.3.10'
+bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.4.0'
 # Enable the compact footer rows (off by default), including Codex and Claude resets:
 bb plugin config usage-pace set showStrip true
 ```
 
-Use `@^0.3.10` instead of `@v0.3.10` to track compatible releases with `bb plugin update usage-pace`. **Use 0.3.1 or newer for Git installs**: 0.3.0 fails when development dependencies are absent. Release tags include prebuilt bundles, but BB's Git installer rebuilds source with its own build tooling after installing production dependencies. The required SDK runtime is installed automatically; you do not need to install it manually. Sign into Codex with a ChatGPT account or Claude Code with a Claude subscription on each host where you want that provider's reset information.
+Use `@^0.4.0` instead of `@v0.4.0` to track compatible releases with `bb plugin update usage-pace`. **Use 0.3.1 or newer for Git installs**: 0.3.0 fails when development dependencies are absent. Release tags include prebuilt bundles, but BB's Git installer rebuilds source with its own build tooling after installing production dependencies. The required SDK runtime is installed automatically; you do not need to install it manually. Sign into Codex with a ChatGPT account or Claude Code with a Claude subscription on each host where you want that provider's reset information.
 
 From a local checkout:
 
@@ -149,7 +164,7 @@ bb usage-pace --tokens     # token totals across BB
 bb usage-pace --resets --json # Codex banked resets on the primary host (unchanged)
 ```
 
-Claude reset details are currently in the strip/dialog; `--resets` retains its existing Codex-only behavior.
+Text output groups by provider and prints the pool before its accounts. JSON contains `accounts[]` (including `accountKey`, `sources`, `hosts`, `observedAt`, and per-window `pace`) and `pools[]`. `providers[]` is a deprecated alias of `accounts[]` for the 0.4 minor series. Unknown pool values and pace remain null rather than zero. Stale account windows retain the last reported values in JSON with `stale: true`; text and UI show unknown usage. Claude reset details are in the strip/dialog; `--resets` retains its existing Codex-only behavior.
 
 ```
 Claude Code · Max (5x) (MacBook Pro)

@@ -112,8 +112,8 @@ export function createBankedResetsReader(deps: {
           method: "GET", redirect: "error", headers,
           signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
         });
-        if (response.status === 401) return bankedResetsUnavailable("Codex login expired. Sign in with Codex, then refresh.", "unauthenticated", email);
-        if (!response.ok) return bankedResetsUnavailable(`Banked resets unavailable (HTTP ${response.status}). This private Codex endpoint may be unavailable for this account.`, "error", email);
+        if (response.status === 401) return { ...bankedResetsUnavailable("Codex login expired. Sign in with Codex, then refresh.", "unauthenticated", email), accountKey: `openai:chatgpt:${accountId}` };
+        if (!response.ok) return { ...bankedResetsUnavailable(`Banked resets unavailable (HTTP ${response.status}). This private Codex endpoint may be unavailable for this account.`, "error", email), accountKey: `openai:chatgpt:${accountId}` };
         if (!response.body) throw new Error("Missing body");
         const reader = response.body.getReader();
         const chunks: Uint8Array[] = [];
@@ -127,12 +127,12 @@ export function createBankedResetsReader(deps: {
             chunks.push(chunk.value);
           }
         } finally { await reader.cancel().catch(() => {}); }
-        const data = normalize(JSON.parse(Buffer.concat(chunks).toString("utf8")), email, now());
+        const data = { ...normalize(JSON.parse(Buffer.concat(chunks).toString("utf8")), email, now()), accountKey: `openai:chatgpt:${accountId}` };
         const nextExpiry = Math.min(...data.credits.map(c => c.expiresAt ? Date.parse(c.expiresAt) : Infinity));
         cache = { key, until: Math.min(now() + CACHE_MS, nextExpiry), data };
         return data;
       } catch {
-        return bankedResetsUnavailable("Could not read banked resets. The request failed or Codex returned an unfamiliar response. Try refreshing.", "error", email);
+        return { ...bankedResetsUnavailable("Could not read banked resets. The request failed or Codex returned an unfamiliar response. Try refreshing.", "error", email), accountKey: `openai:chatgpt:${accountId}` };
       }
     })();
     pending = { key, work };

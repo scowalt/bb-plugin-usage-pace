@@ -33,8 +33,10 @@ Provider usage card.
   When exhausted, an amber hourglass and reset countdown replace the ordinary
   values on one line, using the latest exhausted reset; missing times show
   “reset unknown.” Hover for details; click for the dialog and token totals.
+- **Multiple quota accounts.** Discovers machine and shared usage sources, merges only matching provider-issued identities, and shows each account once. Optional email aliases label accounts. The dialog lists sources, available machines, and measurement age.
+- **Provider pools.** Two or more displayed accounts add a pool row with shared availability and plan-weighted weekly use/pace. Weekly numbers are estimates; unknown plans and stale reads make them partial. Model-family exhaustion is separate, and there is no pool run-out forecast.
 - **Server-only view.** An optional, shared setting limits Usage Pace's strip,
-  dialog, and saved-reset details to providers on the bb server machine.
+  dialog, and saved-reset details to accounts available on the bb server machine; shared-source accounts remain visible.
   It updates without a reload and never substitutes another host if the server
   is unavailable. Off by default; the Provider Usage card, CLI, quota collection,
   and global token totals stay unchanged.
@@ -43,14 +45,14 @@ Provider usage card.
   warning within seven days of expiry. Click for read-only account details.
   Claude distinguishes full and five-hour saved grants; conditional five-hour
   reset availability is shown separately and never added to the saved count.
-  Saved resets do not alter the pace calculation.
+  Saved resets do not alter the pace calculation. Badges require a matching provider-issued account identity; unread inventories have no badge.
 - **`bb usage-pace`** prints each window with its pace in a terminal, and
   `--json` gives agents a `pace` object for each window.
 
 ## How pace is calculated
 
 Providers report the used percent and the reset time of each window. The
-window length comes from its label ("Five-hour limit", "Weekly limit"). A
+window length comes from its kind, falling back to its label ("Five-hour limit", "Weekly limit"). A
 window without a length in its label takes the length of a window that resets
 at the same time. The start of the window is the reset time minus the length.
 The plugin then projects the current rate in a straight line to the reset.
@@ -64,7 +66,7 @@ unknown pace never claims to last until reset.
 
 In-card annotations reuse bb's cached Provider usage data with no extra
 provider requests. If bb changes the card, annotations may stop showing.
-The optional footer reads usage separately and refreshes once when an exhausted
+The optional footer discovers all `provider-usage.v1` sources and refreshes once when an exhausted
 reset countdown ends, awaiting fresh data before implying quota is available.
 
 The saved-reset badges and dialog make separate read-only inventory requests

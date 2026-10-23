@@ -1,5 +1,6 @@
-import type { UsageProvider, UsageWindow } from "../server";
+import type { UsageAccount, UsageWindow } from "../server";
 import type { UsageState } from "./usage-store";
+import { accountId, mergeAccounts, observationTime, usageIsStale } from "./usage-accounts";
 import { formatReset } from "./usage-store";
 import { describePace, formatDuration, paceForWindows, toneForUsed, windowDurationMs, type Pace, type Tone } from "./pace";
 
@@ -11,6 +12,7 @@ export interface CompactWindow {
   detail: string;
   pace: Pace | null;
   paceState: "known" | "early" | "unknown";
+  usageKnown: boolean;
 }
 
 interface CompactStatus {
@@ -21,7 +23,7 @@ interface CompactStatus {
 
 export interface CompactUsageRow {
   key: string;
-  provider: UsageProvider;
+  provider: UsageAccount;
   windows: CompactWindow[];
   status: CompactStatus;
   notice: { label: string; tone: Tone | null } | null;
@@ -35,7 +37,7 @@ export interface CompactUsageRow {
 
 function shortLabel(window: UsageWindow): string {
   if (window.weekly) return "W";
-  const duration = windowDurationMs(window.label);
+  const duration = window.kind === "five-hour" ? 5 * HOUR : window.kind === "daily" ? 24 * HOUR : windowDurationMs(window.label);
   if (duration === 5 * HOUR) return "S";
   if (duration === 24 * HOUR) return "D";
   if (/\bmonth(ly)?\b/iu.test(window.label)) return "M";
@@ -105,33 +107,30 @@ function countdownFor(windows: UsageWindow[], paces: (Pace | null)[], now: numbe
 
 export function compactUsageRows(state: UsageState, now = Date.now()): CompactUsageRow[] {
   const rows: CompactUsageRow[] = [];
-  const seen = new Set<string>();
-  const fetchedAt = Date.parse(state.data?.fetchedAt ?? "");
-  const paceAt = Number.isFinite(fetchedAt) ? Math.min(fetchedAt, now) : now;
-  for (const provider of state.data?.providers ?? []) {
-    if (provider.status !== "ok" || provider.windows.length === 0) continue;
-    const key = `${provider.id}/${provider.accountEmail ?? provider.hostId}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
+  for (const [index, provider] of mergeAccounts(state.data?.accounts ?? state.data?.providers ?? []).entries()) {
+    if (provider.status !== "ok" && provider.status !== "error") continue;
+    if (provider.status === "ok" && provider.windows.length === 0) continue;
+    const key = `${accountId(provider)}${provider.accountKey === null ? `/${index}` : ""}`;
+    const paceAt = observationTime(provider, state.data?.fetchedAt ?? "", now);
     const paces = paceForWindows(provider.windows, paceAt);
-    const error = state.error ?? state.data?.error ?? null;
-    const unreliable = error !== null || provider.windows.some(window => window.resetsAt !== null && Date.parse(window.resetsAt) <= now);
+    const error = state.error ?? (provider.stale || provider.observedAt === null || provider.status !== "ok" ? provider.message ?? "Usage unavailable." : null);
+    const unreliable = error !== null || usageIsStale(provider, now);
     const allWindows = provider.windows.map((window, index): CompactWindow => {
       const reset = formatReset(window.resetsAt, now);
       const pace = unreliable ? null : paces[index]!;
       const expired = window.resetsAt !== null && Date.parse(window.resetsAt) <= now;
       const detail = [
-        `${window.label}: ${Math.round(window.usedPercent)}% used`,
+        unreliable ? `${window.label}: usage unknown` : `${window.label}: ${Math.round(window.usedPercent)}% used`,
         reset ? (expired ? "reset passed; refresh usage" : `resets in ${reset}`) : "reset unavailable",
         expired ? "" : describePace(pace, now) || "pace unavailable",
       ].filter(Boolean).join(" · ");
-      return { window, label: shortLabel(window), detail, pace,
+      return { window, label: shortLabel(window), detail, pace, usageKnown: !unreliable,
         paceState: pace === null ? "unknown" : pace.ratio === null ? "early" : "known" };
     });
     const weekly = allWindows.find(entry => entry.window.weekly);
-    const session = allWindows.find(entry => windowDurationMs(entry.window.label) === 5 * HOUR);
+    const session = allWindows.find(entry => entry.window.kind === "five-hour" || windowDurationMs(entry.window.label) === 5 * HOUR);
     const selected = [weekly, session].filter((entry): entry is CompactWindow => entry !== undefined);
-    if (selected.length === 0) selected.push(allWindows[0]!);
+    if (selected.length === 0 && allWindows[0]) selected.push(allWindows[0]);
     const reset = resetCountdownFor(provider.windows, now);
     const status = statusFor(provider.windows, paces, error, now, reset);
     const countdown = status.glyph === "⌛" ? reset
@@ -144,8 +143,9 @@ export function compactUsageRows(state: UsageState, now = Date.now()): CompactUs
       !unreliable && allWindows.some(entry => !selected.includes(entry) && entry.paceState !== "known") ? "other pace unknown" : null,
       quotaWarning ? warningLabel : null,
     ].filter(Boolean).join(" · ");
-    const notice: CompactUsageRow["notice"] = noticeLabel ? { label: noticeLabel, tone: quotaWarning ? "warning" : null } : null;
-    const identity = [provider.displayName, provider.accountEmail, provider.hostName].filter(Boolean).join(" · ");
+    const notice: CompactUsageRow["notice"] = selected.length === 0 ? { label: "usage unknown", tone: null }
+      : noticeLabel ? { label: noticeLabel, tone: quotaWarning ? "warning" : null } : null;
+    const identity = [provider.displayName, provider.accountLabel, provider.accountEmail, provider.hostName].filter(Boolean).join(" · ");
     rows.push({ key, provider, windows: selected, status, notice, countdown,
       title: [identity, status.detail, notice?.label, countdown?.detail, ...allWindows.map(entry => entry.detail),
         "1.0× is even pace. Below 1.0× uses less quota than even pace; above uses more. Average since window start, not an agent-count recommendation."].filter(Boolean).join("\n") });

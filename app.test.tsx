@@ -19,6 +19,8 @@ const NOW = Date.parse("2026-10-01T12:00:00Z");
 const provider: UsageProvider = {
   id: "claude-code", displayName: "Claude Code", hostId: "one", hostName: "One",
   accountEmail: "one@example.test", status: "ok", message: null,
+  accountKey: "one", accountLabel: "one", observedAt: NOW, plan: null, weight: null, stale: false,
+  sources: [], hosts: [{ id: "one", name: "One" }],
   logoUrl: null, icon: null, iconTint: null, planLabel: null,
   windows: [
     { label: "Weekly limit", weekly: true, usedPercent: 52, resetsAt: "2026-10-03T12:00:00Z" },
@@ -49,7 +51,7 @@ beforeEach(() => {
   vi.spyOn(usageStore, "refreshUsage").mockResolvedValue();
   onOpen.mockReset();
   rpc.mockReset().mockResolvedValue({
-    status: "ok", availableCount: 3, credits: [], accountEmail: provider.accountEmail,
+    status: "ok", availableCount: 3, credits: [], accountEmail: provider.accountEmail, accountKey: provider.accountKey,
     fetchedAt: new Date(NOW).toISOString(), message: null,
   });
   usageStore.setOverlayOpen(false);
@@ -73,7 +75,7 @@ it("leads with weekly pace while retaining used quota and the saved reset balanc
     ...provider.windows[0]!, usedPercent: 11, resetsAt: new Date(NOW + 133.11451889 * 3_600_000).toISOString(),
   }] };
   state.data!.providers = [codex];
-  rpc.mockResolvedValue({ status: "ok", availableCount: 2, credits: [], accountEmail: codex.accountEmail,
+  rpc.mockResolvedValue({ status: "ok", availableCount: 2, credits: [], accountEmail: codex.accountEmail, accountKey: codex.accountKey,
     fetchedAt: new Date(NOW).toISOString(), message: null });
   await render(<BankedResetsProvider providers={[codex]} active><UsageBar onOpen={onOpen} /></BankedResetsProvider>);
   const button = container.querySelector<HTMLButtonElement>('button[aria-label*="Open usage details."]')!;
@@ -92,7 +94,7 @@ it.each([false, true])("does not call early-week usage near limit at 5% used (de
   }] };
   state.data!.providers = [codex];
   if (fullScenario) {
-    rpc.mockResolvedValue({ status: "ok", availableCount: 2, credits: [], accountEmail: codex.accountEmail,
+    rpc.mockResolvedValue({ status: "ok", availableCount: 2, credits: [], accountEmail: codex.accountEmail, accountKey: codex.accountKey,
       fetchedAt: new Date(NOW).toISOString(), message: null });
     await render(<>
       <BankedResetsProvider providers={[codex]} active><UsageBar onOpen={onOpen} /></BankedResetsProvider>
@@ -198,7 +200,7 @@ it("keeps pace and shortfall snapshot-anchored and accepts a refreshed rate", as
   expect(container.querySelector("button")?.textContent).toContain("1.5× pace");
   expect(container.textContent).toContain("1h 40m short");
   expect(container.querySelector("button")?.title).toContain("out in 19m");
-  state = { ...state, data: { ...state.data!, fetchedAt: new Date(Date.now()).toISOString(), providers: [{ ...provider,
+  state = { ...state, data: { ...state.data!, fetchedAt: new Date(Date.now()).toISOString(), providers: [{ ...provider, observedAt: Date.now(),
     windows: [{ ...provider.windows[1]!, usedPercent: 95 }] }] } };
   await render();
   expect(container.querySelector("button")?.textContent).toContain("1.6× pace");
@@ -281,7 +283,7 @@ it("refreshes once when the reset countdown reaches zero and awaits confirmation
 
 it("coalesces expired accounts into one refresh and waits for an existing request", async () => {
   const expired = { ...provider, windows: [{ ...provider.windows[1]!, usedPercent: 100, resetsAt: new Date(NOW).toISOString() }] };
-  state = { ...state, loading: true, data: { ...state.data!, providers: [expired, { ...expired, accountEmail: "two@example.test" }] } };
+  state = { ...state, loading: true, data: { ...state.data!, providers: [expired, { ...expired, accountKey: "two", accountEmail: "two@example.test" }] } };
   await render();
   expect(container.querySelectorAll('button[aria-label*="Open usage details."]')).toHaveLength(2);
   expect(container.textContent).not.toContain("% used");
@@ -356,8 +358,8 @@ it("withdraws numeric pace and reassuring tooltips when refresh fails", async ()
   state = { ...state, error: "Offline" };
   await render();
   const button = container.querySelector("button")!;
-  expect(button.textContent).toContain("Wunknown· 52% used");
-  expect(button.textContent).toContain("Sunknown· 32% used");
+  expect(button.textContent).toContain("Wunknown· usage unknown");
+  expect(button.textContent).toContain("Sunknown· usage unknown");
   expect(button.textContent).not.toContain("× pace");
   expect(button.title).toContain("stale or incomplete. Offline");
   expect(button.title).not.toContain("0.7× pace");
@@ -365,11 +367,11 @@ it("withdraws numeric pace and reassuring tooltips when refresh fails", async ()
 });
 
 it("withdraws numeric pace and estimates for an incomplete snapshot", async () => {
-  state = { ...state, data: { ...state.data!, error: "One host failed", providers: [{ ...provider,
+  state = { ...state, data: { ...state.data!, error: "One host failed", providers: [{ ...provider, stale: true, message: "One host failed",
     windows: [{ ...provider.windows[1]!, usedPercent: 90 }] }] } };
   await render();
   const button = container.querySelector("button")!;
-  expect(button.textContent).toContain("Sunknown· 90% used");
+  expect(button.textContent).toContain("Sunknown· usage unknown");
   expect(button.textContent).not.toContain("× pace");
   expect(button.textContent).not.toContain("short");
   expect(button.getAttribute("aria-label")).toContain("One host failed");
@@ -465,16 +467,25 @@ it.each([
   expect(onOpen).toHaveBeenCalledExactlyOnceWith();
 });
 
+it("never presents stale zero usage as available quota in the strip or dialog", async () => {
+  const stale = { ...provider, stale: true, message: "Source offline", windows: [{ ...provider.windows[0]!, usedPercent: 0 }] };
+  state.data!.providers = [stale];
+  await render(<><UsageBar onOpen={onOpen} /><ProviderBlock provider={stale} showHost={false} showBankedResets={false} focusBankedResets={false} /></>);
+  expect(container.textContent).toContain("usage unknown");
+  expect(container.textContent).not.toContain("0%");
+  expect(container.querySelector("button")?.title).not.toContain("0%");
+});
+
 it("does not mistake a provider error for no limits", async () => {
   state.data!.providers = [{ ...provider, windows: [], status: "error" }];
   await render();
-  expect(container.textContent).toBe("Usage unavailable");
+  expect(container.textContent).toContain("usage unknown");
 });
 
 it("filters the strip before account deduplication so a remote duplicate cannot hide the server", async () => {
   state.data = {
     ...state.data!, serverOnly: true, serverHostId: provider.hostId, serverHostError: null,
-    providers: [{ ...provider, hostId: "remote", hostName: "Laptop" }, provider, { ...provider, hostId: "other", accountEmail: "remote@example.test" }],
+    providers: [{ ...provider, hostId: "remote", hostName: "Laptop", hosts: [{ id: "remote", name: "Laptop" }] }, provider, { ...provider, hostId: "other", hosts: [{ id: "other", name: "Other" }], accountEmail: "remote@example.test" }],
   };
   await render();
   const rows = container.querySelectorAll<HTMLButtonElement>('button[aria-label*="Open usage details."]');
@@ -485,7 +496,7 @@ it("filters the strip before account deduplication so a remote duplicate cannot 
 });
 
 it("shows a server-specific clickable empty state when only remote hosts report usage", async () => {
-  state.data = { ...state.data!, serverOnly: true, serverHostId: provider.hostId, providers: [{ ...provider, hostId: "remote" }] };
+  state.data = { ...state.data!, serverOnly: true, serverHostId: provider.hostId, providers: [{ ...provider, hostId: "remote", hosts: [{ id: "remote", name: "Remote" }] }] };
   await render();
   expect(container.textContent).toBe("No usage limits on server");
   await act(async () => container.querySelector<HTMLButtonElement>("button")!.click());
@@ -503,6 +514,30 @@ it.each([
   expect(container.querySelectorAll('button[aria-label*="Open usage details."]')).toHaveLength(0);
 });
 
+it("shows one row per issued account plus a pool without merging identical emails", async () => {
+  const a = { ...provider, accountLabel: "A", weight: 20, plan: { id: "max", multiplier: 20 } };
+  const b = { ...a, accountKey: "b", accountLabel: "B", weight: 5, plan: { id: "max", multiplier: 5 } };
+  const c = { ...a, accountKey: "c", accountLabel: "C", weight: 1, plan: { id: "pro", multiplier: null }, windows: [{ ...provider.windows[1]!, usedPercent: 100 }] };
+  state.data!.providers = [a, b, c, { ...a, hostId: "two", hosts: [{ id: "two", name: "Two" }] }];
+  await render();
+  expect(container.querySelectorAll('button[aria-label*="Open usage details."]')).toHaveLength(3);
+  expect(container.querySelectorAll('button[aria-label*="Open pool details."]')).toHaveLength(1);
+  expect(container.textContent).toContain("2/3 available");
+  expect(container.textContent).toContain("(est.)");
+  expect(container.textContent).not.toContain("0% used");
+});
+
+it("keeps shared accounts visible in the server-only view without reading a remote default login", async () => {
+  const shared = { ...provider, accountKey: "shared", hostId: "", hosts: [], accountLabel: "Shared",
+    sources: [{ pluginId: "claude-accounts", label: "Claude Accounts", resourceId: "shared", scope: { kind: "shared" as const } }] };
+  state.data = { ...state.data!, showStrip: true, serverOnly: true, serverHostId: provider.hostId, serverHostError: "Server host is offline", providers: [shared] };
+  const dialog = await renderOverlay();
+  expect(container.textContent).toContain("0.7× pace");
+  expect(dialog.textContent).toContain("Available on: shared · via Claude Accounts");
+  expect(dialog.textContent).toContain("observed 0m ago");
+  expect(rpc).not.toHaveBeenCalled();
+});
+
 async function renderOverlay() {
   vi.spyOn(usageStore, "getBarHost").mockReturnValue(container);
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ ok: true, result: {
@@ -514,8 +549,8 @@ async function renderOverlay() {
 }
 
 it("updates the strip, dialog, and reset targets together when the display setting changes", async () => {
-  const remote = { ...provider, hostId: "remote", hostName: "Laptop", windows: [{ ...provider.windows[0]!, usedPercent: 80 }] };
-  const remoteOnly = { ...remote, hostId: "third", hostName: "Desktop", accountEmail: "remote@example.test" };
+  const remote = { ...provider, hostId: "remote", hostName: "Laptop", hosts: [{ id: "remote", name: "Laptop" }], windows: [{ ...provider.windows[0]!, usedPercent: 80 }] };
+  const remoteOnly = { ...remote, accountKey: "remote", hostId: "third", hostName: "Desktop", hosts: [{ id: "third", name: "Desktop" }], accountEmail: "remote@example.test" };
   state.data = { ...state.data!, showStrip: true, serverOnly: false, serverHostId: provider.hostId, serverHostError: null, providers: [remote, provider, remoteOnly] };
   const dialog = await renderOverlay();
   expect(container.querySelectorAll('button[aria-label*="Open usage details."]')).toHaveLength(2);
@@ -577,7 +612,7 @@ it("does not read any resets or show another machine's details when the server i
 });
 
 it("explains in the dialog when the server has no reporting providers", async () => {
-  state.data = { ...state.data!, showStrip: true, serverOnly: true, serverHostId: provider.hostId, providers: [{ ...provider, hostId: "remote" }] };
+  state.data = { ...state.data!, showStrip: true, serverOnly: true, serverHostId: provider.hostId, providers: [{ ...provider, hostId: "remote", hosts: [{ id: "remote", name: "Remote" }] }] };
   const dialog = await renderOverlay();
   expect(dialog.textContent).toContain("No providers with usage reporting on the server.");
   expect(dialog.textContent).not.toContain("one@example.test");

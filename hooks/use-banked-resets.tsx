@@ -1,18 +1,18 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useRpc } from "@get-bb/plugin-sdk/app";
-import type { rpcContract, UsageProvider } from "../server";
-import { bankedResetsUnavailable, resetProviderName, supportsBankedResets, type BankedResets } from "../lib/banked-resets-contract";
+import type { rpcContract, UsageAccount } from "../server";
+import { supportsBankedResets, type BankedResets } from "../lib/banked-resets-contract";
 
-export type BankedResetTarget = Pick<UsageProvider, "id" | "hostId" | "accountEmail">;
-type ResetState = { data: BankedResets | null; loading: boolean };
-const EMPTY: ResetState = { data: null, loading: true };
+export type BankedResetTarget = Pick<UsageAccount, "id" | "hostId" | "accountEmail"> & { accountKey?: string | null; hostIds?: string[] };
+type ResetState = { data: BankedResets | null; loading: boolean; applicable: boolean };
+const EMPTY: ResetState = { data: null, loading: false, applicable: false };
 const Context = createContext<{ states: Record<string, ResetState>; refresh: () => void }>({ states: {}, refresh: () => {} });
 
-export const bankedResetKey = (target: BankedResetTarget) => JSON.stringify([target.id, target.hostId, target.accountEmail]);
+export const bankedResetKey = (target: BankedResetTarget) => JSON.stringify([target.id, target.accountKey ?? target.hostId]);
 export const bankedResetSectionId = (target: BankedResetTarget) => `banked-resets-${encodeURIComponent(bankedResetKey(target))}`;
 
-export function BankedResetsProvider({ providers, active, children }: {
-  providers: UsageProvider[]; active: boolean; children: ReactNode;
+export function BankedResetsProvider({ providers, active, children, scopeHostId }: {
+  providers: UsageAccount[]; active: boolean; children: ReactNode; scopeHostId?: string | null;
 }) {
   const rpc = useRpc<typeof rpcContract>();
   const rpcRef = useRef(rpc);
@@ -21,13 +21,14 @@ export function BankedResetsProvider({ providers, active, children }: {
   const [states, setStates] = useState<Record<string, ResetState>>({});
   const seen = new Set<string>();
   const targets = providers.filter(provider => {
-    if (!supportsBankedResets(provider.id)) return false;
-    if (provider.status !== "ok" || provider.accountEmail === null) return true;
-    const account = JSON.stringify([provider.id, provider.accountEmail]);
+    if (!supportsBankedResets(provider.id) || provider.accountKey === null) return false;
+    const account = bankedResetKey(provider);
     if (seen.has(account)) return false;
     seen.add(account);
     return true;
-  }).map(({ id, hostId, accountEmail }) => ({ id, hostId, accountEmail }));
+  }).map(({ id, hostId, hosts, accountEmail, accountKey }) => ({ id, hostId, accountEmail, accountKey,
+    hostIds: (hosts.length ? hosts.map(host => host.id) : hostId ? [hostId] : []).filter(id => scopeHostId === undefined || id === scopeHostId),
+  })).filter(target => target.hostIds.length > 0);
   const targetKey = JSON.stringify(targets);
 
   useEffect(() => {
@@ -46,18 +47,16 @@ export function BankedResetsProvider({ providers, active, children }: {
       forceQueued = false;
       await Promise.all(currentTargets.map(async target => {
         const key = bankedResetKey(target);
-        setStates(prior => ({ ...prior, [key]: { data: prior[key]?.data ?? null, loading: true } }));
-        let data: BankedResets;
-        try {
-          if (!supportsBankedResets(target.id)) return;
-          data = await rpcRef.current.call("getBankedResets", { hostId: target.hostId, providerId: target.id, force: forceRead });
-          if ((data.status === "ok" || data.sessionReset) && target.accountEmail !== null && data.accountEmail?.toLowerCase() !== target.accountEmail.toLowerCase()) {
-            data = bankedResetsUnavailable(`${resetProviderName(target.id)} account changed on this host. Refresh usage to check the current account.`);
-          }
-        } catch {
-          data = bankedResetsUnavailable("Could not refresh banked resets. Try the refresh button again.");
+        setStates(prior => ({ ...prior, [key]: { data: prior[key]?.data ?? null, applicable: prior[key]?.applicable ?? false, loading: true } }));
+        let data: BankedResets | null = null;
+        for (const hostId of target.hostIds ?? []) {
+          try {
+            if (!supportsBankedResets(target.id)) return;
+            const inventory = await rpcRef.current.call("getBankedResets", { hostId, providerId: target.id, force: forceRead });
+            if (target.accountKey && inventory.accountKey === target.accountKey) { data = inventory; break; }
+          } catch {}
         }
-        if (!disposed) setStates(prior => ({ ...prior, [key]: { data, loading: false } }));
+        if (!disposed) setStates(prior => ({ ...prior, [key]: { data, loading: false, applicable: data !== null } }));
       }));
       pending = false;
       if (forceQueued && !disposed) void refresh();

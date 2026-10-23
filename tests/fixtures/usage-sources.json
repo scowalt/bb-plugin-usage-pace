@@ -1,0 +1,46 @@
+[
+  {
+    "source": "provider-claude-code",
+    "resource": { "id": "[\"beelink\",\"claude-code\"]", "accountKey": null, "providerId": "claude-code", "label": "Claude Code", "scope": { "kind": "host", "hostId": "beelink", "hostName": "Beelink" } },
+    "measurement": {
+      "accountKey": "anthropic:account:account-a", "observedAt": 1792756800000,
+      "usage": { "status": "ok", "plan": { "id": "max", "multiplier": 20 }, "accountEmail": "a@example.test", "planLabel": "Max 20x", "windows": [
+        { "kind": "five-hour", "id": "five-hour", "label": "Current session", "usedPercent": 36, "resetsAt": "2026-10-23T14:00:00Z", "model": null, "cost": null },
+        { "kind": "weekly", "id": "weekly", "label": "Weekly limit", "usedPercent": 16, "resetsAt": "2026-10-25T12:00:00Z", "model": null, "cost": null },
+        { "kind": "weekly", "id": "fable", "label": "Fable", "usedPercent": 1, "resetsAt": "2026-10-25T12:00:00Z", "model": "fable", "cost": null }
+      ] }
+    }
+  },
+  {
+    "source": "account-pool",
+    "resource": { "id": "b", "accountKey": "anthropic:account:account-b", "providerId": "claude-code", "label": "b@example.test", "scope": { "kind": "shared" } },
+    "measurement": {
+      "accountKey": "anthropic:account:account-b", "observedAt": 1792756800000,
+      "usage": { "status": "ok", "plan": { "id": "max", "multiplier": 5 }, "accountEmail": "b@example.test", "planLabel": "Max 5x", "windows": [
+        { "kind": "five-hour", "id": "five-hour", "label": "Current session", "usedPercent": 32, "resetsAt": "2026-10-23T14:00:00Z", "model": null, "cost": null },
+        { "kind": "weekly", "id": "weekly", "label": "Weekly limit", "usedPercent": 71, "resetsAt": "2026-10-25T12:00:00Z", "model": null, "cost": null }
+      ] }
+    }
+  },
+  {
+    "source": "claude-accounts",
+    "resource": { "id": "c", "accountKey": "anthropic:account:account-c", "providerId": "claude-code", "label": "c@example.test", "scope": { "kind": "shared" } },
+    "measurement": {
+      "accountKey": "anthropic:account:account-c", "observedAt": 1792756800000,
+      "usage": { "status": "ok", "plan": { "id": "pro", "multiplier": null }, "accountEmail": "c@example.test", "planLabel": "Pro", "windows": [
+        { "kind": "five-hour", "id": "five-hour", "label": "Current session", "usedPercent": 100, "resetsAt": "2026-10-23T14:00:00Z", "model": null, "cost": null },
+        { "kind": "weekly", "id": "weekly", "label": "Weekly limit", "usedPercent": 52, "resetsAt": "2026-10-25T12:00:00Z", "model": null, "cost": null }
+      ] }
+    }
+  },
+  {
+    "source": "provider-codex",
+    "resource": { "id": "[\"beelink\",\"codex\"]", "accountKey": null, "providerId": "codex", "label": "Codex", "scope": { "kind": "host", "hostId": "beelink", "hostName": "Beelink" } },
+    "measurement": {
+      "accountKey": "openai:chatgpt:codex-account", "observedAt": 1792765988378,
+      "usage": { "status": "ok", "plan": { "id": "pro", "multiplier": null }, "accountEmail": "codex@example.test", "planLabel": "Pro", "windows": [
+        { "kind": "weekly", "id": "0:Weekly limit", "label": "Weekly limit", "usedPercent": 28, "resetsAt": "2026-10-29T17:09:55.000Z", "model": null, "cost": null }
+      ] }
+    }
+  }
+]

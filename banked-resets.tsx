@@ -93,16 +93,18 @@ export function BankedResetsList({ data, loading, hostName, id, providerId = "co
   );
 }
 
-export function BankedResetsSection({ id, hostId, hostName, accountEmail, focus = false }: BankedResetTarget & { hostName: string; focus?: boolean }) {
-  const target = { id, hostId, accountEmail };
-  const { data, loading } = useBankedResets(target);
+export function BankedResetsSection({ id, hostId, hostName, accountEmail, accountKey, focus = false }: BankedResetTarget & { hostName: string; focus?: boolean }) {
+  const target = { id, hostId, accountEmail, accountKey };
+  const { data, loading, applicable } = useBankedResets(target);
+  if (!applicable) return null;
   return <BankedResetsList id={bankedResetSectionId(target)} providerId={id} data={data} loading={loading} hostName={hostName} focusOnMount={focus} />;
 }
 
 export function BankedResetsBadge({ target, onOpen, now = Date.now(), className }: {
   target: BankedResetTarget; onOpen: () => void; now?: number; className?: string;
 }) {
-  const { data, loading } = useBankedResets(target);
+  const { data, loading, applicable } = useBankedResets(target);
+  if (!applicable) return null;
   const label = target.id === "claude-code" ? "saved" : "banked";
   const badge = bankedResetBadge(data, loading, now, label);
   const title = `${badge.title}\nOpen ${label}-reset details (read-only).`;
