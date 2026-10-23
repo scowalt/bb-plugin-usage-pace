@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createClaudeLimitResetsReader } from "./claude-limit-resets";
 import { bankedResetsSchema } from "./banked-resets-contract";
+import { bankedResetBadge } from "./banked-reset-badge";
 
 const NOW = Date.parse("2026-10-07T20:00:00Z");
 const MINUTE = 60_000;
@@ -88,13 +89,24 @@ it("excludes paused, spent, future and expired grants from the current saved bal
   expect(await read()).toMatchObject({ availableCount: 1, credits: [{ id: "example-grant" }] });
 });
 
-it("reports a zero only for a valid, eligible empty inventory", async () => {
+it("reports a zero for a valid, eligible empty inventory", async () => {
   expect(await setup(usage([])).read()).toMatchObject({ status: "ok", availableCount: 0, credits: [] });
 });
 
+it("shows zero saved resets when Claude explicitly reports no_grant", async () => {
+  const { read } = setup({ cedar_ember: { eligible: false, ineligible_reason: "no_grant", grants: [] } });
+  const result = await read();
+  expect(result).toMatchObject({ status: "ok", availableCount: 0, credits: [], accountEmail: "one@example.test", fetchedAt: new Date(NOW).toISOString() });
+  expect(bankedResetBadge(result, false, NOW, "saved")).toMatchObject({ text: "0", empty: true, warning: false });
+});
+
 it.each([
-  {}, { cedar_ember: null }, { cedar_ember: { eligible: false, ineligible_reason: "surface", grants: [] } },
-  { cedar_ember: { eligible: false, ineligible_reason: "no_grant", grants: [] } },
+  {}, { cedar_ember: null },
+  ...["surface", "cli_version", "tier", "unavailable", "unknown", null, undefined].map(ineligible_reason => ({ cedar_ember: { eligible: false, ineligible_reason, grants: [] } })),
+  { cedar_ember: { eligible: false, ineligible_reason: "no_grant" } },
+  { cedar_ember: { eligible: false, ineligible_reason: "no_grant", grants: null } },
+  { cedar_ember: { eligible: false, ineligible_reason: "no_grant", grants: [grant()] } },
+  { cedar_ember: { eligible: false, ineligible_reason: "no_grant", grants: [grant({ resets_left: 0 })] } },
   { cedar_ember: { eligible: true } },
   usage([grant({ resets_left: "1" })]), usage([grant({ resets_left: -1 })]),
   usage([grant({ resets_left: 0.5 })]), usage([grant({ resets_left: 2 })]),

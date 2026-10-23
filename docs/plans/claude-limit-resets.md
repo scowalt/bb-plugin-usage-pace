@@ -120,6 +120,14 @@ Unit and DOM tests cover the protocol, bounds, malformed/missing blocks, multi-u
 
 Verification passed: `bun run check`, all 251 Vitest tests plus 3 token-total tests, `bun run build`, and `check:release` with BB's bundled npm (`--omit=dev --omit=optional`). The latter rebuilt an isolated production-only checkout and smoke-tested both readers without provider requests. Generated bundles were rebuilt; no installed plugin was replaced. The comment-free source check and its 13 regression tests also passed for the v0.3.5 release preparation.
 
+## Confirmed empty inventory follow-up (2026-10-23)
+
+A read-only reproduction on the authorized subscribed Linux host returned HTTP 200 for both usage and profile. Claude Code 2.1.309's first-party user agent and Usage Pace's identified user agent both reported `cedar_ember: { eligible: false, ineligible_reason: "no_grant", grants: [] }`; both the at-wall and saved-grant query variants agreed. Conditional session availability remained separate (`not_at_wall`). Credentials stayed on the host, no authentication was changed, and no reset was redeemed.
+
+The cause of the incorrect `↺ ?` badge was the adapter's `eligible: true` requirement, not a transport failure or UI cache. It rejected this explicit absence as unsupported, and the original negative fixtures locked in that mistake. The inventory schema now also accepts exactly `eligible: false`, `ineligible_reason: "no_grant"`, and an explicitly empty grant list. Missing lists, nonempty contradictory lists, access-gating reasons, and unfamiliar responses remain unknown.
+
+The minimized reader-to-badge regression failed with `status: unsupported` / `availableCount: null` before the change and passed with a dimmed zero afterward. All 330 Vitest tests and 3 token-total tests passed, as did type checking and the comment-policy check plus its 13 tests. The updated actual adapter was bundled and streamed over SSH without persisting remote code; its GET-only live reproduction returned `status: ok`, `availableCount: 0`. The regenerated host artifact returned the same live result while preserving conditional session availability. The BB 0.44.0 / SDK 0.5.29 build and release smoke checks passed, including the isolated production-only rebuild with BB's bundled npm. The installed plugin was not replaced or reloaded as part of this diagnosis.
+
 ## Supporting references
 
 - [Anthropic: What is a limit reset?](https://support.claude.com/en/articles/17007452-what-is-a-limit-reset) — product semantics.

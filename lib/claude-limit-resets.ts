@@ -32,10 +32,17 @@ const grantSchema = z.object({
   paused: z.boolean(),
   usable_now: z.boolean().nullish(),
 }).refine(grant => grant.resets_left <= grant.resets_total, "Invalid remaining balance");
-const inventorySchema = z.object({
-  eligible: z.literal(true),
-  grants: z.array(grantSchema).max(200),
-});
+const inventorySchema = z.discriminatedUnion("eligible", [
+  z.object({
+    eligible: z.literal(true),
+    grants: z.array(grantSchema).max(200),
+  }),
+  z.object({
+    eligible: z.literal(false),
+    ineligible_reason: z.literal("no_grant"),
+    grants: z.array(grantSchema).length(0),
+  }),
+]);
 const sessionSchema = z.object({
   eligible: z.boolean(),
   ineligible_reason: z.string().max(80).nullable().optional(),
