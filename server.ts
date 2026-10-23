@@ -135,7 +135,6 @@ export default async function plugin(bb: BbPluginApi) {
 
   type LoadedUsage = {
     snapshot: UsageSnapshot;
-    hostErrors: Map<string, string>;
     hostsError: string | null;
   };
   let cached: { at: number; usage: LoadedUsage; dirty: boolean } | null = null;
@@ -143,8 +142,8 @@ export default async function plugin(bb: BbPluginApi) {
 
   const collect = createUsageCollector(bb, bankedController.signal);
   async function loadSnapshot(force: boolean): Promise<LoadedUsage> {
-    const { accounts, error, hostErrors, hostsError } = await collect(force);
-    return { snapshot: { accounts, providers: accounts, fetchedAt: new Date().toISOString(), error }, hostErrors, hostsError };
+    const { accounts, error, hostsError } = await collect(force);
+    return { snapshot: { accounts, providers: accounts, fetchedAt: new Date().toISOString(), error }, hostsError };
   }
   function configuredSnapshot(snapshot: UsageSnapshot): UsageSnapshot {
     const accounts = (snapshot.accounts ?? snapshot.providers).map(account => withAccountSettings({ ...account, stale: usageIsStale(account, Date.now()) }, aliases, weights));
@@ -184,7 +183,7 @@ export default async function plugin(bb: BbPluginApi) {
           ? "Server host is no longer available. Check bb's machine connection, then refresh."
           : host.status === "disconnected"
             ? "Server host is offline. Reconnect it, then refresh usage."
-            : usage.hostErrors.get(serverHostId) ?? usage.hostsError;
+            : usage.hostsError;
       }
     } catch {
       serverHostError = "Could not identify the server host. Check bb's machine connection, then refresh.";

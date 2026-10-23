@@ -4,6 +4,7 @@ import plugin, { rpcContract } from "./server";
 import { bankedResetsHostContract } from "./lib/banked-resets-host-contract";
 import type { BankedResets } from "./lib/banked-resets-contract";
 import { usageCliSchema } from "./lib/usage-cli";
+import { usageForDisplay } from "./lib/usage-scope";
 
 const inventory: BankedResets = { status: "ok", availableCount: 0, credits: [], accountEmail: "one@example.test", fetchedAt: "2026-10-07T20:00:00Z", message: null };
 const cleanups: (() => Promise<void>)[] = [];
@@ -171,17 +172,24 @@ describe("server-only display setting", () => {
     expect(snapshot.serverHostId).toBe(primaryHostId);
     expect(snapshot.serverHostError).toContain("Server host");
     expect(snapshot.providers.map(provider => provider.hostId)).toContain("remote");
+    const display = usageForDisplay({ data: snapshot, loading: false, error: null });
+    expect(display.data?.accounts).toEqual([]);
+    expect(display.data?.error).toBe(snapshot.serverHostError);
   });
 
   it("rechecks server availability against cached quota data", async () => {
     const { scope, getUsage, usageLimits } = await setupUsage({ serverOnly: true });
     const before = await getUsage();
     scope.hosts = scope.hosts.map(host => host.id === "server" ? { ...host, status: "disconnected" } : host);
-    expect(await getUsage()).toMatchObject({
+    const snapshot = await getUsage();
+    expect(snapshot).toMatchObject({
       providers: before.providers,
       serverHostId: "server",
       serverHostError: "Server host is offline. Reconnect it, then refresh usage.",
     });
+    const display = usageForDisplay({ data: snapshot, loading: false, error: null });
+    expect(display.data?.accounts).toEqual([]);
+    expect(display.data?.error).toBe(snapshot.serverHostError);
     expect(usageLimits).toHaveBeenCalledTimes(2);
   });
 
@@ -194,7 +202,64 @@ describe("server-only display setting", () => {
     });
     const snapshot = await getUsage();
     expect(snapshot.error).toContain("read failed");
-    expect(snapshot.serverHostError).toBe(failedHostId === "server" ? "Claude Code provider: read failed" : null);
+    expect(snapshot.serverHostError).toBeNull();
+  });
+
+  it.each(["error usage state", "thrown getResource", "failed listResources"])("keeps healthy server-only accounts visible after a provider failure (%s)", async failure => {
+    const now = Date.parse("2026-10-12T12:00:00Z");
+    vi.spyOn(Date, "now").mockReturnValue(now);
+    let failing = failure !== "failed listResources";
+    const sources = [
+      { pluginId: "provider-codex", displayName: "Codex provider", providerId: "codex", label: "Codex Pro" },
+      { pluginId: "provider-acp", displayName: "ACP provider", providerId: "opencode", label: "OpenCode" },
+    ];
+    const { bb, harness } = createFakePluginHost({
+      pluginId: "usage-pace", settings: { grokUsage: false, serverOnly: true, showStrip: true },
+      sdk: {
+        hosts: { list: async () => [makeHostResponse({ id: "server", name: "Server", status: "connected" })] },
+        providers: { list: async () => sources.map(source => ({ id: source.providerId, displayName: source.label })) },
+        system: { config: async () => ({ primaryHostId: "server" }) },
+        plugins: {
+          experimental_discoverRpc: async () => sources,
+          callRpc: async ({ pluginId, method }: { pluginId: string; method: string }) => {
+            const source = sources.find(source => source.pluginId === pluginId)!;
+            const failed = failing && pluginId === "provider-acp";
+            if (method.endsWith("listResources")) {
+              if (failed && failure === "failed listResources") throw new Error("usage unavailable");
+              return { resources: [{
+                id: `${source.providerId}-example.test`, providerId: source.providerId, label: source.label,
+                accountKey: `${source.providerId}:example.test`, scope: { kind: "host", hostId: "server", hostName: "Server" },
+              }] };
+            }
+            if (failed && failure === "thrown getResource") throw new Error("usage unavailable");
+            const fields = { plan: null, accountEmail: `${source.providerId}@example.test`, planLabel: null };
+            return { accountKey: `${source.providerId}:example.test`, observedAt: now, usage: failed
+              ? { status: "error", ...fields, message: "usage unavailable" }
+              : { status: "ok", ...fields, windows: [{ id: "weekly", kind: "weekly", label: "Weekly limit", usedPercent: 52, resetsAt: "2026-10-15T12:00:00Z" }] },
+            };
+          },
+        },
+      },
+    });
+    cleanups.push(() => harness.lifecycle.dispose());
+    await plugin(bb);
+    if (!failing) {
+      const before = rpcContract.getUsage.output.parse(await harness.behavior.callRpc("getUsage", {}));
+      expect(before.accounts).toHaveLength(2);
+      failing = true;
+    }
+    const snapshot = rpcContract.getUsage.output.parse(await harness.behavior.callRpc("getUsage", { force: true }));
+    const display = usageForDisplay({ data: snapshot, loading: false, error: null });
+    expect(snapshot).toMatchObject({ serverOnly: true, showStrip: true, serverHostId: "server", serverHostError: null });
+    expect(snapshot.error).toBe("ACP provider: usage unavailable");
+    expect(display.data?.accounts).toHaveLength(2);
+    expect(display.data?.accounts?.find(account => account.id === "codex")).toMatchObject({
+      status: "ok", stale: false, message: null, windows: [expect.objectContaining({ weekly: true, usedPercent: 52 })],
+    });
+    expect(display.data?.accounts?.find(account => account.id === "opencode")).toMatchObject({
+      status: failure === "failed listResources" ? "ok" : "error", stale: true, message: "ACP provider: usage unavailable",
+    });
+    expect(display.data?.error).toBeNull();
   });
 
   it("reports identity lookup failure without breaking collection or the CLI", async () => {

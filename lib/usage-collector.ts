@@ -28,7 +28,7 @@ type Resource = z.infer<typeof sourceListSchema>["resources"][number];
 type Host = Awaited<ReturnType<BbPluginApi["sdk"]["hosts"]["list"]>>[number];
 type Provider = Awaited<ReturnType<BbPluginApi["sdk"]["providers"]["list"]>>[number];
 type Source = { pluginId: string; displayName: string };
-export type CollectedUsage = { accounts: UsageAccount[]; error: string | null; hostErrors: Map<string, string>; hostsError: string | null };
+export type CollectedUsage = { accounts: UsageAccount[]; error: string | null; hostsError: string | null };
 
 const names: Record<string, string> = { "claude-code": "Claude Code", codex: "Codex", "usage-pace-grok": "Grok Build (usage)" };
 const messageOf = (error: unknown) => error instanceof Error ? error.message : String(error);
@@ -60,7 +60,6 @@ export function createUsageCollector(bb: Pick<BbPluginApi, "sdk">, signal: Abort
     return outputSchema.parse(await bounded(signal => bb.sdk.plugins.callRpc({ pluginId: source.pluginId, method, input, outputSchema, signal })));
   }
   return async function collect(force: boolean): Promise<CollectedUsage> {
-    const hostErrors = new Map<string, string>();
     let hostsError: string | null = null;
     const errors: string[] = [];
     let hosts: Host[] = [];
@@ -84,7 +83,7 @@ export function createUsageCollector(bb: Pick<BbPluginApi, "sdk">, signal: Abort
       const message = `Usage source discovery: ${messageOf(error)}`;
       return { accounts: mergeAccounts([...previous.values()].flatMap(rows => [...rows.values()]
         .filter(account => !account.hosts.length || account.hosts.some(known => hosts.some(host => host.id === known.id && host.status !== "disconnected")))
-        .map(account => failed(account, message)))), error: message, hostsError, hostErrors };
+        .map(account => failed(account, message)))), error: message, hostsError };
     }
     const active = new Set(sources.map(source => source.pluginId));
     for (const id of previous.keys()) if (!active.has(id)) previous.delete(id);
@@ -98,7 +97,6 @@ export function createUsageCollector(bb: Pick<BbPluginApi, "sdk">, signal: Abort
         for (const account of previous.get(source.pluginId)?.values() ?? []) {
           if (account.hosts.length && !account.hosts.some(known => hosts.some(host => host.id === known.id && host.status !== "disconnected"))) continue;
           rows.push(failed(account, message));
-          for (const host of account.hosts) hostErrors.set(host.id, message);
         }
         continue;
       }
@@ -127,7 +125,6 @@ export function createUsageCollector(bb: Pick<BbPluginApi, "sdk">, signal: Abort
             if (usage.status === "error") {
               const message = `${source.displayName}: ${usage.message}`;
               errors.push(message);
-              if (scope.kind === "host") hostErrors.set(scope.hostId, message);
               const prior = old.get(resource.id);
               const sameAccount = measurement.accountKey !== null && prior?.accountKey === measurement.accountKey;
               account = { ...(sameAccount ? prior : base), stale: true, message,
@@ -141,7 +138,6 @@ export function createUsageCollector(bb: Pick<BbPluginApi, "sdk">, signal: Abort
           } catch (error) {
             const message = `${source.displayName}: ${messageOf(error)}`;
             errors.push(message);
-            if (scope.kind === "host") hostErrors.set(scope.hostId, message);
             account = failed(old.get(resource.id) ?? base, message);
           }
           current.set(resource.id, account);
@@ -153,6 +149,6 @@ export function createUsageCollector(bb: Pick<BbPluginApi, "sdk">, signal: Abort
     await Promise.all(Array.from({ length: Math.min(3, tasks.length) }, async () => {
       while (next < tasks.length && !signal.aborted) await tasks[next++]!();
     }));
-    return { accounts: mergeAccounts(rows), error: errors.length ? [...new Set(errors)].join("; ") : null, hostErrors, hostsError };
+    return { accounts: mergeAccounts(rows), error: errors.length ? [...new Set(errors)].join("; ") : null, hostsError };
   };
 }
