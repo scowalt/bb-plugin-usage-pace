@@ -4,6 +4,8 @@ import { z } from "zod";
 import { createFakePluginHost, makeHostResponse } from "@get-bb/plugin-sdk/testing";
 import { createUsageCollector, measurementSchema, sourceListSchema } from "./usage-collector";
 import { makeAccount, NOW } from "../tests/usage-fixtures";
+import { withAccountSettings } from "./usage-accounts";
+import { usagePools } from "./usage-pools";
 
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => { for (const cleanup of cleanups.splice(0)) await cleanup(); vi.useRealTimers(); });
@@ -79,6 +81,56 @@ describe("discoverable usage collection", () => {
     expect(result.accounts[0]).toMatchObject({ accountKey: "anthropic:account:replacement", observedAt: null, windows: [], stale: true });
   });
 
+  it("keeps a known resource merged through keyless errors, recovery, and a later successful identity change", async () => {
+    const { collect, callRpc, lists } = await setup();
+    lists.set("pool", { resources: [resource("a"), resource("b")] });
+    const pool = (accounts: Awaited<ReturnType<typeof collect>>["accounts"]) => usagePools(
+      accounts.map(account => withAccountSettings(account, new Map(), new Map())), new Date(NOW).toISOString(), NOW,
+    )[0];
+    const before = await collect(false);
+    expect(before.accounts).toHaveLength(2);
+    expect(pool(before.accounts)).toMatchObject({ accounts: 2, available: 2, unknown: 0, partial: false });
+    const original = callRpc.getMockImplementation()!;
+    callRpc.mockImplementation(async args => args.pluginId === "machine" && args.method.endsWith("getResource") && args.input.resourceId === "mac"
+      ? { accountKey: null, observedAt: null, usage: { status: "error", plan: null, accountEmail: null, planLabel: null, message: "fetch failed" } }
+      : original(args));
+    for (let refresh = 0; refresh < 2; refresh++) {
+      const failed = await collect(true);
+      expect(failed.accounts).toHaveLength(2);
+      expect(pool(failed.accounts)).toEqual(pool(before.accounts));
+      expect(failed.accounts.find(account => account.accountKey === "anthropic:account:a")).toMatchObject({
+        status: "ok", stale: false, hosts: expect.arrayContaining([{ id: "beelink", name: "beelink" }, { id: "mac", name: "mac" }]),
+        message: "Machine source: fetch failed",
+      });
+      expect(failed.accounts[0]?.sources).toHaveLength(3);
+      expect(failed.error).toBeNull();
+    }
+    callRpc.mockImplementation(original);
+    expect(pool((await collect(true)).accounts)).toEqual(pool(before.accounts));
+    callRpc.mockImplementation(async args => args.pluginId === "machine" && args.method.endsWith("getResource") && args.input.resourceId === "mac"
+      ? measurement("replacement") : original(args));
+    const changed = await collect(true);
+    expect(changed.accounts).toHaveLength(3);
+    expect(changed.accounts.find(account => account.accountKey === "anthropic:account:replacement")).toMatchObject({
+      status: "ok", stale: false, hosts: [{ id: "mac", name: "mac" }],
+    });
+    expect(changed.accounts.find(account => account.accountKey === "anthropic:account:a")?.hosts).toEqual([{ id: "beelink", name: "beelink" }]);
+  });
+
+  it("never invents or merges identities for resources whose first reads are keyless errors", async () => {
+    const { collect, callRpc, sources } = await setup();
+    sources.splice(1);
+    const original = callRpc.getMockImplementation()!;
+    callRpc.mockImplementation(async args => args.method.endsWith("getResource")
+      ? { accountKey: null, observedAt: null, usage: { status: "error", plan: null, accountEmail: "same@example.test", planLabel: null, message: "fetch failed" } }
+      : original(args));
+    for (let refresh = 0; refresh < 2; refresh++) {
+      const result = await collect(true);
+      expect(result.accounts).toHaveLength(2);
+      expect(result.accounts.every(account => account.accountKey === null && account.stale && account.status === "error")).toBe(true);
+    }
+  });
+
   it("caches discovery for one minute and forwards force to every measurement", async () => {
     const { collect, discover, callRpc, advance } = await setup();
     await collect(false); await collect(true);
@@ -137,8 +189,8 @@ describe("discoverable usage collection", () => {
     const pending = collect(false);
     await vi.advanceTimersByTimeAsync(5001);
     const result = await pending;
-    expect(result.error).toContain("timed out");
-    expect(result.accounts.find(account => account.status === "error")).toMatchObject({ windows: [], observedAt: null, stale: true });
+    expect(result.error).toBeNull();
+    expect(result.accounts.find(account => account.status === "error")).toMatchObject({ windows: [], observedAt: null, stale: true, message: "Claude Accounts: Usage source timed out after 5 seconds." });
   });
 });
 

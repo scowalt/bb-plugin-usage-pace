@@ -95,9 +95,9 @@ export function BankedResetsList({ data, loading, hostName, id, providerId = "co
 
 export function BankedResetsSection({ id, hostId, hostName, accountEmail, accountKey, focus = false }: BankedResetTarget & { hostName: string; focus?: boolean }) {
   const target = { id, hostId, accountEmail, accountKey };
-  const { data, loading, applicable } = useBankedResets(target);
+  const { data, loading, applicable, hostName: inventoryHostName } = useBankedResets(target);
   if (!applicable) return null;
-  return <BankedResetsList id={bankedResetSectionId(target)} providerId={id} data={data} loading={loading} hostName={hostName} focusOnMount={focus} />;
+  return <BankedResetsList id={bankedResetSectionId(target)} providerId={id} data={data} loading={loading} hostName={inventoryHostName ?? hostName} focusOnMount={focus} />;
 }
 
 export function BankedResetsBadge({ target, onOpen, now = Date.now(), className }: {

@@ -60,12 +60,12 @@ describe("usage display scope", () => {
     expect(display.data?.error).toBe(error);
   });
 
-  it("does not attribute another host's collection failure to the server", () => {
-    const input = state({ error: "Remote: offline" });
+  it("retains collection-level warnings without treating healthy server accounts as failed", () => {
+    const input = state({ error: "Claude Accounts: could not list resources" });
     const display = usageForDisplay(input);
-    expect(display.data?.error).toBeNull();
+    expect(display.data?.error).toBe(input.data?.error);
     expect(compactUsageRows(display, NOW)[0]?.status.glyph).toBe("●");
-    expect(input.data?.error).toBe("Remote: offline");
+    expect(display.data?.serverHostError).toBeNull();
   });
 
   it("keeps transport errors distinct from server-specific collection errors", () => {

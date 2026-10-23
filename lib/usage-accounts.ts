@@ -97,8 +97,17 @@ export function withAccountSettings(account: UsageAccount, aliases: Map<string, 
   };
 }
 
+export function distinctAccountLabel(account: UsageAccount): string | null {
+  const label = account.accountLabel.trim();
+  return label.toLowerCase() === account.displayName.trim().toLowerCase() ? null : label || null;
+}
+
 export const hasSharedSource = (account: UsageAccount) => account.sources.some(source => source.scope.kind === "shared");
 export const onHost = (account: UsageAccount, hostId: string) => account.hosts.some(host => host.id === hostId);
+export function accountLocation(account: UsageAccount, scopeHostId?: string | null): string {
+  const hosts = scopeHostId === undefined ? account.hosts : account.hosts.filter(host => host.id === scopeHostId);
+  return [...new Set(hosts.map(host => host.name))].join(", ") || (hasSharedSource(account) ? "shared" : account.hostName);
+}
 export function observationTime(account: UsageAccount, fetchedAt: string, now: number): number {
   const time = account.observedAt ?? Date.parse(fetchedAt);
   return Number.isFinite(time) ? Math.min(time, now) : now;
