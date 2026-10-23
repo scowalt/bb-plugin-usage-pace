@@ -6,7 +6,7 @@ import {
   useRealtime,
 } from "@get-bb/plugin-sdk/app";
 import type { UsageAccount, UsageWindow } from "./server";
-import { accountId, mergeAccounts, observationTime, usageIsStale } from "./lib/usage-accounts";
+import { accountId, accountLocation, distinctAccountLabel, mergeAccounts, observationTime, usageIsStale } from "./lib/usage-accounts";
 import { describePool, usagePools, type UsagePool } from "./lib/usage-pools";
 import {
   formatReset,
@@ -248,7 +248,7 @@ export function UsageBar({ onOpen }: { onOpen: (target?: BankedResetTarget) => v
           >
             <span className="flex min-w-0 items-center gap-1">
               <ProviderMark provider={provider} />
-              {pools.some(pool => pool.providerId === provider.id) ? <span className="max-w-12 truncate font-medium">{provider.accountLabel}</span> : null}
+              {pools.some(pool => pool.providerId === provider.id) && distinctAccountLabel(provider) ? <span className="max-w-12 truncate font-medium">{distinctAccountLabel(provider)}</span> : null}
             </span>
             {status.glyph === "⌛" ? (
               <span aria-hidden="true" title={countdown?.detail} className="col-start-2 flex items-center gap-2 text-muted-foreground tabular-nums">
@@ -370,18 +370,22 @@ export function ProviderBlock({
   showHost,
   showBankedResets,
   focusBankedResets,
+  scopeHostId,
 }: {
   provider: UsageAccount;
   showHost: boolean;
   showBankedResets: boolean;
   focusBankedResets: boolean;
+  scopeHostId?: string | null;
 }) {
   const reliable = provider.status === "ok" && !usageIsStale(provider, Date.now());
   const paces = reliable ? paceForWindows(provider.windows, observationTime(provider, "", Date.now())) : provider.windows.map(() => null);
+  const location = accountLocation(provider, scopeHostId);
+  const label = distinctAccountLabel(provider);
   const subtitle = [
     provider.planLabel,
     provider.accountEmail,
-    showHost ? provider.hostName : null,
+    showHost || scopeHostId !== undefined || provider.hosts.length > 1 ? location : null,
   ]
     .filter((part): part is string => typeof part === "string" && part !== "")
     .join(" · ");
@@ -390,7 +394,7 @@ export function ProviderBlock({
       <div className="flex items-center gap-2">
         <ProviderMark provider={provider} className="size-4" />
         <div className="flex min-w-0 flex-col">
-          <span className="text-sm font-medium">{provider.displayName} · {provider.accountLabel}</span>
+          <span className="text-sm font-medium">{provider.displayName}{label ? ` · ${label}` : ""}</span>
           {subtitle ? (
             <span className="truncate text-[11px] text-muted-foreground">
               {subtitle}
@@ -398,7 +402,7 @@ export function ProviderBlock({
           ) : null}
         </div>
       </div>
-      <p className="text-[11px] text-muted-foreground">Available on: {provider.hosts.map(host => host.name).join(", ") || "shared"} · via {[...new Set(provider.sources.map(source => source.label))].join(", ")}
+      <p className="text-[11px] text-muted-foreground">Available on: {location} · via {[...new Set(provider.sources.map(source => source.label))].join(", ")}
         {provider.observedAt === null ? " · observation unknown" : ` · observed ${formatDuration(Math.max(0, Date.now() - provider.observedAt))} ago`}</p>
       {provider.stale ? <p role="status" className="text-xs text-muted-foreground">Showing stale usage. {provider.message ?? "Refresh to check this account."}</p> : provider.message ? <p role="status" className="text-xs text-muted-foreground">{provider.message}</p> : null}
       {provider.status === "ok" ? (
@@ -432,7 +436,7 @@ function UsageDialog({ tokens, bankedTarget }: { tokens: TokenTotals | null; ban
   useMinuteTick();
   const providers = mergeAccounts(state.data?.accounts ?? state.data?.providers ?? []);
   const pools = usagePools(providers, state.data?.fetchedAt ?? "");
-  const hostCount = new Set(providers.map((provider) => provider.hostId)).size;
+  const hostCount = new Set(providers.flatMap(provider => provider.hosts.map(host => host.id))).size;
   return (
     <Dialog open={open} onOpenChange={setOverlayOpen}>
       <DialogContent className="max-w-md">
@@ -484,6 +488,7 @@ function UsageDialog({ tokens, bankedTarget }: { tokens: TokenTotals | null; ban
               <ProviderBlock
                 provider={provider}
                 showHost={hostCount > 1}
+                scopeHostId={state.data?.serverOnly ? state.data.serverHostId ?? null : undefined}
                 showBankedResets={open}
                 focusBankedResets={bankedTarget?.id === provider.id && bankedTarget.accountKey === provider.accountKey}
               />

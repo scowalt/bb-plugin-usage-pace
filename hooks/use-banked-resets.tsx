@@ -3,9 +3,10 @@ import { useRpc } from "@get-bb/plugin-sdk/app";
 import type { rpcContract, UsageAccount } from "../server";
 import { supportsBankedResets, type BankedResets } from "../lib/banked-resets-contract";
 
-export type BankedResetTarget = Pick<UsageAccount, "id" | "hostId" | "accountEmail"> & { accountKey?: string | null; hostIds?: string[] };
-type ResetState = { data: BankedResets | null; loading: boolean; applicable: boolean };
-const EMPTY: ResetState = { data: null, loading: false, applicable: false };
+export type BankedResetTarget = Pick<UsageAccount, "id" | "hostId" | "accountEmail"> & { accountKey?: string | null };
+type ResetReadTarget = BankedResetTarget & { hosts: UsageAccount["hosts"] };
+type ResetState = { data: BankedResets | null; loading: boolean; applicable: boolean; hostName: string | null };
+const EMPTY: ResetState = { data: null, loading: false, applicable: false, hostName: null };
 const Context = createContext<{ states: Record<string, ResetState>; refresh: () => void }>({ states: {}, refresh: () => {} });
 
 export const bankedResetKey = (target: BankedResetTarget) => JSON.stringify([target.id, target.accountKey ?? target.hostId]);
@@ -26,14 +27,14 @@ export function BankedResetsProvider({ providers, active, children, scopeHostId 
     if (seen.has(account)) return false;
     seen.add(account);
     return true;
-  }).map(({ id, hostId, hosts, accountEmail, accountKey }) => ({ id, hostId, accountEmail, accountKey,
-    hostIds: (hosts.length ? hosts.map(host => host.id) : hostId ? [hostId] : []).filter(id => scopeHostId === undefined || id === scopeHostId),
-  })).filter(target => target.hostIds.length > 0);
+  }).map(({ id, hostId, hostName, hosts, accountEmail, accountKey }) => ({ id, hostId, accountEmail, accountKey,
+    hosts: (hosts.length ? hosts : hostId ? [{ id: hostId, name: hostName }] : []).filter(host => scopeHostId === undefined || host.id === scopeHostId),
+  })).filter(target => target.hosts.length > 0);
   const targetKey = JSON.stringify(targets);
 
   useEffect(() => {
     if (!active) return;
-    const currentTargets: BankedResetTarget[] = JSON.parse(targetKey);
+    const currentTargets: ResetReadTarget[] = JSON.parse(targetKey);
     if (currentTargets.length === 0) return;
     let disposed = false;
     let pending = false;
@@ -47,16 +48,17 @@ export function BankedResetsProvider({ providers, active, children, scopeHostId 
       forceQueued = false;
       await Promise.all(currentTargets.map(async target => {
         const key = bankedResetKey(target);
-        setStates(prior => ({ ...prior, [key]: { data: prior[key]?.data ?? null, applicable: prior[key]?.applicable ?? false, loading: true } }));
+        setStates(prior => ({ ...prior, [key]: { data: prior[key]?.data ?? null, applicable: prior[key]?.applicable ?? false, hostName: prior[key]?.hostName ?? null, loading: true } }));
         let data: BankedResets | null = null;
-        for (const hostId of target.hostIds ?? []) {
+        let hostName: string | null = null;
+        for (const host of target.hosts) {
           try {
             if (!supportsBankedResets(target.id)) return;
-            const inventory = await rpcRef.current.call("getBankedResets", { hostId, providerId: target.id, force: forceRead });
-            if (target.accountKey && inventory.accountKey === target.accountKey) { data = inventory; break; }
+            const inventory = await rpcRef.current.call("getBankedResets", { hostId: host.id, providerId: target.id, force: forceRead });
+            if (target.accountKey && inventory.accountKey === target.accountKey) { data = inventory; hostName = host.name; break; }
           } catch {}
         }
-        if (!disposed) setStates(prior => ({ ...prior, [key]: { data, loading: false, applicable: data !== null } }));
+        if (!disposed) setStates(prior => ({ ...prior, [key]: { data, hostName, loading: false, applicable: data !== null } }));
       }));
       pending = false;
       if (forceQueued && !disposed) void refresh();

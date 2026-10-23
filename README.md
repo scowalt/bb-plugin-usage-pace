@@ -50,7 +50,7 @@ Status considers **all** reported windows, including model-specific limits not d
 
 Usage Pace discovers every `provider-usage.v1` source, including machine-local providers, Account Pooler, Claude Accounts, and its own Grok source. Accounts merge only by the provider-issued `accountKey`, never by email, label, or plan. A merged account uses the freshest measurement and lists all reporting sources and machines. Unknown identities stay separate. Failed sources keep their last measurements, marked stale; healthy sources still show pace. Measurements are fetched at most three at a time, with five-second source timeouts.
 
-Each account has a strip row. With two or more accounts, the provider also has a pool row; the dialog places the pool before that provider's accounts. Account labels use **Account aliases** (`email=Alias` pairs, separated by commas or newlines), then the email prefix, then the resource label.
+Each account has a strip row. With two or more accounts, the provider also has a pool row; the dialog places the pool before that provider's accounts. Account labels use **Account aliases** (`email=Alias` pairs, separated by commas or newlines), then the email prefix, then the resource label. Labels that only repeat the provider name (ignoring case) are omitted from text and UI headings. A failed resource read with no identity keeps that resource's last known `accountKey`; a resource that has never reported an identity stays separate.
 
 Pool weekly use and pace are plan-weighted: Max 20x weighs 20, Max 5x weighs 5, and Pro weighs 1. **Pool weight overrides** accepts `email=weight` pairs. Unknown plans, stale measurements, and missing weekly windows are excluded from weighted values and mark the result **partial**. Pool pace divides weighted consumption by weighted elapsed budget, rather than averaging the account multipliers. Weekly pool figures say **est.** because session plan multipliers do not establish weekly quota sizes. There is no pool run-out forecast.
 
@@ -90,7 +90,9 @@ Turn on **Only show providers on the server machine** in Settings → Installed 
 bb plugin config usage-pace set serverOnly true
 ```
 
-The setting is off by default, persists across reloads, is shared across browsers, and updates without a reload. Machine-scoped accounts must be available on bb's server-host ID. Shared-scope accounts remain visible because the server serves them. Merged accounts retain the freshest measurement and their availability on every host. If the server is missing or offline, machine-only rows disappear with an actionable error; shared rows remain. Saved-reset reads are limited to the server host and require a matching account identity. The view never substitutes another machine.
+The setting is off by default, persists across reloads, is shared across browsers, and updates without a reload. Machine-scoped accounts must be available on bb's server-host ID. Shared-scope accounts remain visible because the server serves them. Merged accounts retain the freshest measurement and their availability on every host. Location labels show the server machine in this view, all reporting machines in the all-machines view, or “shared” when no machine is associated. Saved-reset details name the machine that actually supplied the matching inventory.
+
+Only an unknown, missing, or offline server host, or an unreadable host list, makes the server scope unavailable. A failed account read stays on that account and never hides healthy accounts. Snapshot warnings are reserved for discovery, host-list, and source-list failures. If the server is missing or offline, machine-only rows disappear with an actionable error; shared rows remain. Saved-reset reads are limited to the server host and require a matching account identity. The view never substitutes another machine.
 
 This is a display filter: all-host quota collection, bb's separately owned Provider Usage card, `bb usage-pace` output, and **Tokens · across BB** remain unchanged. Saved-reset inventory reads in the strip/dialog follow the displayed accounts. To restore the all-machines view, set `serverOnly` to `false`.
 
@@ -109,7 +111,7 @@ This is a straight-line projection. Nights and weekends usually lower the real r
 
 ## Which provider failed
 
-When one provider on a machine fails to refresh, bb's card shows "Couldn't refresh usage. Showing the last available update." on every tab, and does not say which provider failed. Usage Pace moves the message to the tab of the provider that failed:
+When one provider on a machine fails to refresh, bb's card can show “Couldn’t refresh. Showing last update.” (or the older “Couldn't refresh usage. Showing the last available update.”) on every tab, without saying which provider failed. Usage Pace moves the message to the tab of the provider that failed:
 
 - That tab gets a red dot, and shows bb's message with the provider's error, for example "opencode: OpenCode Go usage access was denied.".
 - The other tabs, whose data is current, show no message.
@@ -138,15 +140,44 @@ Turn this off with the *Add Grok Build usage to bb's usage card* setting, then r
 
 ## Install
 
+### New installations
+
 ```sh
-bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.4.0'
-# Enable the compact footer rows (off by default), including Codex and Claude resets:
+bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.4.1'
 bb plugin config usage-pace set showStrip true
 ```
 
-Use `@^0.4.0` instead of `@v0.4.0` to track compatible releases with `bb plugin update usage-pace`. **Use 0.3.1 or newer for Git installs**: 0.3.0 fails when development dependencies are absent. Release tags include prebuilt bundles, but BB's Git installer rebuilds source with its own build tooling after installing production dependencies. The required SDK runtime is installed automatically; you do not need to install it manually. Sign into Codex with a ChatGPT account or Claude Code with a Claude subscription on each host where you want that provider's reset information.
+The compact footer is off by default; the second command enables it, including Codex and Claude resets. Use `@^0.4.1` instead of `@v0.4.1` to track compatible release tags with `bb plugin update usage-pace`.
 
-From a local checkout:
+### Upgrades
+
+First inspect the installed source:
+
+```sh
+bb plugin source usage-pace
+```
+
+For an install tracking the repository's default branch or another branch containing 0.4.1, update in place. The same command updates a Git semver-range install when a published release satisfies its range. This keeps the plugin's settings:
+
+```sh
+bb plugin update usage-pace
+```
+
+An exact tag or commit is pinned: `update` does not move it to a newer release. To move a pinned install to 0.4.1, or change any existing install to a tag or range, remove it and install the new source. **Removal deletes the plugin's settings, secrets, and schedules.** Record your configuration first with `bb plugin config usage-pace`, then restore the settings you need after reinstalling:
+
+```sh
+bb plugin config usage-pace
+bb plugin remove usage-pace
+bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.4.1'
+```
+
+Use `@^0.4.1` in that final command to track compatible releases instead. Running `plugin install` over an existing managed install is not an upgrade; bb 0.46.1 refuses the duplicate plugin ID.
+
+### Installation details
+
+**Use 0.3.1 or newer for Git installs**: 0.3.0 fails when development dependencies are absent. Release tags include prebuilt bundles, but BB's Git installer rebuilds source with its own build tooling after installing production dependencies. The required SDK runtime is installed automatically; you do not need to install it manually. Sign into Codex with a ChatGPT account or Claude Code with a Claude subscription on each host where you want that provider's reset information.
+
+For a new install from a local checkout:
 
 ```sh
 bb plugin install ./

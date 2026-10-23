@@ -5,6 +5,7 @@ import type { UsageProvider } from "./server";
 import { ProviderBlock, UsageBar, UsageOverlay } from "./app";
 import * as usageStore from "./lib/usage-store";
 import { BankedResetsProvider } from "./hooks/use-banked-resets";
+import { mergeAccounts } from "./lib/usage-accounts";
 
 const rpc = vi.hoisted(() => vi.fn());
 vi.mock("@get-bb/plugin-sdk/app", () => ({
@@ -579,6 +580,52 @@ it("updates the strip, dialog, and reset targets together when the display setti
   expect(dialog.textContent).not.toContain("Server machine ·");
   expect(rpc).toHaveBeenCalledTimes(2);
   expect(rpc.mock.calls.map(([, input]) => input.hostId)).toEqual(["remote", "third"]);
+});
+
+it.each([
+  [true, "One", "One"],
+  [false, "One, Laptop", "One"],
+  [false, "One, Laptop", "Laptop"],
+] as const)("labels merged-account locations for the current view and the actual reset reader (server-only: %s)", async (serverOnly, location, resetHost) => {
+  const local = { ...provider, observedAt: NOW - 2000, planLabel: "Max (20x)", sources: [
+    { pluginId: "provider-claude-code", label: "Claude Code provider", resourceId: "one", scope: { kind: "host" as const, hostId: "one", hostName: "One" } },
+  ] };
+  const laptop = { ...local, hostId: "remote", hostName: "Laptop", observedAt: NOW, hosts: [{ id: "remote", name: "Laptop" }], sources: [
+    { ...local.sources[0]!, resourceId: "remote", scope: { kind: "host" as const, hostId: "remote", hostName: "Laptop" } },
+  ] };
+  const shared = { ...local, hostId: "", hostName: "Claude Accounts", hosts: [], observedAt: NOW - 1000, sources: [
+    { pluginId: "claude-accounts", label: "Claude Accounts", resourceId: "one", scope: { kind: "shared" as const } },
+  ] };
+  const accounts = [...mergeAccounts([local, laptop, shared]), { ...shared, accountKey: "pro", accountEmail: "pro@example.test", accountLabel: "pro", planLabel: "Pro" }];
+  state.data = { ...state.data!, showStrip: true, serverOnly, serverHostId: "one", serverHostError: null, accounts, providers: accounts };
+  rpc.mockImplementation(async (_method: string, input: { hostId: string }) => ({
+    status: "ok", availableCount: 3, credits: [], accountEmail: "one@example.test", fetchedAt: new Date(NOW).toISOString(), message: null,
+    accountKey: resetHost === "Laptop" && input.hostId === "one" ? "other" : "one",
+  }));
+  const dialog = await renderOverlay();
+  const row = container.querySelector<HTMLButtonElement>('button[aria-label*="one@example.test"]')!;
+  expect.soft(row.getAttribute("aria-label")?.split("\n")[0]).toBe(`Claude Code · one · one@example.test · ${location}`);
+  expect.soft(dialog.textContent).toContain(`Max (20x) · one@example.test · ${location}`);
+  expect.soft(dialog.textContent).toContain(`Available on: ${location} · via`);
+  const resetSection = dialog.querySelector('section[aria-label="Claude limit resets"]');
+  expect.soft(resetSection?.textContent).toContain(`one@example.test · ${resetHost} · Checked`);
+  expect(rpc).toHaveBeenLastCalledWith("getBankedResets", { hostId: resetHost === "One" ? "one" : "remote", providerId: "claude-code", force: false });
+});
+
+it.each([
+  ["Codex", "codex", "Codex"],
+  ["Cursor", "Cursor", "Cursor"],
+  ["opencode", "OPENCODE", "opencode"],
+  ["Claude Code", "Work", "Claude Code · Work"],
+])("avoids redundant account labels in strip and dialog headings (%s / %s)", async (displayName, accountLabel, heading) => {
+  const account = { ...provider, displayName, accountLabel, accountEmail: null };
+  state.data!.providers = [account, { ...account, accountKey: "other", accountLabel: "Personal" }];
+  await render(<><UsageBar onOpen={onOpen} /><ProviderBlock provider={account} showHost showBankedResets={false} focusBankedResets={false} /></>);
+  const row = container.querySelector<HTMLButtonElement>('button[aria-label*="Open usage details."]:not([aria-label*="Personal"])')!;
+  expect.soft(row.getAttribute("aria-label")?.split("\n")[0]).toBe(`${heading} · One`);
+  expect.soft(container.querySelector("span.text-sm.font-medium")?.textContent).toBe(heading);
+  if (heading === displayName) expect.soft(row.textContent?.toLowerCase()).not.toContain(accountLabel.toLowerCase());
+  else expect.soft(row.textContent).toContain(accountLabel);
 });
 
 it("honours the optional strip setting without reading saved resets while hidden", async () => {

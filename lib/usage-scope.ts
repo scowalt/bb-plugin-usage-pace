@@ -8,5 +8,5 @@ export function usageForDisplay(state: UsageState): UsageState {
   const error = data.serverHostError ?? (data.serverHostId ? null : "Server host is not available. Check bb's machine connection, then refresh.");
   const accounts = (data.accounts ?? data.providers).filter(account =>
     hasSharedSource(account) || (!error && data.serverHostId && onHost(account, data.serverHostId)));
-  return { ...state, data: { ...data, accounts, providers: accounts, pools: usagePools(accounts, data.fetchedAt), error } };
+  return { ...state, data: { ...data, accounts, providers: accounts, pools: usagePools(accounts, data.fetchedAt), error: error ?? data.error } };
 }

@@ -1,6 +1,6 @@
 import type { UsageAccount, UsageWindow } from "../server";
 import type { UsageState } from "./usage-store";
-import { accountId, mergeAccounts, observationTime, usageIsStale } from "./usage-accounts";
+import { accountId, accountLocation, distinctAccountLabel, mergeAccounts, observationTime, usageIsStale } from "./usage-accounts";
 import { formatReset } from "./usage-store";
 import { describePace, formatDuration, paceForWindows, toneForUsed, windowDurationMs, type Pace, type Tone } from "./pace";
 
@@ -145,7 +145,7 @@ export function compactUsageRows(state: UsageState, now = Date.now()): CompactUs
     ].filter(Boolean).join(" · ");
     const notice: CompactUsageRow["notice"] = selected.length === 0 ? { label: "usage unknown", tone: null }
       : noticeLabel ? { label: noticeLabel, tone: quotaWarning ? "warning" : null } : null;
-    const identity = [provider.displayName, provider.accountLabel, provider.accountEmail, provider.hostName].filter(Boolean).join(" · ");
+    const identity = [provider.displayName, distinctAccountLabel(provider), provider.accountEmail, accountLocation(provider, state.data?.serverOnly ? state.data.serverHostId ?? null : undefined)].filter(Boolean).join(" · ");
     rows.push({ key, provider, windows: selected, status, notice, countdown,
       title: [identity, status.detail, notice?.label, countdown?.detail, ...allWindows.map(entry => entry.detail),
         "1.0× is even pace. Below 1.0× uses less quota than even pace; above uses more. Average since window start, not an agent-count recommendation."].filter(Boolean).join("\n") });

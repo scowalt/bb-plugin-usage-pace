@@ -444,7 +444,7 @@ describe("failure notice", () => {
     document.body.innerHTML = `
       <div class="card">
         <div data-provider-usage-header>
-          ${["Claude Code", "opencode", "Grok Build (usage)"]
+          ${["Claude Code", "Codex", "All accounts", "opencode", "Grok Build (usage)"]
             .map((name) => `<button role="tab" aria-label="${name}" aria-selected="${name === selected}"></button>`)
             .join("")}
           <button type="button" aria-expanded="false" aria-label="Usage machine: MacBook Pro (7)"></button>
@@ -475,6 +475,29 @@ describe("failure notice", () => {
       }),
     ).toEqual([opencode]);
     expect(parseFailures({ ok: false })).toEqual([]);
+  });
+
+  it.each([
+    "Couldn’t load usage.",
+    "Couldn’t refresh usage.",
+    "Couldn’t refresh. Showing last update.",
+    "Couldn’t refresh usage. Showing the last available update.",
+    "Couldn't refresh usage. Showing the last available update.",
+    "Couldn't load usage.",
+  ])("scopes bb's exact failure wording to the failed tab: %s", message => {
+    const failures = parseFailures({ result: { error: null, serverHostError: null, accounts: [
+      { displayName: "Codex", hostName: "MacBook Pro (7)", status: "ok", stale: false, message: null },
+      { displayName: "Claude Code", hostName: "MacBook Pro (7)", status: "ok", stale: false, message: null },
+      { displayName: "opencode", hostName: "MacBook Pro (7)", status: "ok", stale: true, message: opencode.message },
+    ] } });
+    for (const selected of ["Codex", "Claude Code", "All accounts", "opencode"]) {
+      const header = card(message, selected);
+      decorateFailure(header, failures, "MacBook Pro (7)", memory());
+      expect(status().hasAttribute("data-usage-pace-other-tab")).toBe(selected !== "opencode");
+      expect(status().querySelector(".text")?.textContent).toBe(message);
+      expect(line()?.textContent).toBe("opencode: OpenCode Go usage access was denied.");
+      expect([...header.querySelectorAll("[data-usage-pace-failed-tab]")].map(tab => tab.getAttribute("aria-label"))).toEqual(["opencode"]);
+    }
   });
 
   it("names each failed provider, or says that it is not known", () => {
