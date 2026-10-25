@@ -190,7 +190,7 @@ describe("CLI account labels", () => {
     cleanups.push(() => harness.lifecycle.dispose());
     await plugin(bb);
     const text = (await harness.behavior.runCli([])).stdout;
-    expect.soft(text).toMatch(/^Codex \(Server\): expired$/mu);
+    expect.soft(text).toMatch(/^Codex \(Server\): expired — Machine source: expired — usage denied$/mu);
     expect.soft(text).toMatch(/^Cursor \(Server\): not_installed$/mu);
     expect.soft(text).toMatch(/^opencode \(Server\): error — Machine source: usage denied$/mu);
     expect.soft(text).toMatch(/^Claude Code \(Server\)$/mu);

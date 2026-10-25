@@ -119,3 +119,15 @@ export function observationTime(account: UsageAccount, fetchedAt: string, now: n
 export function usageIsStale(account: UsageAccount, now: number): boolean {
   return account.stale || account.observedAt === null || account.windows.some(window => window.resetsAt !== null && Date.parse(window.resetsAt) <= now);
 }
+export function lastReadDescription(account: UsageAccount, now = Date.now()): string {
+  if (account.observedAt === null) return "last successful reading unknown";
+  const minutes = Math.floor(Math.max(0, now - account.observedAt) / 60_000);
+  return `last read ${minutes < 1 ? "<1m" : minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h`} ago`;
+}
+export function staleUsageReason(account: UsageAccount, now = Date.now()): string {
+  if (account.message) return account.message;
+  if (account.windows.some(window => window.resetsAt !== null && Date.parse(window.resetsAt) <= now)) {
+    return "Reset passed since last update. Refresh usage.";
+  }
+  return "Usage unavailable. Refresh to check this account.";
+}

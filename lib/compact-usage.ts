@@ -1,7 +1,8 @@
 import type { UsageAccount, UsageWindow } from "../server";
 import type { UsageState } from "./usage-store";
-import { accountId, accountLocation, distinctAccountLabel, mergeAccounts, observationTime, usageIsStale } from "./usage-accounts";
+import { accountId, accountLocation, distinctAccountLabel, lastReadDescription, mergeAccounts, observationTime, staleUsageReason, usageIsStale } from "./usage-accounts";
 import { formatReset } from "./usage-store";
+import { displayedAccounts } from "./usage-pools";
 import { describePace, formatDuration, paceForWindows, toneForUsed, windowDurationMs, type Pace, type Tone } from "./pace";
 
 const HOUR = 3_600_000;
@@ -107,13 +108,11 @@ function countdownFor(windows: UsageWindow[], paces: (Pace | null)[], now: numbe
 
 export function compactUsageRows(state: UsageState, now = Date.now()): CompactUsageRow[] {
   const rows: CompactUsageRow[] = [];
-  for (const [index, provider] of mergeAccounts(state.data?.accounts ?? state.data?.providers ?? []).entries()) {
-    if (provider.status !== "ok" && provider.status !== "error") continue;
-    if (provider.status === "ok" && provider.windows.length === 0) continue;
+  for (const [index, provider] of displayedAccounts(mergeAccounts(state.data?.accounts ?? state.data?.providers ?? [])).entries()) {
     const key = `${accountId(provider)}${provider.accountKey === null ? `/${index}` : ""}`;
     const paceAt = observationTime(provider, state.data?.fetchedAt ?? "", now);
     const paces = paceForWindows(provider.windows, paceAt);
-    const error = state.error ?? (provider.stale || provider.observedAt === null || provider.status !== "ok" ? provider.message ?? "Usage unavailable." : null);
+    const error = state.error ?? (provider.stale || provider.observedAt === null || provider.status !== "ok" ? staleUsageReason(provider, now) : null);
     const unreliable = error !== null || usageIsStale(provider, now);
     const allWindows = provider.windows.map((window, index): CompactWindow => {
       const reset = formatReset(window.resetsAt, now);
@@ -121,7 +120,7 @@ export function compactUsageRows(state: UsageState, now = Date.now()): CompactUs
       const expired = window.resetsAt !== null && Date.parse(window.resetsAt) <= now;
       const detail = [
         unreliable ? `${window.label}: usage unknown` : `${window.label}: ${Math.round(window.usedPercent)}% used`,
-        reset ? (expired ? "reset passed; refresh usage" : `resets in ${reset}`) : "reset unavailable",
+        reset ? (expired ? "reset passed" : `resets in ${reset}`) : "reset unavailable",
         expired ? "" : describePace(pace, now) || "pace unavailable",
       ].filter(Boolean).join(" · ");
       return { window, label: shortLabel(window), detail, pace, usageKnown: !unreliable,
@@ -147,7 +146,7 @@ export function compactUsageRows(state: UsageState, now = Date.now()): CompactUs
       : noticeLabel ? { label: noticeLabel, tone: quotaWarning ? "warning" : null } : null;
     const identity = [provider.displayName, distinctAccountLabel(provider), provider.accountEmail, accountLocation(provider, state.data?.serverOnly ? state.data.serverHostId ?? null : undefined)].filter(Boolean).join(" · ");
     rows.push({ key, provider, windows: selected, status, notice, countdown,
-      title: [identity, status.detail, notice?.label, countdown?.detail, ...allWindows.map(entry => entry.detail),
+      title: [identity, status.detail, unreliable ? lastReadDescription(provider, now) : null, notice?.label, countdown?.detail, ...allWindows.map(entry => entry.detail),
         "1.0× is even pace. Below 1.0× uses less quota than even pace; above uses more. Average since window start, not an agent-count recommendation."].filter(Boolean).join("\n") });
   }
   return rows;

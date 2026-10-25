@@ -1,6 +1,6 @@
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import { accountSchema, isWeeklyWindow, mergeAccounts, planSchema, scopeSchema, windowKindSchema, type UsageAccount } from "./usage-accounts";
+import { accountSchema, isWeeklyWindow, mergeAccounts, planSchema, scopeSchema, usageIsStale, windowKindSchema, type UsageAccount } from "./usage-accounts";
 
 export const sourceListSchema = z.object({
   label: z.string().optional(),
@@ -9,7 +9,7 @@ export const sourceListSchema = z.object({
     accountKey: z.string().nullable().default(null), scope: scopeSchema,
   })),
 });
-const accountFields = { plan: planSchema, accountEmail: z.string().nullable(), planLabel: z.string().nullable() };
+const accountFields = { plan: planSchema, accountEmail: z.string().nullable(), planLabel: z.string().nullable(), message: z.string().nullable().optional() };
 export const measurementSchema = z.object({
   accountKey: z.string().min(1).nullable().default(null),
   observedAt: z.number().int().nonnegative().nullable(),
@@ -28,14 +28,16 @@ type Resource = z.infer<typeof sourceListSchema>["resources"][number];
 type Host = Awaited<ReturnType<BbPluginApi["sdk"]["hosts"]["list"]>>[number];
 type Provider = Awaited<ReturnType<BbPluginApi["sdk"]["providers"]["list"]>>[number];
 type Source = { pluginId: string; displayName: string };
+type RefreshAttempt = { at: number; accountKey: string | null; message: string | null };
 export type CollectedUsage = { accounts: UsageAccount[]; error: string | null; hostsError: string | null };
 
 const names: Record<string, string> = { "claude-code": "Claude Code", codex: "Codex", "usage-pace-grok": "Grok Build (usage)" };
 const messageOf = (error: unknown) => error instanceof Error ? error.message : String(error);
 
-export function createUsageCollector(bb: Pick<BbPluginApi, "sdk">, signal: AbortSignal, now: () => number = Date.now) {
+export function createUsageCollector(bb: Pick<BbPluginApi, "sdk">, signal: AbortSignal, now: () => number = Date.now, cachePeriod: () => number = () => 5 * 60_000) {
   let discovery: { at: number; sources: Source[] } | null = null;
   const previous = new Map<string, Map<string, UsageAccount>>();
+  const refreshAttempts = new Map<string, Map<string, RefreshAttempt>>();
 
   async function bounded<T>(work: (signal: AbortSignal) => Promise<T>): Promise<T> {
     const controller = new AbortController();
@@ -86,7 +88,7 @@ export function createUsageCollector(bb: Pick<BbPluginApi, "sdk">, signal: Abort
         .map(account => failed(account, message)))), error: message, hostsError };
     }
     const active = new Set(sources.map(source => source.pluginId));
-    for (const id of previous.keys()) if (!active.has(id)) previous.delete(id);
+    for (const id of previous.keys()) if (!active.has(id)) { previous.delete(id); refreshAttempts.delete(id); }
     const tasks: (() => Promise<void>)[] = [];
     for (const source of sources) {
       let resources: Resource[];
@@ -103,6 +105,10 @@ export function createUsageCollector(bb: Pick<BbPluginApi, "sdk">, signal: Abort
       const old = previous.get(source.pluginId) ?? new Map<string, UsageAccount>();
       const current = new Map<string, UsageAccount>();
       previous.set(source.pluginId, current);
+      const attempts = refreshAttempts.get(source.pluginId) ?? new Map<string, RefreshAttempt>();
+      refreshAttempts.set(source.pluginId, attempts);
+      const resourceIds = new Set(resources.map(resource => resource.id));
+      for (const id of attempts.keys()) if (!resourceIds.has(id)) attempts.delete(id);
       for (const resource of resources) {
         const scope = resource.scope;
         if (scope.kind === "host" && !hosts.some(host => host.id === scope.hostId && host.status !== "disconnected")) continue;
@@ -118,28 +124,66 @@ export function createUsageCollector(bb: Pick<BbPluginApi, "sdk">, signal: Abort
             hosts: scope.kind === "host" ? [{ id: scope.hostId, name: scope.hostName }] : [],
             sources: [{ pluginId: source.pluginId, label: source.displayName, resourceId: resource.id, scope }],
           });
+          const measured = (value: z.infer<typeof measurementSchema>): UsageAccount => ({
+            ...base, accountKey: value.accountKey, observedAt: value.observedAt, status: value.usage.status,
+            plan: value.usage.plan, accountEmail: value.usage.accountEmail, planLabel: value.usage.planLabel,
+            windows: value.usage.status === "ok" ? value.usage.windows.map(window => ({ ...window, weekly: isWeeklyWindow(window) })) : [],
+          });
+          let prior = old.get(resource.id);
           let account: UsageAccount;
           try {
-            const measurement = await rpc(source, "provider-usage.v1.getResource", { resourceId: resource.id, refresh: force }, measurementSchema);
+            const read = async (refresh: boolean, accountKey = prior?.accountKey ?? null) => {
+              const at = now();
+              if (refresh) attempts.set(resource.id, { at, accountKey, message: null });
+              try {
+                const value = await rpc(source, "provider-usage.v1.getResource", { resourceId: resource.id, refresh }, measurementSchema);
+                if (refresh) attempts.set(resource.id, { at,
+                  accountKey: value.accountKey ?? (value.usage.status === "ok" ? null : accountKey),
+                  message: value.usage.status === "ok" ? value.usage.message ?? null
+                    : `${value.usage.status}${value.usage.message ? ` — ${value.usage.message}` : ""}`,
+                });
+                return value;
+              } catch (error) {
+                if (refresh) attempts.set(resource.id, { at, accountKey, message: messageOf(error) });
+                throw error;
+              }
+            };
+            let measurement = await read(force);
+            if (measurement.usage.status === "ok" && (measurement.accountKey !== prior?.accountKey ||
+              (measurement.observedAt ?? -1) >= (prior?.observedAt ?? -1))) prior = measured(measurement);
+            const attempt = attempts.get(resource.id);
+            const period = cachePeriod();
+            let refreshError: string | null = null;
+            if (!force && measurement.usage.status === "ok" &&
+              (measurement.observedAt === null || now() - measurement.observedAt >= period) &&
+              (!attempt || attempt.accountKey !== measurement.accountKey || now() - attempt.at >= period)) {
+              try { measurement = await read(true, measurement.accountKey); }
+              catch (error) { refreshError = `${source.displayName}: ${messageOf(error)}`; }
+            }
             const usage = measurement.usage;
-            if (usage.status === "error") {
-              const message = `${source.displayName}: ${usage.message}`;
-              const prior = old.get(resource.id);
+            if (usage.status === "error" || usage.status === "expired" || usage.status === "unauthenticated") {
+              const message = `${source.displayName}: ${usage.status === "error" ? usage.message : `${usage.status}${usage.message ? ` — ${usage.message}` : ""}`}`;
               const accountKey = measurement.accountKey ?? prior?.accountKey ?? null;
               const sameAccount = accountKey !== null && prior?.accountKey === accountKey;
-              const retained = sameAccount ? prior : base;
-              account = { ...retained, stale: true, message,
-                accountKey, observedAt: measurement.observedAt,
+              const retained = sameAccount && prior ? prior : base;
+              account = { ...retained, status: usage.status === "error" ? retained.status : usage.status, stale: true, message,
+                accountKey, observedAt: sameAccount ? retained.observedAt : measurement.observedAt,
                 accountEmail: usage.accountEmail ?? retained.accountEmail,
                 plan: usage.plan ?? retained.plan, planLabel: usage.planLabel ?? retained.planLabel };
-            } else account = { ...base, accountKey: measurement.accountKey, observedAt: measurement.observedAt,
-              status: usage.status, plan: usage.plan, accountEmail: usage.accountEmail, planLabel: usage.planLabel,
-              windows: usage.status === "ok" ? usage.windows.map(window => ({ ...window, weekly: isWeeklyWindow(window) })) : [],
-              stale: usage.status === "ok" && measurement.observedAt === null,
-            };
+            } else {
+              const latestAttempt = attempts.get(resource.id);
+              const refreshFailed = usage.status === "ok" && latestAttempt?.accountKey === measurement.accountKey &&
+                (measurement.observedAt === null || latestAttempt.at - measurement.observedAt >= period);
+              account = { ...measured(measurement),
+                message: refreshError ?? (refreshFailed ? `${source.displayName} couldn't refresh this account. ${usage.message ?? latestAttempt.message ?? "The source returned an old or unavailable reading."}`
+                  : usage.status === "ok" && usage.message ? `${source.displayName}: ${usage.message}` : null),
+                stale: refreshFailed || refreshError !== null,
+              };
+              account.stale = usage.status === "ok" && usageIsStale(account, now());
+            }
           } catch (error) {
             const message = `${source.displayName}: ${messageOf(error)}`;
-            account = failed(old.get(resource.id) ?? base, message);
+            account = failed(prior ?? base, message);
           }
           current.set(resource.id, account);
           rows.push(account);

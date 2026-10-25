@@ -43,6 +43,64 @@ async function setup() {
 }
 
 describe("discoverable usage collection", () => {
+  it("probes a stuck weekly-only resource at most once per cache period and preserves its stale verdict between probes", async () => {
+    const { collect, sources, lists, callRpc, advance } = await setup();
+    sources.splice(0, 1);
+    lists.set("pool", { resources: [resource("b")] });
+    callRpc.mockImplementation(async args => args.method.endsWith("listResources") ? lists.get("pool") : {
+      ...measurement("b", NOW - 29 * 3_600_000), usage: { ...measurement("b").usage, windows: [measurement("b").usage.windows[1]!] },
+    });
+    for (let poll = 0; poll < 3; poll++) {
+      expect((await collect(false)).accounts[0]).toMatchObject({ stale: true, observedAt: NOW - 29 * 3_600_000,
+        message: "Claude Accounts couldn't refresh this account. The source returned an old or unavailable reading.",
+      });
+    }
+    const probes = () => callRpc.mock.calls.filter(([args]) => args.input.refresh);
+    expect(probes()).toHaveLength(1);
+    advance(299_999);
+    expect((await collect(false)).accounts[0]?.stale).toBe(true);
+    expect(probes()).toHaveLength(1);
+    advance(1);
+    expect((await collect(false)).accounts[0]?.stale).toBe(true);
+    expect(probes()).toHaveLength(2);
+    await collect(true);
+    expect(probes()).toHaveLength(3);
+  });
+
+  it("keeps the freshness probe's reason visible on subsequent cached reads", async () => {
+    const { collect, callRpc, sources, lists } = await setup();
+    sources.splice(0, 1);
+    lists.set("pool", { resources: [resource("b")] });
+    callRpc.mockImplementation(async args => args.method.endsWith("listResources") ? lists.get("pool") : {
+      ...measurement("b", NOW - 600_000), usage: { ...measurement("b").usage, message: args.input.refresh ? "Source login needs attention." : undefined },
+    });
+    await collect(false);
+    expect((await collect(false)).accounts[0]?.message).toContain("Source login needs attention.");
+  });
+
+  it.each(["expired", "unauthenticated"])("does not let a known source's %s state displace healthy duplicates or leak windows into a changed identity", async status => {
+    const { collect, callRpc, lists } = await setup();
+    lists.set("pool", { resources: [resource("a"), resource("b")] });
+    await collect(false);
+    const original = callRpc.getMockImplementation()!;
+    let accountKey: string | null = null;
+    callRpc.mockImplementation(async args => args.pluginId === "machine" && args.input.resourceId === "mac" ? {
+      accountKey, observedAt: null, usage: { status, accountEmail: null, plan: null, planLabel: null },
+    } : original(args));
+    const failed = await collect(true);
+    expect(failed.accounts).toHaveLength(2);
+    expect(failed.accounts.find(account => account.accountKey === "anthropic:account:a")).toMatchObject({
+      status: "ok", stale: false, accountEmail: "a@example.test", message: `Machine source: ${status}`,
+    });
+    expect(failed.accounts.find(account => account.accountKey === "anthropic:account:a")?.sources).toHaveLength(3);
+    accountKey = "anthropic:account:replacement";
+    const changed = await collect(true);
+    expect(changed.accounts.find(account => account.accountKey === accountKey)).toMatchObject({
+      status, stale: true, windows: [], accountEmail: null, plan: null, planLabel: null,
+    });
+    expect(changed.accounts.find(account => account.accountKey === "anthropic:account:a")?.sources).toHaveLength(2);
+  });
+
   it("collects three accounts once, merging default logins from two hosts with the pooled account", async () => {
     const { collect, callRpc } = await setup();
     const result = await collect(false);

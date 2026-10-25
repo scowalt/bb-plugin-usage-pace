@@ -535,7 +535,7 @@ it("keeps shared accounts visible in the server-only view without reading a remo
   const dialog = await renderOverlay();
   expect(container.textContent).toContain("0.7× pace");
   expect(dialog.textContent).toContain("Available on: shared · via Claude Accounts");
-  expect(dialog.textContent).toContain("observed 0m ago");
+  expect(dialog.textContent).toContain("last read <1m ago");
   expect(rpc).not.toHaveBeenCalled();
 });
 

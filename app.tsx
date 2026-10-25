@@ -6,7 +6,7 @@ import {
   useRealtime,
 } from "@get-bb/plugin-sdk/app";
 import type { UsageAccount, UsageWindow } from "./server";
-import { accountId, accountLocation, distinctAccountLabel, mergeAccounts, observationTime, usageIsStale } from "./lib/usage-accounts";
+import { accountId, accountLocation, distinctAccountLabel, lastReadDescription, mergeAccounts, observationTime, staleUsageReason, usageIsStale } from "./lib/usage-accounts";
 import { describePool, usagePools, type UsagePool } from "./lib/usage-pools";
 import {
   formatReset,
@@ -308,12 +308,13 @@ function PoolSummary({ pool, provider, onOpen }: { pool: UsagePool; provider: Us
 function WindowRow({ window, pace, usageKnown }: { window: UsageWindow; pace: Pace | null; usageKnown: boolean }) {
   const tone = pace?.tone ?? toneForUsed(window.usedPercent);
   const reset = formatReset(window.resetsAt);
+  const resetPassed = window.resetsAt !== null && Date.parse(window.resetsAt) <= Date.now();
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-baseline justify-between gap-2 text-xs">
         <span className="truncate">{window.label}</span>
         <span className="shrink-0 text-muted-foreground tabular-nums">
-          {reset ? `resets in ${reset}` : ""}
+          {resetPassed ? "reset passed" : reset ? `resets in ${reset}` : ""}
         </span>
         <span
           className="w-10 shrink-0 text-right font-semibold tabular-nums"
@@ -338,7 +339,7 @@ function WindowRow({ window, pace, usageKnown }: { window: UsageWindow; pace: Pa
             style={{ left: `${pace.elapsedFraction * 100}%` }}
           />
         ) : null}
-      </div> : <p className="text-[11px] text-muted-foreground">Usage unknown. Refresh to check this account.</p>}
+      </div> : <p className="text-[11px] text-muted-foreground">Usage unknown.</p>}
       {pace !== null ? <PaceVerdict pace={pace} /> : null}
     </div>
   );
@@ -403,8 +404,8 @@ export function ProviderBlock({
         </div>
       </div>
       <p className="text-[11px] text-muted-foreground">Available on: {location} · via {[...new Set(provider.sources.map(source => source.label))].join(", ")}
-        {provider.observedAt === null ? " · observation unknown" : ` · observed ${formatDuration(Math.max(0, Date.now() - provider.observedAt))} ago`}</p>
-      {provider.stale ? <p role="status" className="text-xs text-muted-foreground">Showing stale usage. {provider.message ?? "Refresh to check this account."}</p> : provider.message ? <p role="status" className="text-xs text-muted-foreground">{provider.message}</p> : null}
+        {` · ${lastReadDescription(provider)}`}</p>
+      {!reliable && usageIsStale(provider, Date.now()) ? <p role="status" className="text-xs text-muted-foreground">Usage unknown. {staleUsageReason(provider)}</p> : provider.message ? <p role="status" className="text-xs text-muted-foreground">{provider.message}</p> : null}
       {provider.status === "ok" ? (
         provider.windows.length === 0 ? (
           <p className="text-xs text-muted-foreground">No limit windows reported.</p>
