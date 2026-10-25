@@ -1,0 +1,758 @@
+[
+  {
+    "name": "before-macos-900",
+    "framed": true,
+    "titlebarHeight": "44px",
+    "viewport": [
+      1440,
+      900
+    ],
+    "footer": {
+      "x": 49,
+      "top": 844,
+      "bottom": 892,
+      "width": 271,
+      "height": 48,
+      "inside": true,
+      "hit": true,
+      "hitTag": "SPAN"
+    },
+    "strip": {
+      "x": 56,
+      "top": 737.375,
+      "bottom": 954.625,
+      "width": 256,
+      "height": 217.25,
+      "inside": false,
+      "hit": true,
+      "hitTag": "SPAN"
+    },
+    "rows": [
+      {
+        "label": "Claude Code · a · a@example.test · shared",
+        "x": 56,
+        "top": 741.375,
+        "bottom": 778.375,
+        "width": 256,
+        "height": 37,
+        "inside": true,
+        "hit": false,
+        "hitTag": "DIV"
+      },
+      {
+        "label": "Claude Code · b · b@example.test · shared",
+        "x": 56,
+        "top": 780.375,
+        "bottom": 832.375,
+        "width": 256,
+        "height": 52,
+        "inside": true,
+        "hit": false,
+        "hitTag": "DIV"
+      },
+      {
+        "label": "Claude Code pool: 2/2 available · W 0.9× pace · 40% used (est.). Open pool details.",
+        "x": 56,
+        "top": 834.375,
+        "bottom": 872.625,
+        "width": 256,
+        "height": 38.25,
+        "inside": true,
+        "hit": true,
+        "hitTag": "SPAN"
+      },
+      {
+        "label": "Codex · codex@example.test · shared",
+        "x": 56,
+        "top": 874.625,
+        "bottom": 911.625,
+        "width": 256,
+        "height": 37,
+        "inside": false,
+        "hit": false,
+        "hitTag": "DIV"
+      },
+      {
+        "label": "opencode · opencode@example.test · shared",
+        "x": 56,
+        "top": 913.625,
+        "bottom": 950.625,
+        "width": 256,
+        "height": 37,
+        "inside": false,
+        "hit": false,
+        "hitTag": null
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Claude Code · a · a@example.test · shared\nAll quota windows last to reset at this rate.\nWeekly limit: 30% used · resets in 3d 23h · 0.7× pace · on track for 70% · budget 18%/day\n5-hour limit: 32% used · resets in 1h 59m · 0.5× pace · on track for 53% · 68% left for 2h 0m\n1.0× is even pace. Below 1.0× uses less quota than even pace; above uses more. Average since window start, not an agent-count recommendation.\nOpen usage details.",
+        "x": 56,
+        "top": 741.375,
+        "bottom": 778.375,
+        "width": 256,
+        "height": 37,
+        "inside": true,
+        "hit": false,
+        "hitTag": "DIV"
+      },
+      {
+        "label": "Claude Code · b · b@example.test · shared\nAt this rate, a quota window runs out before reset.\nWeekly limit: projected to run out 3d 6h before reset; out in 18h 0m at the last reported pace.\nWeekly limit: 80% used · resets in 3d 23h · runs out Mon 12:32, 3d 6h before reset · 1.9× pace · on track for 187% · budget 5%/day\n5-hour limit: 32% used · resets in 1h 59m · 0.5× pace · on track for 53% · 68% left for 2h 0m\n1.0× is even pace. Below 1.0× uses less quota than even pace; above uses more. Average since window start, not an agent-count recommendation.\nOpen usage details.",
+        "x": 56,
+        "top": 780.375,
+        "bottom": 832.375,
+        "width": 256,
+        "height": 52,
+        "inside": true,
+        "hit": false,
+        "hitTag": "DIV"
+      },
+      {
+        "label": "Claude Code pool: 2/2 available · W 0.9× pace · 40% used (est.). Open pool details.",
+        "x": 56,
+        "top": 834.375,
+        "bottom": 872.625,
+        "width": 256,
+        "height": 38.25,
+        "inside": true,
+        "hit": true,
+        "hitTag": "SPAN"
+      },
+      {
+        "label": "Codex · codex@example.test · shared\nAll quota windows last to reset at this rate.\nWeekly limit: 30% used · resets in 3d 23h · 0.7× pace · on track for 70% · budget 18%/day\n5-hour limit: 32% used · resets in 1h 59m · 0.5× pace · on track for 53% · 68% left for 2h 0m\n1.0× is even pace. Below 1.0× uses less quota than even pace; above uses more. Average since window start, not an agent-count recommendation.\nOpen usage details.",
+        "x": 56,
+        "top": 874.625,
+        "bottom": 911.625,
+        "width": 256,
+        "height": 37,
+        "inside": false,
+        "hit": false,
+        "hitTag": "DIV"
+      },
+      {
+        "label": "opencode · opencode@example.test · shared\nAll quota windows last to reset at this rate.\nWeekly limit: 30% used · resets in 3d 23h · 0.7× pace · on track for 70% · budget 18%/day\n5-hour limit: 32% used · resets in 1h 59m · 0.5× pace · on track for 53% · 68% left for 2h 0m\n1.0× is even pace. Below 1.0× uses less quota than even pace; above uses more. Average since window start, not an agent-count recommendation.\nOpen usage details.",
+        "x": 56,
+        "top": 913.625,
+        "bottom": 950.625,
+        "width": 256,
+        "height": 37,
+        "inside": false,
+        "hit": false,
+        "hitTag": null
+      },
+      {
+        "label": "Mobile apps",
+        "x": 56,
+        "top": 966.625,
+        "bottom": 998.625,
+        "width": 32,
+        "height": 32,
+        "inside": false,
+        "hit": false,
+        "hitTag": null
+      },
+      {
+        "label": "Provider usage",
+        "x": 92,
+        "top": 966.625,
+        "bottom": 998.625,
+        "width": 32,
+        "height": 32,
+        "inside": false,
+        "hit": false,
+        "hitTag": null
+      },
+      {
+        "label": "Report a bug",
+        "x": 128,
+        "top": 966.625,
+        "bottom": 998.625,
+        "width": 32,
+        "height": 32,
+        "inside": false,
+        "hit": false,
+        "hitTag": null
+      },
+      {
+        "label": "More footer actions",
+        "x": 164,
+        "top": 966.625,
+        "bottom": 998.625,
+        "width": 32,
+        "height": 32,
+        "inside": false,
+        "hit": false,
+        "hitTag": null
+      }
+    ],
+    "footerHost": true,
+    "errors": []
+  },
+  {
+    "name": "before-macos-600",
+    "framed": true,
+    "titlebarHeight": "44px",
+    "viewport": [
+      1440,
+      600
+    ],
+    "footer": {
+      "x": 49,
+      "top": 544,
+      "bottom": 592,
+      "width": 271,
+      "height": 48,
+      "inside": true,
+      "hit": true,
+      "hitTag": "SPAN"
+    },
+    "strip": {
+      "x": 56,
+      "top": 437.375,
+      "bottom": 654.625,
+      "width": 256,
+      "height": 217.25,
+      "inside": false,
+      "hit": true,
+      "hitTag": "SPAN"
+    },
+    "rows": [
+      {
+        "label": "Claude Code · a · a@example.test · shared",
+        "x": 56,
+        "top": 441.375,
+        "bottom": 478.375,
+        "width": 256,
+        "height": 37,
+        "inside": true,
+        "hit": false,
+        "hitTag": "DIV"
+      },
+      {
+        "label": "Claude Code · b · b@example.test · shared",
+        "x": 56,
+        "top": 480.375,
+        "bottom": 532.375,
+        "width": 256,
+        "height": 52,
+        "inside": true,
+        "hit": false,
+        "hitTag": "DIV"
+      },
+      {
+        "label": "Claude Code pool: 2/2 available · W 0.9× pace · 40% used (est.). Open pool details.",
+        "x": 56,
+        "top": 534.375,
+        "bottom": 572.625,
+        "width": 256,
+        "height": 38.25,
+        "inside": true,
+        "hit": true,
+        "hitTag": "SPAN"
+      },
+      {
+        "label": "Codex · codex@example.test · shared",
+        "x": 56,
+        "top": 574.625,
+        "bottom": 611.625,
+        "width": 256,
+        "height": 37,
+        "inside": false,
+        "hit": false,
+        "hitTag": "DIV"
+      },
+      {
+        "label": "opencode · opencode@example.test · shared",
+        "x": 56,
+        "top": 613.625,
+        "bottom": 650.625,
+        "width": 256,
+        "height": 37,
+        "inside": false,
+        "hit": false,
+        "hitTag": null
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Claude Code · a · a@example.test · shared\nAll quota windows last to reset at this rate.\nWeekly limit: 30% used · resets in 3d 23h · 0.7× pace · on track for 70% · budget 18%/day\n5-hour limit: 32% used · resets in 1h 59m · 0.5× pace · on track for 53% · 68% left for 2h 0m\n1.0× is even pace. Below 1.0× uses less quota than even pace; above uses more. Average since window start, not an agent-count recommendation.\nOpen usage details.",
+        "x": 56,
+        "top": 441.375,
+        "bottom": 478.375,
+        "width": 256,
+        "height": 37,
+        "inside": true,
+        "hit": false,
+        "hitTag": "DIV"
+      },
+      {
+        "label": "Claude Code · b · b@example.test · shared\nAt this rate, a quota window runs out before reset.\nWeekly limit: projected to run out 3d 6h before reset; out in 18h 0m at the last reported pace.\nWeekly limit: 80% used · resets in 3d 23h · runs out Mon 12:32, 3d 6h before reset · 1.9× pace · on track for 187% · budget 5%/day\n5-hour limit: 32% used · resets in 1h 59m · 0.5× pace · on track for 53% · 68% left for 2h 0m\n1.0× is even pace. Below 1.0× uses less quota than even pace; above uses more. Average since window start, not an agent-count recommendation.\nOpen usage details.",
+        "x": 56,
+        "top": 480.375,
+        "bottom": 532.375,
+        "width": 256,
+        "height": 52,
+        "inside": true,
+        "hit": false,
+        "hitTag": "DIV"
+      },
+      {
+        "label": "Claude Code pool: 2/2 available · W 0.9× pace · 40% used (est.). Open pool details.",
+        "x": 56,
+        "top": 534.375,
+        "bottom": 572.625,
+        "width": 256,
+        "height": 38.25,
+        "inside": true,
+        "hit": true,
+        "hitTag": "SPAN"
+      },
+      {
+        "label": "Codex · codex@example.test · shared\nAll quota windows last to reset at this rate.\nWeekly limit: 30% used · resets in 3d 23h · 0.7× pace · on track for 70% · budget 18%/day\n5-hour limit: 32% used · resets in 1h 59m · 0.5× pace · on track for 53% · 68% left for 2h 0m\n1.0× is even pace. Below 1.0× uses less quota than even pace; above uses more. Average since window start, not an agent-count recommendation.\nOpen usage details.",
+        "x": 56,
+        "top": 574.625,
+        "bottom": 611.625,
+        "width": 256,
+        "height": 37,
+        "inside": false,
+        "hit": false,
+        "hitTag": "DIV"
+      },
+      {
+        "label": "opencode · opencode@example.test · shared\nAll quota windows last to reset at this rate.\nWeekly limit: 30% used · resets in 3d 23h · 0.7× pace · on track for 70% · budget 18%/day\n5-hour limit: 32% used · resets in 1h 59m · 0.5× pace · on track for 53% · 68% left for 2h 0m\n1.0× is even pace. Below 1.0× uses less quota than even pace; above uses more. Average since window start, not an agent-count recommendation.\nOpen usage details.",
+        "x": 56,
+        "top": 613.625,
+        "bottom": 650.625,
+        "width": 256,
+        "height": 37,
+        "inside": false,
+        "hit": false,
+        "hitTag": null
+      },
+      {
+        "label": "Mobile apps",
+        "x": 56,
+        "top": 666.625,
+        "bottom": 698.625,
+        "width": 32,
+        "height": 32,
+        "inside": false,
+        "hit": false,
+        "hitTag": null
+      },
+      {
+        "label": "Provider usage",
+        "x": 92,
+        "top": 666.625,
+        "bottom": 698.625,
+        "width": 32,
+        "height": 32,
+        "inside": false,
+        "hit": false,
+        "hitTag": null
+      },
+      {
+        "label": "Report a bug",
+        "x": 128,
+        "top": 666.625,
+        "bottom": 698.625,
+        "width": 32,
+        "height": 32,
+        "inside": false,
+        "hit": false,
+        "hitTag": null
+      },
+      {
+        "label": "More footer actions",
+        "x": 164,
+        "top": 666.625,
+        "bottom": 698.625,
+        "width": 32,
+        "height": 32,
+        "inside": false,
+        "hit": false,
+        "hitTag": null
+      }
+    ],
+    "footerHost": true,
+    "errors": []
+  },
+  {
+    "name": "before-browser-900",
+    "framed": false,
+    "titlebarHeight": "",
+    "viewport": [
+      1440,
+      900
+    ],
+    "footer": {
+      "x": 48,
+      "top": 623.75,
+      "bottom": 900,
+      "width": 271,
+      "height": 276.25,
+      "inside": true,
+      "hit": true,
+      "hitTag": "SPAN"
+    },
+    "strip": {
+      "x": 55,
+      "top": 631.75,
+      "bottom": 849,
+      "width": 256,
+      "height": 217.25,
+      "inside": true,
+      "hit": true,
+      "hitTag": "SPAN"
+    },
+    "rows": [
+      {
+        "label": "Claude Code · a · a@example.test · shared",
+        "x": 55,
+        "top": 635.75,
+        "bottom": 672.75,
+        "width": 256,
+        "height": 37,
+        "inside": true,
+        "hit": true,
+        "hitTag": "BUTTON"
+      },
+      {
+        "label": "Claude Code · b · b@example.test · shared",
+        "x": 55,
+        "top": 674.75,
+        "bottom": 726.75,
+        "width": 256,
+        "height": 52,
+        "inside": true,
+        "hit": true,
+        "hitTag": "SPAN"
+      },
+      {
+        "label": "Claude Code pool: 2/2 available · W 0.9× pace · 40% used (est.). Open pool details.",
+        "x": 55,
+        "top": 728.75,
+        "bottom": 767,
+        "width": 256,
+        "height": 38.25,
+        "inside": true,
+        "hit": true,
+        "hitTag": "SPAN"
+      },
+      {
+        "label": "Codex · codex@example.test · shared",
+        "x": 55,
+        "top": 769,
+        "bottom": 806,
+        "width": 256,
+        "height": 37,
+        "inside": true,
+        "hit": true,
+        "hitTag": "BUTTON"
+      },
+      {
+        "label": "opencode · opencode@example.test · shared",
+        "x": 55,
+        "top": 808,
+        "bottom": 845,
+        "width": 256,
+        "height": 37,
+        "inside": true,
+        "hit": true,
+        "hitTag": "BUTTON"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Claude Code · a · a@example.test · shared\nAll quota windows last to reset at this rate.\nWeekly limit: 30% used · resets in 3d 23h · 0.7× pace · on track for 70% · budget 18%/day\n5-hour limit: 32% used · resets in 1h 59m · 0.5× pace · on track for 53% · 68% left for 2h 0m\n1.0× is even pace. Below 1.0× uses less quota than even pace; above uses more. Average since window start, not an agent-count recommendation.\nOpen usage details.",
+        "x": 55,
+        "top": 635.75,
+        "bottom": 672.75,
+        "width": 256,
+        "height": 37,
+        "inside": true,
+        "hit": true,
+        "hitTag": "BUTTON"
+      },
+      {
+        "label": "Claude Code · b · b@example.test · shared\nAt this rate, a quota window runs out before reset.\nWeekly limit: projected to run out 3d 6h before reset; out in 18h 0m at the last reported pace.\nWeekly limit: 80% used · resets in 3d 23h · runs out Mon 12:32, 3d 6h before reset · 1.9× pace · on track for 187% · budget 5%/day\n5-hour limit: 32% used · resets in 1h 59m · 0.5× pace · on track for 53% · 68% left for 2h 0m\n1.0× is even pace. Below 1.0× uses less quota than even pace; above uses more. Average since window start, not an agent-count recommendation.\nOpen usage details.",
+        "x": 55,
+        "top": 674.75,
+        "bottom": 726.75,
+        "width": 256,
+        "height": 52,
+        "inside": true,
+        "hit": true,
+        "hitTag": "SPAN"
+      },
+      {
+        "label": "Claude Code pool: 2/2 available · W 0.9× pace · 40% used (est.). Open pool details.",
+        "x": 55,
+        "top": 728.75,
+        "bottom": 767,
+        "width": 256,
+        "height": 38.25,
+        "inside": true,
+        "hit": true,
+        "hitTag": "SPAN"
+      },
+      {
+        "label": "Codex · codex@example.test · shared\nAll quota windows last to reset at this rate.\nWeekly limit: 30% used · resets in 3d 23h · 0.7× pace · on track for 70% · budget 18%/day\n5-hour limit: 32% used · resets in 1h 59m · 0.5× pace · on track for 53% · 68% left for 2h 0m\n1.0× is even pace. Below 1.0× uses less quota than even pace; above uses more. Average since window start, not an agent-count recommendation.\nOpen usage details.",
+        "x": 55,
+        "top": 769,
+        "bottom": 806,
+        "width": 256,
+        "height": 37,
+        "inside": true,
+        "hit": true,
+        "hitTag": "BUTTON"
+      },
+      {
+        "label": "opencode · opencode@example.test · shared\nAll quota windows last to reset at this rate.\nWeekly limit: 30% used · resets in 3d 23h · 0.7× pace · on track for 70% · budget 18%/day\n5-hour limit: 32% used · resets in 1h 59m · 0.5× pace · on track for 53% · 68% left for 2h 0m\n1.0× is even pace. Below 1.0× uses less quota than even pace; above uses more. Average since window start, not an agent-count recommendation.\nOpen usage details.",
+        "x": 55,
+        "top": 808,
+        "bottom": 845,
+        "width": 256,
+        "height": 37,
+        "inside": true,
+        "hit": true,
+        "hitTag": "BUTTON"
+      },
+      {
+        "label": "Mobile apps",
+        "x": 55,
+        "top": 861,
+        "bottom": 893,
+        "width": 32,
+        "height": 32,
+        "inside": true,
+        "hit": true,
+        "hitTag": "svg"
+      },
+      {
+        "label": "Provider usage",
+        "x": 91,
+        "top": 861,
+        "bottom": 893,
+        "width": 32,
+        "height": 32,
+        "inside": true,
+        "hit": true,
+        "hitTag": "svg"
+      },
+      {
+        "label": "Report a bug",
+        "x": 127,
+        "top": 861,
+        "bottom": 893,
+        "width": 32,
+        "height": 32,
+        "inside": true,
+        "hit": true,
+        "hitTag": "svg"
+      },
+      {
+        "label": "More footer actions",
+        "x": 163,
+        "top": 861,
+        "bottom": 893,
+        "width": 32,
+        "height": 32,
+        "inside": true,
+        "hit": true,
+        "hitTag": "path"
+      }
+    ],
+    "footerHost": true,
+    "errors": []
+  },
+  {
+    "name": "before-browser-600",
+    "framed": false,
+    "titlebarHeight": "",
+    "viewport": [
+      1440,
+      600
+    ],
+    "footer": {
+      "x": 48,
+      "top": 323.75,
+      "bottom": 600,
+      "width": 271,
+      "height": 276.25,
+      "inside": true,
+      "hit": true,
+      "hitTag": "SPAN"
+    },
+    "strip": {
+      "x": 55,
+      "top": 331.75,
+      "bottom": 549,
+      "width": 256,
+      "height": 217.25,
+      "inside": true,
+      "hit": true,
+      "hitTag": "SPAN"
+    },
+    "rows": [
+      {
+        "label": "Claude Code · a · a@example.test · shared",
+        "x": 55,
+        "top": 335.75,
+        "bottom": 372.75,
+        "width": 256,
+        "height": 37,
+        "inside": true,
+        "hit": true,
+        "hitTag": "BUTTON"
+      },
+      {
+        "label": "Claude Code · b · b@example.test · shared",
+        "x": 55,
+        "top": 374.75,
+        "bottom": 426.75,
+        "width": 256,
+        "height": 52,
+        "inside": true,
+        "hit": true,
+        "hitTag": "SPAN"
+      },
+      {
+        "label": "Claude Code pool: 2/2 available · W 0.9× pace · 40% used (est.). Open pool details.",
+        "x": 55,
+        "top": 428.75,
+        "bottom": 467,
+        "width": 256,
+        "height": 38.25,
+        "inside": true,
+        "hit": true,
+        "hitTag": "SPAN"
+      },
+      {
+        "label": "Codex · codex@example.test · shared",
+        "x": 55,
+        "top": 469,
+        "bottom": 506,
+        "width": 256,
+        "height": 37,
+        "inside": true,
+        "hit": true,
+        "hitTag": "BUTTON"
+      },
+      {
+        "label": "opencode · opencode@example.test · shared",
+        "x": 55,
+        "top": 508,
+        "bottom": 545,
+        "width": 256,
+        "height": 37,
+        "inside": true,
+        "hit": true,
+        "hitTag": "BUTTON"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Claude Code · a · a@example.test · shared\nAll quota windows last to reset at this rate.\nWeekly limit: 30% used · resets in 3d 23h · 0.7× pace · on track for 70% · budget 18%/day\n5-hour limit: 32% used · resets in 1h 59m · 0.5× pace · on track for 53% · 68% left for 2h 0m\n1.0× is even pace. Below 1.0× uses less quota than even pace; above uses more. Average since window start, not an agent-count recommendation.\nOpen usage details.",
+        "x": 55,
+        "top": 335.75,
+        "bottom": 372.75,
+        "width": 256,
+        "height": 37,
+        "inside": true,
+        "hit": true,
+        "hitTag": "BUTTON"
+      },
+      {
+        "label": "Claude Code · b · b@example.test · shared\nAt this rate, a quota window runs out before reset.\nWeekly limit: projected to run out 3d 6h before reset; out in 18h 0m at the last reported pace.\nWeekly limit: 80% used · resets in 3d 23h · runs out Mon 12:32, 3d 6h before reset · 1.9× pace · on track for 187% · budget 5%/day\n5-hour limit: 32% used · resets in 1h 59m · 0.5× pace · on track for 53% · 68% left for 2h 0m\n1.0× is even pace. Below 1.0× uses less quota than even pace; above uses more. Average since window start, not an agent-count recommendation.\nOpen usage details.",
+        "x": 55,
+        "top": 374.75,
+        "bottom": 426.75,
+        "width": 256,
+        "height": 52,
+        "inside": true,
+        "hit": true,
+        "hitTag": "SPAN"
+      },
+      {
+        "label": "Claude Code pool: 2/2 available · W 0.9× pace · 40% used (est.). Open pool details.",
+        "x": 55,
+        "top": 428.75,
+        "bottom": 467,
+        "width": 256,
+        "height": 38.25,
+        "inside": true,
+        "hit": true,
+        "hitTag": "SPAN"
+      },
+      {
+        "label": "Codex · codex@example.test · shared\nAll quota windows last to reset at this rate.\nWeekly limit: 30% used · resets in 3d 23h · 0.7× pace · on track for 70% · budget 18%/day\n5-hour limit: 32% used · resets in 1h 59m · 0.5× pace · on track for 53% · 68% left for 2h 0m\n1.0× is even pace. Below 1.0× uses less quota than even pace; above uses more. Average since window start, not an agent-count recommendation.\nOpen usage details.",
+        "x": 55,
+        "top": 469,
+        "bottom": 506,
+        "width": 256,
+        "height": 37,
+        "inside": true,
+        "hit": true,
+        "hitTag": "BUTTON"
+      },
+      {
+        "label": "opencode · opencode@example.test · shared\nAll quota windows last to reset at this rate.\nWeekly limit: 30% used · resets in 3d 23h · 0.7× pace · on track for 70% · budget 18%/day\n5-hour limit: 32% used · resets in 1h 59m · 0.5× pace · on track for 53% · 68% left for 2h 0m\n1.0× is even pace. Below 1.0× uses less quota than even pace; above uses more. Average since window start, not an agent-count recommendation.\nOpen usage details.",
+        "x": 55,
+        "top": 508,
+        "bottom": 545,
+        "width": 256,
+        "height": 37,
+        "inside": true,
+        "hit": true,
+        "hitTag": "BUTTON"
+      },
+      {
+        "label": "Mobile apps",
+        "x": 55,
+        "top": 561,
+        "bottom": 593,
+        "width": 32,
+        "height": 32,
+        "inside": true,
+        "hit": true,
+        "hitTag": "svg"
+      },
+      {
+        "label": "Provider usage",
+        "x": 91,
+        "top": 561,
+        "bottom": 593,
+        "width": 32,
+        "height": 32,
+        "inside": true,
+        "hit": true,
+        "hitTag": "svg"
+      },
+      {
+        "label": "Report a bug",
+        "x": 127,
+        "top": 561,
+        "bottom": 593,
+        "width": 32,
+        "height": 32,
+        "inside": true,
+        "hit": true,
+        "hitTag": "svg"
+      },
+      {
+        "label": "More footer actions",
+        "x": 163,
+        "top": 561,
+        "bottom": 593,
+        "width": 32,
+        "height": 32,
+        "inside": true,
+        "hit": true,
+        "hitTag": "path"
+      }
+    ],
+    "footerHost": true,
+    "errors": []
+  }
+]

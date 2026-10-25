@@ -1,0 +1,129 @@
+RUN  v3.2.7 <pristine-main>
+
+ ❯ |dom| sidebar-footer.test.tsx (5 tests | 1 failed | 4 skipped) 2003ms
+   × opens one sidebar footer disclosure at startup without injecting footer DOM 2002ms
+     → expected [] to have a length of 1 but got +0
+     → expected undefined to match object { kind: 'disclosure', …(3) }
+     → expected "spy" to be called 1 times, but got 0 times
+     → expected '<div id="usage-pace-bar-host" style="…' to be '<button type="button">BB footer</butt…' // Object.is equality
+     → expected <div id="usage-pace-bar-host" …(1)>…(1)</div> to be null
+   ↓ registers no sidebar footer item with showStrip off
+   ↓ keeps polling and focus/visibility refreshes while the disclosure is closed without reopening it
+   ↓ refreshes once when a reset passes even while the disclosure is closed
+   ↓ reads saved resets only while the actual disclosure or dialog is open
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |dom| sidebar-footer.test.tsx > opens one sidebar footer disclosure at startup without injecting footer DOM
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ sidebar-footer.test.tsx:102:28
+    100| it("opens one sidebar footer disclosure at startup without injecting f…
+    101|   await start();
+    102|   expect.soft(disclosures).toHaveLength(1);
+       |                            ^
+    103|   expect.soft(disclosures[0]).toMatchObject({ kind: "disclosure", id: …
+    104|   expect.soft(open).toHaveBeenCalledTimes(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  |dom| sidebar-footer.test.tsx > opens one sidebar footer disclosure at startup without injecting footer DOM
+AssertionError: expected undefined to match object { kind: 'disclosure', …(3) }
+
+- Expected:
+{
+  "icon": "ChartLine",
+  "id": "usage-strip",
+  "kind": "disclosure",
+  "label": "Usage Pace",
+}
+
++ Received:
+undefined
+
+ ❯ sidebar-footer.test.tsx:103:31
+    101|   await start();
+    102|   expect.soft(disclosures).toHaveLength(1);
+    103|   expect.soft(disclosures[0]).toMatchObject({ kind: "disclosure", id: …
+       |                               ^
+    104|   expect.soft(open).toHaveBeenCalledTimes(1);
+    105|   expect.soft(footer.innerHTML).toBe('<button type="button">BB footer<…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  |dom| sidebar-footer.test.tsx > opens one sidebar footer disclosure at startup without injecting footer DOM
+AssertionError: expected "spy" to be called 1 times, but got 0 times
+ ❯ sidebar-footer.test.tsx:104:21
+    102|   expect.soft(disclosures).toHaveLength(1);
+    103|   expect.soft(disclosures[0]).toMatchObject({ kind: "disclosure", id: …
+    104|   expect.soft(open).toHaveBeenCalledTimes(1);
+       |                     ^
+    105|   expect.soft(footer.innerHTML).toBe('<button type="button">BB footer<…
+    106|   expect.soft(document.getElementById("usage-pace-bar-host")).toBeNull…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  |dom| sidebar-footer.test.tsx > opens one sidebar footer disclosure at startup without injecting footer DOM
+AssertionError: expected '<div id="usage-pace-bar-host" style="…' to be '<button type="button">BB footer</butt…' // Object.is equality
+
+Expected: "<button type="button">BB footer</button>"
+Received: "<div id="usage-pace-bar-host" style="min-width: 0; display: none;"><div data-bb-plugin="usage-pace" role="group" aria-label="BB usage limits" class="mb-1 flex w-full min-w-0 flex-col gap-0.5 py-1 text-[11px] leading-none text-sidebar-foreground"><button type="button" aria-haspopup="dialog" class="truncate rounded px-1.5 py-1 text-left text-muted-foreground hover:bg-sidebar-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">No usage limits</button></div></div><button type="button">BB footer</button>"
+
+ ❯ sidebar-footer.test.tsx:105:33
+    103|   expect.soft(disclosures[0]).toMatchObject({ kind: "disclosure", id: …
+    104|   expect.soft(open).toHaveBeenCalledTimes(1);
+    105|   expect.soft(footer.innerHTML).toBe('<button type="button">BB footer<…
+       |                                 ^
+    106|   expect.soft(document.getElementById("usage-pace-bar-host")).toBeNull…
+    107| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  |dom| sidebar-footer.test.tsx > opens one sidebar footer disclosure at startup without injecting footer DOM
+AssertionError: expected <div id="usage-pace-bar-host" …(1)>…(1)</div> to be null
+
+- Expected:
+null
+
++ Received:
+<div
+  id="usage-pace-bar-host"
+  style="min-width: 0; display: none;"
+>
+  <div
+    aria-label="BB usage limits"
+    class="mb-1 flex w-full min-w-0 flex-col gap-0.5 py-1 text-[11px] leading-none text-sidebar-foreground"
+    data-bb-plugin="usage-pace"
+    role="group"
+  >
+    <button
+      aria-haspopup="dialog"
+      class="truncate rounded px-1.5 py-1 text-left text-muted-foreground hover:bg-sidebar-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+      type="button"
+    >
+      No usage limits
+    </button>
+  </div>
+</div>
+
+ ❯ sidebar-footer.test.tsx:106:63
+    104|   expect.soft(open).toHaveBeenCalledTimes(1);
+    105|   expect.soft(footer.innerHTML).toBe('<button type="button">BB footer<…
+    106|   expect.soft(document.getElementById("usage-pace-bar-host")).toBeNull…
+       |                                                               ^
+    107| });
+    108|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 skipped (5)
+   Start at  18:38:43
+   Duration  2.85s (transform 300ms, setup 0ms, collect 103ms, tests 2.00s, environment 466ms, prepare 71ms)

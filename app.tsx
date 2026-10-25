@@ -10,13 +10,13 @@ import { accountId, accountLocation, distinctAccountLabel, lastReadDescription, 
 import { describePool, usagePools, type UsagePool } from "./lib/usage-pools";
 import {
   formatReset,
-  getBarHost,
+  getStripHost,
   getUsageState,
   isOverlayOpen,
   refreshUsage,
-  setBarHost,
+  setStripHost,
   setOverlayOpen,
-  subscribeBarHost,
+  subscribeStripHost,
   subscribeOverlay,
   subscribeUsage,
   toneColor,
@@ -50,38 +50,8 @@ import { supportsBankedResets } from "./lib/banked-resets-contract";
 import { BankedResetsProvider, useRefreshBankedResets, type BankedResetTarget } from "./hooks/use-banked-resets";
 
 const REFRESH_MS = 5 * 60_000;
-const BAR_HOST_ID = "usage-pace-bar-host";
-const FOOTER_SELECTOR = 'div[data-sidebar="footer"]';
 
-
-function mountBarHost({ signal }: { signal: AbortSignal }) {
-  const host = document.createElement("div");
-  host.id = BAR_HOST_ID;
-  host.style.minWidth = "0";
-
-  const attach = () => {
-    if (signal.aborted) return;
-    const footer = document.querySelector(FOOTER_SELECTOR);
-    if (footer === null) {
-      host.remove();
-      setBarHost(null);
-      return;
-    }
-    const collapsed =
-      footer.closest('[data-state="collapsed"]') !== null ||
-      footer.getBoundingClientRect().width < 120;
-    host.style.display = collapsed ? "none" : "block";
-    if (host.parentElement !== footer || footer.firstChild !== host) {
-      footer.insertBefore(host, footer.firstChild);
-    }
-    setBarHost(host);
-  };
-  attach();
-  const observer = new MutationObserver(attach);
-  observer.observe(document.body, { childList: true, subtree: true });
-  const resize = new ResizeObserver(attach);
-  resize.observe(document.body);
-
+function mountUsageRefresh({ signal }: { signal: AbortSignal }) {
   let timer: number | null = null;
   const schedule = () => {
     if (timer !== null) window.clearTimeout(timer);
@@ -98,17 +68,12 @@ function mountBarHost({ signal }: { signal: AbortSignal }) {
   };
   document.addEventListener("visibilitychange", onVisibility);
   window.addEventListener("focus", onVisibility);
-  void refreshUsage({ signal });
   schedule();
 
   return () => {
-    observer.disconnect();
-    resize.disconnect();
     document.removeEventListener("visibilitychange", onVisibility);
     window.removeEventListener("focus", onVisibility);
     if (timer !== null) window.clearTimeout(timer);
-    setBarHost(null);
-    host.remove();
   };
 }
 
@@ -132,14 +97,14 @@ function useMinuteTick() {
   }, []);
 }
 
-function useResetRefresh(rows: CompactUsageRow[], loading: boolean, now: number) {
+function useResetRefresh(rows: CompactUsageRow[], loading: boolean, now: number, active = true) {
   const refreshed = useRef(new Map<string, number>());
   useEffect(() => {
     const keys = new Set(rows.map(row => row.key));
     for (const key of refreshed.current.keys()) {
       if (!keys.has(key)) refreshed.current.delete(key);
     }
-    if (loading || document.visibilityState !== "visible") return;
+    if (!active || loading || document.visibilityState !== "visible") return;
     let due = false;
     for (const row of rows) {
       const at = row.countdown?.resetAtMs;
@@ -148,7 +113,7 @@ function useResetRefresh(rows: CompactUsageRow[], loading: boolean, now: number)
       due = true;
     }
     if (due) void refreshUsage({ force: true });
-  }, [rows, loading, now]);
+  }, [rows, loading, now, active]);
 }
 
 
@@ -220,7 +185,6 @@ export function UsageBar({ onOpen }: { onOpen: (target?: BankedResetTarget) => v
   const now = Date.now();
   const rows = compactUsageRows(state, now);
   const pools = usagePools(rows.map(row => row.provider), state.data?.fetchedAt ?? "", now);
-  useResetRefresh(rows, state.loading, now);
   const open = () => onOpen();
   const serverOnly = state.data?.serverOnly === true;
   const empty = state.error || state.data?.error || state.data?.providers.some(provider => provider.status !== "ok" && provider.status !== "not_installed")
@@ -231,7 +195,7 @@ export function UsageBar({ onOpen }: { onOpen: (target?: BankedResetTarget) => v
       data-bb-plugin={PLUGIN_ID}
       role="group"
       aria-label="BB usage limits"
-      className="mb-1 flex w-full min-w-0 flex-col gap-0.5 py-1 text-[11px] leading-none text-sidebar-foreground"
+      className="flex w-full min-w-0 flex-col gap-0.5 p-1 text-[11px] leading-none text-sidebar-foreground"
     >
       {rows.length === 0 ? (
         <button type="button" onClick={open} aria-haspopup="dialog" title={state.error ?? state.data?.error ?? undefined} className="truncate rounded px-1.5 py-1 text-left text-muted-foreground hover:bg-sidebar-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">{empty}</button>
@@ -512,12 +476,29 @@ function UsageDialog({ tokens, bankedTarget }: { tokens: TokenTotals | null; ban
   );
 }
 
+export function UsageStrip() {
+  return <div ref={setStripHost} className="min-w-0" />;
+}
+
 export function UsageOverlay() {
   const tokens = useTokenTotals();
-  const host = useSyncExternalStore(subscribeBarHost, getBarHost);
+  const host = useSyncExternalStore(subscribeStripHost, getStripHost);
   const state = useUsage();
   const showStrip = state.data?.showStrip === true;
   const open = useSyncExternalStore(subscribeOverlay, isOverlayOpen);
+  useMinuteTick();
+  useResetRefresh(compactUsageRows(state, Date.now()), state.loading, Date.now(), showStrip);
+  useEffect(() => {
+    const controller = new AbortController();
+    void refreshUsage({ signal: controller.signal });
+    return () => controller.abort();
+  }, []);
+  useEffect(() => {
+    if (!showStrip) return;
+    const controller = new AbortController();
+    const cleanup = mountUsageRefresh({ signal: controller.signal });
+    return () => { controller.abort(); cleanup(); };
+  }, [showStrip]);
   const [bankedTarget, setBankedTarget] = useState<BankedResetTarget | null>(null);
   const openDetails = (target?: BankedResetTarget) => {
     setBankedTarget(target ?? null);
@@ -533,8 +514,27 @@ export function UsageOverlay() {
   );
 }
 
+async function stripEnabledAtStartup(): Promise<boolean> {
+  try {
+    const response = await fetch(`/api/v1/plugins/${PLUGIN_ID}/settings`, { signal: AbortSignal.timeout(5_000) });
+    const body: unknown = await response.json();
+    if (!response.ok || typeof body !== "object" || body === null || Reflect.get(body, "ok") !== true) return false;
+    const values: unknown = Reflect.get(body, "values");
+    return typeof values === "object" && values !== null && Reflect.get(values, "showStrip") === true;
+  } catch {
+    return false;
+  }
+}
+
+const showStripAtStartup = await stripEnabledAtStartup();
+
 export default definePluginApp((app) => {
   app.slots.experimental_appOverlay({ id: "usage", component: UsageOverlay });
-  app.contentScripts.register({ id: "bar-host", mount: mountBarHost });
+  if (showStripAtStartup) {
+    const strip = app.experimental_sidebarFooter.register({
+      kind: "disclosure", id: "usage-strip", label: "Usage Pace", icon: "ChartLine", component: UsageStrip,
+    });
+    strip.open();
+  }
   app.contentScripts.register({ id: "card-pace", mount: mountCardPace });
 });

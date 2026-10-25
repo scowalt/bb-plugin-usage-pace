@@ -261,7 +261,10 @@ it("refreshes once when the reset countdown reaches zero and awaits confirmation
   state.data!.providers = [{ ...provider, windows: [{
     ...provider.windows[1]!, usedPercent: 100, resetsAt: "2026-10-01T12:01:00Z",
   }] }];
-  await render();
+  state.data!.showStrip = true;
+  vi.spyOn(usageStore, "getStripHost").mockReturnValue(container);
+  await render(<UsageOverlay />);
+  vi.mocked(usageStore.refreshUsage).mockClear();
   expect(container.textContent).toContain("resets in 1m");
   expect(usageStore.refreshUsage).not.toHaveBeenCalled();
   await act(async () => { vi.advanceTimersByTime(60_000); });
@@ -269,14 +272,14 @@ it("refreshes once when the reset countdown reaches zero and awaits confirmation
   expect(container.textContent).not.toContain("% used");
   expect(usageStore.refreshUsage).toHaveBeenCalledExactlyOnceWith({ force: true });
   state = { ...state, error: "Offline" };
-  await render();
+  await render(<UsageOverlay />);
   await act(async () => { vi.advanceTimersByTime(60_000); });
   expect(container.textContent).toContain("awaiting refresh");
   expect(container.querySelector("button")?.title).toContain("Offline");
   expect(usageStore.refreshUsage).toHaveBeenCalledTimes(1);
 
   state = { ...state, error: null, data: { ...state.data!, fetchedAt: new Date(Date.now()).toISOString(), providers: [provider] } };
-  await render();
+  await render(<UsageOverlay />);
   expect(container.querySelector("button")?.textContent).toContain("W0.7× pace· 52% used");
   expect(container.querySelector("button")?.textContent).toContain("S0.5× pace· 32% used");
   expect(container.querySelector('[data-icon="Hourglass"]')).toBeNull();
@@ -284,22 +287,24 @@ it("refreshes once when the reset countdown reaches zero and awaits confirmation
 
 it("coalesces expired accounts into one refresh and waits for an existing request", async () => {
   const expired = { ...provider, windows: [{ ...provider.windows[1]!, usedPercent: 100, resetsAt: new Date(NOW).toISOString() }] };
-  state = { ...state, loading: true, data: { ...state.data!, providers: [expired, { ...expired, accountKey: "two", accountEmail: "two@example.test" }] } };
-  await render();
+  state = { ...state, loading: true, data: { ...state.data!, showStrip: true, providers: [expired, { ...expired, accountKey: "two", accountEmail: "two@example.test" }] } };
+  vi.spyOn(usageStore, "getStripHost").mockReturnValue(container);
+  await render(<UsageOverlay />);
+  vi.mocked(usageStore.refreshUsage).mockClear();
   expect(container.querySelectorAll('button[aria-label*="Open usage details."]')).toHaveLength(2);
   expect(container.textContent).not.toContain("% used");
   expect(container.textContent).toContain("awaiting refresh");
   expect(usageStore.refreshUsage).not.toHaveBeenCalled();
   state = { ...state, loading: false };
-  await render();
+  await render(<UsageOverlay />);
   expect(usageStore.refreshUsage).toHaveBeenCalledExactlyOnceWith({ force: true });
   state = { ...state, data: { ...state.data!, fetchedAt: new Date(NOW + 60_000).toISOString() } };
-  await render();
+  await render(<UsageOverlay />);
   await act(async () => { vi.advanceTimersByTime(60_000); });
   expect(usageStore.refreshUsage).toHaveBeenCalledTimes(1);
 
   state = { ...state, data: { ...state.data!, providers: [{ ...expired, windows: [{ ...expired.windows[0]!, resetsAt: "2026-10-01T12:02:00Z" }] }] } };
-  await render();
+  await render(<UsageOverlay />);
   expect(container.textContent).toContain("resets in 1m");
   await act(async () => { vi.advanceTimersByTime(60_000); });
   expect(usageStore.refreshUsage).toHaveBeenCalledTimes(2);
@@ -540,7 +545,7 @@ it("keeps shared accounts visible in the server-only view without reading a remo
 });
 
 async function renderOverlay() {
-  vi.spyOn(usageStore, "getBarHost").mockReturnValue(container);
+  vi.spyOn(usageStore, "getStripHost").mockReturnValue(container);
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ ok: true, result: {
     day: 123, month: 456, timeZone: "UTC", fetchedAt: new Date(NOW).toISOString(), error: null,
   } }))));
@@ -629,7 +634,7 @@ it.each([
 });
 
 it("honours the optional strip setting without reading saved resets while hidden", async () => {
-  vi.spyOn(usageStore, "getBarHost").mockReturnValue(container);
+  vi.spyOn(usageStore, "getStripHost").mockReturnValue(container);
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ ok: true, result: {
     day: 0, month: 0, timeZone: "UTC", fetchedAt: new Date(NOW).toISOString(), error: null,
   } }))));
