@@ -1,4 +1,4 @@
-# Multi-account verification — 0.4.0 through 0.4.2
+# Multi-account verification — 0.4.0 through 0.4.3
 
 ## 0.4.0 automated checks
 
@@ -120,3 +120,58 @@ Only synthetic identities and `example.test` addresses are used. Before/after lo
 - An isolated Chromium file fixture rendered the real components and rebuilt CSS with synthetic account/RPC data. In server-only and all-machine modes, all four account rows remained, including healthy Codex beside failed OpenCode; the Claude pool stayed 2/2, the Work alias remained, and only the matching account had a saved-reset badge. Strip buttons had positive bounds and no horizontal overflow at **172/212/252px**. Desktop/mobile dialog checks and screenshots at **1200/375px** retained the source-error message, distinct headings, correct view-specific account locations, and the actual reset-reader footer, without horizontal overflow. The session was closed; no development server was started. This checks fixture rendering, not a live BB theme or provider integration.
 
 See [draft 0.4.2 release notes](../releases/0.4.2.md). Preparing this release stops at an open PR for review; do not merge, tag, or publish yet. Both bb servers' installed plugins and configuration remain untouched. README's live `plugin reload` command is deliberately excluded under this boundary. No threads were started or messaged, and no reset was redeemed.
+
+## 0.4.2 follow-up: a successful response is not a fresh reading
+
+The user reports 0.4.2 running in server-only mode with two Claude accounts: A (Max 20x), reported by three sources, and B (Pro), reported only by Claude Accounts. Around 2026-10-25T03:15Z, A remained healthy while B was unknown after a session reset. B's only source repeatedly returned `status: "ok"`, the last successful `observedAt` (2026-10-23T22:11:31Z), and cached windows: session 36% resetting 2026-10-24T00:50Z, weekly 11% resetting 2026-10-30T10:00Z. Forced reads returned the same observation. The source supplied no failure reason.
+
+The upstream cause is outside this repository: an idle Claude Code login's access token expired and its usage source could not renew it. Usage Pace must not infer that cause from a silent cached response or attempt to repair credentials. The provider-usage contract permits last-success timestamps and cached unforced reads; bundled machine sources can also report an old last-success timestamp on failure.
+
+In 0.4.2, only a null observation, explicit stale flag, or passed reset made quota stale. B therefore showed old percentages and pace as current between its first failed read and its session reset. A weekly-only account could look current for days. After reset, the strip and dialog recommended refreshing even after a forced read had failed to obtain fresh usage; the CLI said only `measurement unavailable or reset passed`. Known `expired` and `unauthenticated` results also discarded historical windows, unlike errors.
+
+## 0.4.3 freshness and failure rules
+
+- Use the live **Cache usage for (minutes)** setting (five minutes by default, minimum 30 seconds) as the observation-age threshold. Age alone triggers verification, not a stale verdict: on an unforced collection, an `ok` reading at least that old, or without an observation, gets a resource-local `refresh: true` request. Automatic probes are limited to once per cache period, including failed/rejected probes; manual force bypasses the limit.
+- A forced response that still has no observation, or an observation at least one cache period older than the request's start, fails the freshness check. Recent observations inside that period are accepted, allowing timestamps slightly before an RPC without falsely staling a healthy source. A passed reset still makes the row stale. Staleness is established before merging, so unusable rows cannot displace healthy duplicates.
+- Keep the attempt and supplied reason for that resource/identity through subsequent unforced cached reads. Clear evidence with new refresh results, recent observations, identity changes, resource removal, or source removal as appropriate. A normal cached reply never fabricates a new last-success timestamp.
+- The strip tooltip, dialog, and CLI show `last read 29h ago` (or an unknown last successful reading). A failed freshness check names the source that couldn't refresh the account and includes its reason if supplied. Account-level advice is shown once; unknown window rows no longer repeat refresh instructions. A passed reset in the dialog says `reset passed`, not `resets in resets now`.
+- Known `expired`/`unauthenticated` results retain windows, the windows' original observation time, and omitted identity metadata, marked stale with a source-named state/reason. They stay visible and count as unknown in the pool. An automatic probe that rejects or reports an error/authentication failure also retains the successful cached reading received immediately before it, even on the collector's first call. Unknown keys stay separate; explicit replacements receive no former account history.
+- 0.4.2 merging is unchanged: healthy rows win over stale/failed duplicates, while sources, hosts, and messages accumulate. Stale quota remains unknown in text/UI, with no numeric pace, zero-usage implication, or stale forecast. JSON retains historical values marked stale and null pace. No authentication, quota math, token totals, or saved-reset behavior is changed.
+
+## 0.4.3 before/after evidence
+
+The new integration fixture drives the real plugin collector → settings/pool → RPC/CLI path, then renders the actual strip and dialog account component. All identities are synthetic and all account addresses use `example.test`; timestamps model the reported timeline, not saved provider payloads.
+
+```sh
+bunx --no-install vitest run stale-usage.test.tsx -t 'B after|B before'
+```
+
+**Before:** ran the final test file and test-runner configuration over an isolated archive of pristine `origin/main` (`d7bdcf5b16f675491726c59b6bb96cf767041de9`, v0.4.2). Production collector, account, pool, compact, dialog, and server files were checked byte-identical to that commit. **4 failed, 8 skipped**; no production code was modified to force the failures.
+
+**After:** the identical file/command against the fixed source: **4 passed, 8 skipped**.
+
+| Regression (forced and unforced) | Before | After |
+| --- | --- | --- |
+| B at 2026-10-25T03:15Z: last success 29 hours old, session reset passed, weekly reset future. | Already unknown in the pool, but missing the requested age/source explanation in strip and CLI; strip/dialog still advise refreshing. | Stale and 1 unknown in a partial two-account pool. Strip, dialog, and CLI show `last read 29h ago` and `Claude Accounts couldn't refresh this account`; no refresh advice, numeric usage/pace, or stale forecast for B. JSON keeps both windows with null pace. |
+| B at 2026-10-23T22:26:31Z: same successful reading is 15 minutes old, both resets still future. | `stale: false`, numeric percentages and pace; pool incorrectly `2/2 available`, zero unknown, complete. | `stale: true`, usage unknown and no numeric pace; pool `1/2 available · 1 unknown · … · partial`; all three displays show `last read 15m ago` and the source's inability to refresh. |
+
+Additional command:
+
+```sh
+bunx --no-install vitest run stale-usage.test.tsx lib/usage-collector.test.ts lib/usage-accounts.test.ts
+```
+
+**38/38 passed.** Coverage includes a healthy on-demand account (old cached reply → fresh forced reply), a live cache-setting change, a weekly-only stuck resource, automatic probe throttling and manual override, supplied reasons surviving cached reads, rejected probes, known `expired` and `unauthenticated` accounts, first-call probe failures retaining just-read windows, explicit identity changes, and A's healthy duplicates. The extra rejected-probe/history/reason cases were also run red before their fixes. Before/after logs remain outside the repository in the preparing thread's temporary evidence directory.
+
+## 0.4.3 release-preparation verification
+
+- `bun install` and `bun install --frozen-lockfile` passed without dependency/Bun lockfile changes. Package and npm-lock versions are 0.4.3; SDK 0.5.29 remains a pinned production dependency. Minimum requirements, hooks, and CI configuration are unchanged.
+- `bun run check` passed. `bun run test` passed **406 Vitest tests across 18 files plus all 3 token-total tests**.
+- Both exact CI.md policy commands passed independently: **98 files, zero violations; all 13 policy regression tests passed**. The complete staged-index policy check, Lefthook pre-commit check, redacted staged Gitleaks, and ordinary hooked commit also passed. `git diff --check` and `git diff --cached --check` passed.
+- `bun run build` used the separate **BB 0.44.0 / SDK 0.5.29** toolchain through `BB_CLI`, not the running BB installation. All three generated artifact metadata files report plugin 0.4.3 and that baseline; rebuilt `dist/` is committed with source.
+- `bun run check:install` passed both the isolated production-only Bun rebuild and BB's npm **11.16.0** rebuild. `bun run check:release` passed with that npm through `BB_INSTALL_NPM_CLI` and the toolchain's actual SDK runtime: version/lock/artifact metadata, host digest, production-only rebuild, and backend/host smoke loading. No provider requests were made.
+- Woodpecker CLI **3.19.0** was verified against the official release SHA-256 checksum, including matching the executable to the verified archive. `lint --strict .woodpecker.yaml` passed under `env -i` with a temporary HOME and no credentials/API access. Local lint is not hosted CI acceptance.
+- The frontend detector reported no findings. An isolated Chromium file fixture rendered the actual components with rebuilt CSS and synthetic SDK/RPC data. Server-only and all-machine strips passed at **172/212/252px** with four account rows, positive button bounds, no horizontal overflow, one identity-matched reset badge, healthy A/Codex beside stale B/failed OpenCode, and a `1/2 available · 1 unknown` Claude pool. B's tooltip shows age/source failure and no retry advice or numeric quota. Desktop/mobile dialogs at **1200/375px** passed without overflow and show B's age, source explanation, unknown quota, and passed reset; A's alias, view-specific locations, source error, and actual reset reader remain. All four screenshots were inspected; no page errors occurred and Chromium was closed.
+- Browser Automation's initial open could not find Chrome. The successful check instead used disposable Puppeteer/Chromium under the thread's temporary evidence directory, without linking a browser into plugin storage or changing any plugin configuration. No development server was started. This is synthetic fixture verification, not a live BB theme/provider acceptance test.
+
+See [draft 0.4.3 release notes](../releases/0.4.3.md). Preparation stops at an open PR against `main` for user review; do not merge, tag, or publish yet. The old checkout and both bb servers' installed plugins/settings remain untouched. README's live `plugin reload` command is deliberately excluded. No threads were started or messaged; no live provider/reset/auth requests or reset redemption occurred.

@@ -42,13 +42,15 @@ G  ⌛ resets in 2h 14m
 - Pace carries the existing risk colour; used percentages stay secondary and neutral. `near limit` means current use is at least 80%. `high projected use` means the forecast exceeds 85% by reset, without current usage being near a limit—for example, 5% used early in the week with 95% projected. Both retain a visible warning when no exhaustion countdown is shown. Rounding a multiplier to 1.0× does not change the unrounded forecast or risk verdict.
 - `▲ 4h short`: at the reported pace, a window is projected to run out **four hours before reset**. The warning uses the earliest projected exhaustion across **all** windows, including hidden model limits. Hover for the window name and time until it runs out. Shortfall and numeric pace stay anchored to the last usage snapshot and are recalculated on refresh; the tooltip's run-out countdown ticks each minute. `out now (est.)` replaces the shortfall when the run-out estimate has passed, without implying confirmed exhaustion.
 - `⌛` (amber hourglass): a window is confirmed exhausted. A countdown **replaces pace and quota percentages on the same line**, updating each minute to the **latest reset among exhausted windows**, including model-specific limits (`resets in 2h 14m`, or `resets in <1m`). Hover for individual window percentages and resets. If any exhausted window has a missing or invalid reset time, it shows `reset unknown`. When the countdown reaches zero, the plugin requests fresh usage once, bypassing its cache, and shows `awaiting refresh` until updated data establishes the new state—even if that refresh fails. The countdown describes scheduled quota renewal, not a guarantee of service availability.
-- `too early` or `unknown`: a multiplier cannot be judged or the data may be stale/incomplete. Fresh reported percentages remain visible; stale or unobserved quota shows “usage unknown,” without a numeric pace claim, a zero-usage implication, or a stale forecast. A reported exhausted or overshooting window still warns even if another window's pace is unknown. `other pace unknown` keeps uncertainty in an undisplayed window visible beside known selected windows.
+- `too early` or `unknown`: a multiplier cannot be judged or the data may be stale/incomplete. Fresh reported percentages remain visible; stale or unobserved quota shows “usage unknown,” without a numeric pace claim, a zero-usage implication, or a stale forecast. Stale rows' tooltips, dialog details, and CLI text show the last successful reading's age (for example, `last read 29h ago`), or say that no successful reading is known. They name a source that couldn't refresh the account and include its reason when supplied, rather than advising another refresh immediately afterward. A reported exhausted or overshooting window still warns even if another window's pace is unknown. `other pace unknown` keeps uncertainty in an undisplayed window visible beside known selected windows.
 
 Status considers **all** reported windows, including model-specific limits not displayed in the strip. Healthy weekly pace never removes their warnings. Hover for full window names, reset times and run-out estimates; click or keyboard-activate the row for the full dialog. Accessible descriptions explain the multiplier and account-level constraints without relying on colour. Token totals remain in the dialog, not the footer.
 
 ### Multiple accounts and pools (0.4.0)
 
-Usage Pace discovers every `provider-usage.v1` source, including machine-local providers, Account Pooler, Claude Accounts, and its own Grok source. Accounts merge only by the provider-issued `accountKey`, never by email, label, or plan. A merged account prefers the freshest healthy measurement (`status: "ok"`, not stale) and lists all reporting sources and machines, including failed sources' messages. If no healthy measurement remains, it uses the newest observation as before. Unknown identities stay separate. Failed sources keep their last measurements, marked stale; healthy sources still show pace. Measurements are fetched at most three at a time, with five-second source timeouts.
+Usage Pace discovers every `provider-usage.v1` source, including machine-local providers, Account Pooler, Claude Accounts, and its own Grok source. Accounts merge only by the provider-issued `accountKey`, never by email, label, or plan. A merged account prefers the freshest healthy measurement (`status: "ok"`, not stale) and lists all reporting sources and machines, including failed sources' messages. If no healthy measurement remains, it uses the newest observation as before. Unknown identities stay separate. Failed sources keep their last measurements, marked stale; healthy sources still show pace. Known accounts also keep their historical windows, timestamp, and omitted identity metadata through `expired` and `unauthenticated` results, with the source name and state as the reason. Explicit identity changes never inherit another account's windows or metadata. Measurements are fetched at most three at a time, with five-second source timeouts.
+
+**Reading freshness (0.4.3).** A passed window reset makes the reading stale. Age alone does not prove a failure: normal polling permits sources to answer from cache. When an `ok` reading is at least one **Cache usage for (minutes)** period old (default five minutes; minimum 30 seconds), or has no observation timestamp, Usage Pace requests `refresh: true` for that resource alone, at most once per cache period. If a forced read still has no observation or returns a reading at least one cache period older than the request's start, it is stale even before any reset passes. A recent reading within that period is accepted; timestamps need not exactly equal the request time. Failed freshness checks and supplied reasons survive subsequent cached reads until a recent observation or a new refresh result replaces them. Manual refresh / `--force` bypasses the probe limit. A healthy on-demand source can therefore return old cached data and then fresh data without ending up stale. Generic refresh advice is reserved for an unknown/passed-reset reading without a reported failure; Usage Pace cannot repair a source's login or renew its credentials.
 
 Each account has a strip row. With two or more accounts, the provider also has a pool row; the dialog places the pool before that provider's accounts. Account labels use **Account aliases** (`email=Alias` pairs, separated by commas or newlines), then the email prefix, then the resource label. Labels that only repeat the provider name (ignoring case) are omitted from text and UI headings. A failed resource read with no identity keeps that resource's last known `accountKey`. Errors for the same identity also retain its email, plan, and plan label wherever the error omits them; a resource that has never reported an identity stays separate.
 
@@ -90,7 +92,7 @@ Turn on **Only show providers on the server machine** in Settings → Installed 
 bb plugin config usage-pace set serverOnly true
 ```
 
-The setting is off by default, persists across reloads, is shared across browsers, and updates without a reload. Machine-scoped accounts must be available on bb's server-host ID. Shared-scope accounts remain visible because the server serves them. Merged accounts prefer the freshest healthy measurement over stale or failed rows, even when a failed row reports a newer last-success timestamp, and retain their availability on every host. If every row is stale, the newest observation still wins. Location labels show the server machine in this view, all reporting machines in the all-machines view, or “shared” when no machine is associated. Saved-reset details name the machine that actually supplied the matching inventory.
+The setting is off by default, persists across reloads, is shared across browsers, and updates without a reload. Machine-scoped accounts must be available on bb's server-host ID. Shared-scope accounts remain visible because the server serves them, including stale accounts whose source cannot refresh them. These rows show unknown quota and count as unknown in the pool; their tooltip and dialog show the last successful reading's age and any source reason. The same per-resource freshness checks apply in this view. Merged accounts prefer the freshest healthy measurement over stale or failed rows, even when a failed row reports a newer last-success timestamp, and retain their availability on every host. If every row is stale, the newest observation still wins. Location labels show the server machine in this view, all reporting machines in the all-machines view, or “shared” when no machine is associated. Saved-reset details name the machine that actually supplied the matching inventory.
 
 Only an unknown, missing, or offline server host, or an unreadable host list, makes the server scope unavailable. A failed account read stays on that account and never hides healthy accounts. Snapshot warnings are reserved for discovery, host-list, and source-list failures. If the server is missing or offline, machine-only rows disappear with an actionable error; shared rows remain. Saved-reset reads are limited to the server host and require a matching account identity. The view never substitutes another machine.
 
@@ -143,11 +145,11 @@ Turn this off with the *Add Grok Build usage to bb's usage card* setting, then r
 ### New installations
 
 ```sh
-bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.4.2'
+bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.4.3'
 bb plugin config usage-pace set showStrip true
 ```
 
-The compact footer is off by default; the second command enables it, including Codex and Claude resets. Use `@^0.4.2` instead of `@v0.4.2` to track compatible release tags with `bb plugin update usage-pace`.
+The compact footer is off by default; the second command enables it, including Codex and Claude resets. Use `@^0.4.3` instead of `@v0.4.3` to track compatible release tags with `bb plugin update usage-pace`.
 
 ### Upgrades
 
@@ -157,21 +159,21 @@ First inspect the installed source:
 bb plugin source usage-pace
 ```
 
-For an install tracking the repository's default branch or another branch containing 0.4.2, update in place. The same command updates a Git semver-range install when a published release satisfies its range. This keeps the plugin's settings:
+For an install tracking the repository's default branch or another branch containing 0.4.3, update in place. The same command updates a Git semver-range install when a published release satisfies its range. This keeps the plugin's settings:
 
 ```sh
 bb plugin update usage-pace
 ```
 
-An exact tag or commit is pinned: `update` does not move it to a newer release. To move a pinned install to 0.4.2, or change any existing install to a tag or range, remove it and install the new source. **Removal deletes the plugin's settings, secrets, and schedules.** Record your configuration first with `bb plugin config usage-pace`, then restore the settings you need after reinstalling:
+An exact tag or commit is pinned: `update` does not move it to a newer release. To move a pinned install to 0.4.3, or change any existing install to a tag or range, remove it and install the new source. **Removal deletes the plugin's settings, secrets, and schedules.** Record your configuration first with `bb plugin config usage-pace`, then restore the settings you need after reinstalling:
 
 ```sh
 bb plugin config usage-pace
 bb plugin remove usage-pace
-bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.4.2'
+bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.4.3'
 ```
 
-Use `@^0.4.2` in that final command to track compatible releases instead. Running `plugin install` over an existing managed install is not an upgrade; bb 0.46.1 refuses the duplicate plugin ID.
+Use `@^0.4.3` in that final command to track compatible releases instead. Running `plugin install` over an existing managed install is not an upgrade; bb 0.46.1 refuses the duplicate plugin ID.
 
 ### Installation details
 
@@ -195,7 +197,7 @@ bb usage-pace --tokens     # token totals across BB
 bb usage-pace --resets --json # Codex banked resets on the primary host (unchanged)
 ```
 
-Text output groups by provider and prints the pool before its accounts. JSON contains `accounts[]` (including `accountKey`, `sources`, `hosts`, `observedAt`, and per-window `pace`) and `pools[]`. `providers[]` is a deprecated alias of `accounts[]` for the 0.4 minor series. Unknown pool values and pace remain null rather than zero. Stale account windows retain the last reported values in JSON with `stale: true`; text and UI show unknown usage. Claude reset details are in the strip/dialog; `--resets` retains its existing Codex-only behavior.
+Text output groups by provider and prints the pool before its accounts. JSON contains `accounts[]` (including `accountKey`, `sources`, `hosts`, `observedAt`, and per-window `pace`) and `pools[]`. `providers[]` is a deprecated alias of `accounts[]` for the 0.4 minor series. Unknown pool values and pace remain null rather than zero. Stale account windows retain the last reported values in JSON with `stale: true` and null pace; text and UI show unknown usage, the last successful reading's age, and any source failure reason. A forced refresh that returns an old reading says the named source couldn't refresh the account, not that the user should refresh again. Claude reset details are in the strip/dialog; `--resets` retains its existing Codex-only behavior.
 
 ```
 Claude Code · Max (5x) (MacBook Pro)

@@ -11,7 +11,8 @@ export const poolSchema = z.object({
 export type UsagePool = z.infer<typeof poolSchema>;
 
 export function displayedAccounts(accounts: UsageAccount[]): UsageAccount[] {
-  return accounts.filter(account => (account.status === "ok" && account.windows.length > 0) || account.status === "error");
+  return accounts.filter(account => account.status === "error" ||
+    (["ok", "expired", "unauthenticated"].includes(account.status) && account.windows.length > 0));
 }
 
 export function usagePools(accounts: UsageAccount[], fetchedAt: string, now = Date.now()): UsagePool[] {

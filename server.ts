@@ -7,7 +7,7 @@ import { createTokenTotals } from "./lib/token-totals";
 import { bankedResetsSchema, bankedResetsUnavailable, resetProviderSchema, type BankedResets, type ResetProviderId } from "./lib/banked-resets-contract";
 import { bankedResetsHostContract } from "./lib/banked-resets-host-contract";
 
-import { accountLocation, accountSchema, distinctAccountLabel, observationTime, parsePairs, usageIsStale, withAccountSettings, type UsageAccount } from "./lib/usage-accounts";
+import { accountLocation, accountSchema, distinctAccountLabel, lastReadDescription, observationTime, parsePairs, staleUsageReason, usageIsStale, withAccountSettings, type UsageAccount } from "./lib/usage-accounts";
 import { createUsageCollector } from "./lib/usage-collector";
 import { accountWithPace, usageCliSchema } from "./lib/usage-cli";
 import { describePool, poolSchema, usagePools } from "./lib/usage-pools";
@@ -140,7 +140,7 @@ export default async function plugin(bb: BbPluginApi) {
   let cached: { at: number; usage: LoadedUsage; dirty: boolean } | null = null;
   let pending: Promise<LoadedUsage> | null = null;
 
-  const collect = createUsageCollector(bb, bankedController.signal);
+  const collect = createUsageCollector(bb, bankedController.signal, Date.now, () => cacheMs);
   async function loadSnapshot(force: boolean): Promise<LoadedUsage> {
     const { accounts, error, hostsError } = await collect(force);
     return { snapshot: { accounts, providers: accounts, fetchedAt: new Date().toISOString(), error }, hostsError };
@@ -236,6 +236,7 @@ export default async function plugin(bb: BbPluginApi) {
         const location = accountLocation(provider);
         if (provider.status !== "ok") {
           lines.push(`${heading} (${location}): ${provider.status}${provider.message ? ` — ${provider.message}` : ""}`);
+          if (provider.stale || provider.windows.length > 0) lines.push(`  usage unknown · ${lastReadDescription(provider)}`);
           continue;
         }
         const stale = usageIsStale(provider, Date.now());
@@ -248,7 +249,7 @@ export default async function plugin(bb: BbPluginApi) {
         lines.push(
           `${heading}${provider.planLabel ? ` · ${provider.planLabel}` : ""} (${location})`,
           `  via ${[...new Set(provider.sources.map(source => source.label))].join(", ")} · observed ${provider.observedAt === null ? "unknown" : new Date(provider.observedAt).toISOString()}`,
-          ...(stale ? [`  stale: ${provider.message ?? "measurement unavailable or reset passed"}`] : []),
+          ...(stale ? [`  stale: usage unknown · ${lastReadDescription(provider)}. ${staleUsageReason(provider)}`] : []),
         );
         for (const { window, pace } of shown) {
           lines.push(`  ${window.label.padEnd(18)} ${stale ? "unknown" : `${String(Math.round(window.usedPercent)).padStart(3)}%`}  ${formatReset(window.resetsAt)}`);

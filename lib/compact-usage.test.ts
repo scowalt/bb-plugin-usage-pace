@@ -176,7 +176,7 @@ describe("compact usage rows", () => {
     const result = compactUsageRows(snapshot, NOW + 3 * 3_600_000)[0]!;
     expect(result.status.glyph).toBe("⌛");
     expect(result.countdown?.label).toBe("resets in 1d 21h");
-    expect(result.title).toContain("5-hour limit: usage unknown · reset passed; refresh usage");
+    expect(result.title).toContain("5-hour limit: usage unknown · reset passed");
   });
 
   it("counts down each minute and awaits refresh at zero, including after a failed refresh", () => {
