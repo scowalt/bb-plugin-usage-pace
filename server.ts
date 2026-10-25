@@ -75,7 +75,8 @@ export default async function plugin(bb: BbPluginApi) {
     },
     showStrip: {
       type: "boolean",
-      label: "Also show the Usage Pace strip above the sidebar footer",
+      label: "Also show the Usage Pace strip in a sidebar footer card",
+      description: "Reload the app UI after changing this. Opens at startup; another footer card closes it. Use the Usage Pace footer icon to reopen it.",
       default: false,
     },
     accountAliases: {

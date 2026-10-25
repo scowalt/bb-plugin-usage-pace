@@ -88,20 +88,20 @@ export function refreshUsage(
 
 type Listener = () => void;
 
-let barHost: HTMLElement | null = null;
-const barHostListeners = new Set<Listener>();
-export function getBarHost(): HTMLElement | null {
-  return barHost;
+let stripHost: HTMLElement | null = null;
+const stripHostListeners = new Set<Listener>();
+export function getStripHost(): HTMLElement | null {
+  return stripHost;
 }
-export function setBarHost(next: HTMLElement | null) {
-  if (barHost === next) return;
-  barHost = next;
-  for (const listener of barHostListeners) listener();
+export function setStripHost(next: HTMLElement | null) {
+  if (stripHost === next) return;
+  stripHost = next;
+  for (const listener of stripHostListeners) listener();
 }
-export function subscribeBarHost(listener: Listener): () => void {
-  barHostListeners.add(listener);
+export function subscribeStripHost(listener: Listener): () => void {
+  stripHostListeners.add(listener);
   return () => {
-    barHostListeners.delete(listener);
+    stripHostListeners.delete(listener);
   };
 }
 

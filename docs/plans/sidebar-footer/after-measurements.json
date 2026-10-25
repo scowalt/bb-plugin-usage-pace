@@ -1,0 +1,590 @@
+[
+  {
+    "name": "after-macos-900",
+    "framed": true,
+    "titlebarHeight": "44px",
+    "viewport": [
+      1440,
+      900
+    ],
+    "footer": {
+      "x": 49,
+      "top": 844,
+      "bottom": 892,
+      "width": 271,
+      "height": 48,
+      "inside": true,
+      "hit": true,
+      "hitTag": "svg"
+    },
+    "strip": {
+      "x": 58,
+      "top": 627.75,
+      "bottom": 845,
+      "width": 253,
+      "height": 217.25,
+      "inside": true,
+      "hit": true,
+      "hitTag": "SPAN"
+    },
+    "rows": [
+      {
+        "label": "Claude Code · a · a@example.test · shared",
+        "x": 62,
+        "top": 631.75,
+        "bottom": 668.75,
+        "width": 245,
+        "height": 37,
+        "inside": true,
+        "hit": true,
+        "hitTag": "BUTTON"
+      },
+      {
+        "label": "Claude Code · b · b@example.test · shared",
+        "x": 62,
+        "top": 670.75,
+        "bottom": 722.75,
+        "width": 245,
+        "height": 52,
+        "inside": true,
+        "hit": true,
+        "hitTag": "SPAN"
+      },
+      {
+        "label": "Claude Code pool: 2/2 available · W 0.9× pace · 40% used (est.). Open pool details.",
+        "x": 62,
+        "top": 724.75,
+        "bottom": 763,
+        "width": 245,
+        "height": 38.25,
+        "inside": true,
+        "hit": true,
+        "hitTag": "SPAN"
+      },
+      {
+        "label": "Codex · codex@example.test · shared",
+        "x": 62,
+        "top": 765,
+        "bottom": 802,
+        "width": 245,
+        "height": 37,
+        "inside": true,
+        "hit": true,
+        "hitTag": "BUTTON"
+      },
+      {
+        "label": "opencode · opencode@example.test · shared",
+        "x": 62,
+        "top": 804,
+        "bottom": 841,
+        "width": 245,
+        "height": 37,
+        "inside": true,
+        "hit": true,
+        "hitTag": "BUTTON"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Mobile apps",
+        "x": 56,
+        "top": 852,
+        "bottom": 884,
+        "width": 32,
+        "height": 32,
+        "inside": true,
+        "hit": true,
+        "hitTag": "svg"
+      },
+      {
+        "label": "Provider usage",
+        "x": 92,
+        "top": 852,
+        "bottom": 884,
+        "width": 32,
+        "height": 32,
+        "inside": true,
+        "hit": true,
+        "hitTag": "svg"
+      },
+      {
+        "label": "Usage Pace",
+        "x": 128,
+        "top": 852,
+        "bottom": 884,
+        "width": 32,
+        "height": 32,
+        "inside": true,
+        "hit": true,
+        "hitTag": "svg"
+      },
+      {
+        "label": "Report a bug",
+        "x": 164,
+        "top": 852,
+        "bottom": 884,
+        "width": 32,
+        "height": 32,
+        "inside": true,
+        "hit": true,
+        "hitTag": "svg"
+      },
+      {
+        "label": "More footer actions",
+        "x": 200,
+        "top": 852,
+        "bottom": 884,
+        "width": 32,
+        "height": 32,
+        "inside": true,
+        "hit": true,
+        "hitTag": "path"
+      }
+    ],
+    "footerHost": false,
+    "providerUsageReplacedStrip": true,
+    "iconReopenedStrip": true,
+    "errors": []
+  },
+  {
+    "name": "after-macos-600",
+    "framed": true,
+    "titlebarHeight": "44px",
+    "viewport": [
+      1440,
+      600
+    ],
+    "footer": {
+      "x": 49,
+      "top": 544,
+      "bottom": 592,
+      "width": 271,
+      "height": 48,
+      "inside": true,
+      "hit": true,
+      "hitTag": "svg"
+    },
+    "strip": {
+      "x": 58,
+      "top": 327.75,
+      "bottom": 545,
+      "width": 253,
+      "height": 217.25,
+      "inside": true,
+      "hit": true,
+      "hitTag": "SPAN"
+    },
+    "rows": [
+      {
+        "label": "Claude Code · a · a@example.test · shared",
+        "x": 62,
+        "top": 331.75,
+        "bottom": 368.75,
+        "width": 245,
+        "height": 37,
+        "inside": true,
+        "hit": true,
+        "hitTag": "BUTTON"
+      },
+      {
+        "label": "Claude Code · b · b@example.test · shared",
+        "x": 62,
+        "top": 370.75,
+        "bottom": 422.75,
+        "width": 245,
+        "height": 52,
+        "inside": true,
+        "hit": true,
+        "hitTag": "SPAN"
+      },
+      {
+        "label": "Claude Code pool: 2/2 available · W 0.9× pace · 40% used (est.). Open pool details.",
+        "x": 62,
+        "top": 424.75,
+        "bottom": 463,
+        "width": 245,
+        "height": 38.25,
+        "inside": true,
+        "hit": true,
+        "hitTag": "SPAN"
+      },
+      {
+        "label": "Codex · codex@example.test · shared",
+        "x": 62,
+        "top": 465,
+        "bottom": 502,
+        "width": 245,
+        "height": 37,
+        "inside": true,
+        "hit": true,
+        "hitTag": "BUTTON"
+      },
+      {
+        "label": "opencode · opencode@example.test · shared",
+        "x": 62,
+        "top": 504,
+        "bottom": 541,
+        "width": 245,
+        "height": 37,
+        "inside": true,
+        "hit": true,
+        "hitTag": "BUTTON"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Mobile apps",
+        "x": 56,
+        "top": 552,
+        "bottom": 584,
+        "width": 32,
+        "height": 32,
+        "inside": true,
+        "hit": true,
+        "hitTag": "svg"
+      },
+      {
+        "label": "Provider usage",
+        "x": 92,
+        "top": 552,
+        "bottom": 584,
+        "width": 32,
+        "height": 32,
+        "inside": true,
+        "hit": true,
+        "hitTag": "svg"
+      },
+      {
+        "label": "Usage Pace",
+        "x": 128,
+        "top": 552,
+        "bottom": 584,
+        "width": 32,
+        "height": 32,
+        "inside": true,
+        "hit": true,
+        "hitTag": "svg"
+      },
+      {
+        "label": "Report a bug",
+        "x": 164,
+        "top": 552,
+        "bottom": 584,
+        "width": 32,
+        "height": 32,
+        "inside": true,
+        "hit": true,
+        "hitTag": "svg"
+      },
+      {
+        "label": "More footer actions",
+        "x": 200,
+        "top": 552,
+        "bottom": 584,
+        "width": 32,
+        "height": 32,
+        "inside": true,
+        "hit": true,
+        "hitTag": "path"
+      }
+    ],
+    "footerHost": false,
+    "providerUsageReplacedStrip": true,
+    "iconReopenedStrip": true,
+    "errors": []
+  },
+  {
+    "name": "after-browser-900",
+    "framed": false,
+    "titlebarHeight": "",
+    "viewport": [
+      1440,
+      900
+    ],
+    "footer": {
+      "x": 48,
+      "top": 853,
+      "bottom": 900,
+      "width": 271,
+      "height": 47,
+      "inside": true,
+      "hit": true,
+      "hitTag": "svg"
+    },
+    "strip": {
+      "x": 57,
+      "top": 636.75,
+      "bottom": 854,
+      "width": 253,
+      "height": 217.25,
+      "inside": true,
+      "hit": true,
+      "hitTag": "SPAN"
+    },
+    "rows": [
+      {
+        "label": "Claude Code · a · a@example.test · shared",
+        "x": 61,
+        "top": 640.75,
+        "bottom": 677.75,
+        "width": 245,
+        "height": 37,
+        "inside": true,
+        "hit": true,
+        "hitTag": "BUTTON"
+      },
+      {
+        "label": "Claude Code · b · b@example.test · shared",
+        "x": 61,
+        "top": 679.75,
+        "bottom": 731.75,
+        "width": 245,
+        "height": 52,
+        "inside": true,
+        "hit": true,
+        "hitTag": "SPAN"
+      },
+      {
+        "label": "Claude Code pool: 2/2 available · W 0.9× pace · 40% used (est.). Open pool details.",
+        "x": 61,
+        "top": 733.75,
+        "bottom": 772,
+        "width": 245,
+        "height": 38.25,
+        "inside": true,
+        "hit": true,
+        "hitTag": "SPAN"
+      },
+      {
+        "label": "Codex · codex@example.test · shared",
+        "x": 61,
+        "top": 774,
+        "bottom": 811,
+        "width": 245,
+        "height": 37,
+        "inside": true,
+        "hit": true,
+        "hitTag": "BUTTON"
+      },
+      {
+        "label": "opencode · opencode@example.test · shared",
+        "x": 61,
+        "top": 813,
+        "bottom": 850,
+        "width": 245,
+        "height": 37,
+        "inside": true,
+        "hit": true,
+        "hitTag": "BUTTON"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Mobile apps",
+        "x": 55,
+        "top": 861,
+        "bottom": 893,
+        "width": 32,
+        "height": 32,
+        "inside": true,
+        "hit": true,
+        "hitTag": "svg"
+      },
+      {
+        "label": "Provider usage",
+        "x": 91,
+        "top": 861,
+        "bottom": 893,
+        "width": 32,
+        "height": 32,
+        "inside": true,
+        "hit": true,
+        "hitTag": "svg"
+      },
+      {
+        "label": "Usage Pace",
+        "x": 127,
+        "top": 861,
+        "bottom": 893,
+        "width": 32,
+        "height": 32,
+        "inside": true,
+        "hit": true,
+        "hitTag": "svg"
+      },
+      {
+        "label": "Report a bug",
+        "x": 163,
+        "top": 861,
+        "bottom": 893,
+        "width": 32,
+        "height": 32,
+        "inside": true,
+        "hit": true,
+        "hitTag": "svg"
+      },
+      {
+        "label": "More footer actions",
+        "x": 199,
+        "top": 861,
+        "bottom": 893,
+        "width": 32,
+        "height": 32,
+        "inside": true,
+        "hit": true,
+        "hitTag": "path"
+      }
+    ],
+    "footerHost": false,
+    "providerUsageReplacedStrip": true,
+    "iconReopenedStrip": true,
+    "errors": []
+  },
+  {
+    "name": "after-browser-600",
+    "framed": false,
+    "titlebarHeight": "",
+    "viewport": [
+      1440,
+      600
+    ],
+    "footer": {
+      "x": 48,
+      "top": 553,
+      "bottom": 600,
+      "width": 271,
+      "height": 47,
+      "inside": true,
+      "hit": true,
+      "hitTag": "svg"
+    },
+    "strip": {
+      "x": 57,
+      "top": 336.75,
+      "bottom": 554,
+      "width": 253,
+      "height": 217.25,
+      "inside": true,
+      "hit": true,
+      "hitTag": "SPAN"
+    },
+    "rows": [
+      {
+        "label": "Claude Code · a · a@example.test · shared",
+        "x": 61,
+        "top": 340.75,
+        "bottom": 377.75,
+        "width": 245,
+        "height": 37,
+        "inside": true,
+        "hit": true,
+        "hitTag": "BUTTON"
+      },
+      {
+        "label": "Claude Code · b · b@example.test · shared",
+        "x": 61,
+        "top": 379.75,
+        "bottom": 431.75,
+        "width": 245,
+        "height": 52,
+        "inside": true,
+        "hit": true,
+        "hitTag": "SPAN"
+      },
+      {
+        "label": "Claude Code pool: 2/2 available · W 0.9× pace · 40% used (est.). Open pool details.",
+        "x": 61,
+        "top": 433.75,
+        "bottom": 472,
+        "width": 245,
+        "height": 38.25,
+        "inside": true,
+        "hit": true,
+        "hitTag": "SPAN"
+      },
+      {
+        "label": "Codex · codex@example.test · shared",
+        "x": 61,
+        "top": 474,
+        "bottom": 511,
+        "width": 245,
+        "height": 37,
+        "inside": true,
+        "hit": true,
+        "hitTag": "BUTTON"
+      },
+      {
+        "label": "opencode · opencode@example.test · shared",
+        "x": 61,
+        "top": 513,
+        "bottom": 550,
+        "width": 245,
+        "height": 37,
+        "inside": true,
+        "hit": true,
+        "hitTag": "BUTTON"
+      }
+    ],
+    "buttons": [
+      {
+        "label": "Mobile apps",
+        "x": 55,
+        "top": 561,
+        "bottom": 593,
+        "width": 32,
+        "height": 32,
+        "inside": true,
+        "hit": true,
+        "hitTag": "svg"
+      },
+      {
+        "label": "Provider usage",
+        "x": 91,
+        "top": 561,
+        "bottom": 593,
+        "width": 32,
+        "height": 32,
+        "inside": true,
+        "hit": true,
+        "hitTag": "svg"
+      },
+      {
+        "label": "Usage Pace",
+        "x": 127,
+        "top": 561,
+        "bottom": 593,
+        "width": 32,
+        "height": 32,
+        "inside": true,
+        "hit": true,
+        "hitTag": "svg"
+      },
+      {
+        "label": "Report a bug",
+        "x": 163,
+        "top": 561,
+        "bottom": 593,
+        "width": 32,
+        "height": 32,
+        "inside": true,
+        "hit": true,
+        "hitTag": "svg"
+      },
+      {
+        "label": "More footer actions",
+        "x": 199,
+        "top": 561,
+        "bottom": 593,
+        "width": 32,
+        "height": 32,
+        "inside": true,
+        "hit": true,
+        "hitTag": "path"
+      }
+    ],
+    "footerHost": false,
+    "providerUsageReplacedStrip": true,
+    "iconReopenedStrip": true,
+    "errors": []
+  }
+]

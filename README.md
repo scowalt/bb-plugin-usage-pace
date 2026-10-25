@@ -27,7 +27,7 @@ The first line is the difference from even pace, in percentage points and in tim
 
 The card belongs to another plugin. Usage Pace only adds nodes to it, and reads the card's own data (`bb--provider-usage` `getUsage`, with the visible provider IDs and cached measurements), so the labels always match. If a bb update changes the card's markup, the tick and the delta stop showing, and nothing else breaks.
 
-**Optional compact footer.** Turn on *Also show the Usage Pace strip* in the plugin settings. The pace-first layout is available in v0.3.7 and newer. Each provider account leads with pace, with one compact line per displayed quota window (provider icons represented by letters here):
+**Optional compact footer card (0.4.4).** Turn on *Also show the Usage Pace strip in a sidebar footer card* in the plugin settings, then reload the app UI. Usage Pace registers a disclosure through bb's supported sidebar footer API, not by inserting into bb's footer markup. The host places the bordered, scrollable card above the footer buttons (up to 320px tall), including in bb 0.47's macOS desktop layout. Each provider account leads with pace, with one compact line per displayed quota window (provider icons represented by letters here):
 
 ```
 C  W 0.7× pace · 52% used  ↺1
@@ -37,6 +37,8 @@ X  W 1.6× pace · 78% used  ↺3
 G  ⌛ resets in 2h 14m
 ```
 
+- The card opens **once at startup** when `showStrip` is on. bb allows only one footer disclosure open across all plugins and does not remember the choice across reloads. Opening **Provider usage** closes this strip; the **Usage Pace** footer icon brings it back. Background refreshes never reopen it or displace another card. Changing `showStrip` requires a UI reload to add or remove the footer icon; with it off at startup, no footer item is registered.
+- Quota usage stays fresh while `showStrip` is on, even with the card closed: five-minute polling while the page is visible, refresh on focus/return to visibility, and a forced refresh when an exhausted account's reset passes. Saved-reset inventory reads run only while this card or the details dialog is open.
 - **1.0× is even pace.** Below 1.0× means less quota consumed than even spending over the elapsed part of that window; above 1.0× means faster spending. For example, 11% used after about 21% of a week is `0.5× pace`. This is the account's average since window start, not recent burn or an exact agent-count recommendation. Shared account quotas can span machines, and session/model limits can override weekly headroom.
 - `W` and `S`: weekly and five-hour session windows, shown in that order when present. The secondary percentage is quota **used**, not remaining. Missing windows stay absent. Providers with neither show their first window (`M` for monthly, `D` for daily, otherwise its label).
 - Pace carries the existing risk colour; used percentages stay secondary and neutral. `near limit` means current use is at least 80%. `high projected use` means the forecast exceeds 85% by reset, without current usage being near a limit—for example, 5% used early in the week with 95% projected. Both retain a visible warning when no exhaustion countdown is shown. Rounding a multiplier to 1.0× does not change the unrounded forecast or risk verdict.
@@ -69,7 +71,7 @@ Codex calls these **banked resets**; its count is provider-reported and details 
 
 Claude's **conditional 5-hour reset availability** is shown separately in the dialog and never added to the badge. It may be available, unavailable now (for example, the session limit has not been reached), or unknown. Its next-availability time is not an expiry, and reaching that time does not prove the offer is available. Session-only resets still count toward the weekly usage limit.
 
-This is read-only: opening details never redeems a reset. Saved resets do not change quota percentages or pace calculations. The footer and dialog share one inventory, refreshed every five minutes while visible, on focus, or with the dialog's refresh button.
+This is read-only: opening details never redeems a reset. Saved resets do not change quota percentages or pace calculations. The footer card and dialog share one inventory, refreshed every five minutes while either is open and the page is visible, on focus/return to visibility, or with the dialog's refresh button. Closing both stops saved-reset reads, without stopping quota polling when `showStrip` is on.
 
 Reads run on the corresponding **BB host**, not necessarily the machine running the server or UI. Codex uses that host's ChatGPT login and a private Codex inventory endpoint. Claude uses that host's Claude Code subscription login with profile scope, verifies account identity through the profile API, and uses the installed CLI version for its private usage API's client headers. Claude credentials are read from `.credentials.json` under `CLAUDE_SECURESTORAGE_CONFIG_DIR`, `CLAUDE_CONFIG_DIR`, or `~/.claude`; macOS uses the corresponding Claude Code keychain entry. Tokens stay on the host. The plugin does not refresh or rewrite credentials or import browser cookies. If a login expires, refresh Claude Code's login on the signed-in host; a login on the server machine is not required. Private endpoint access can vary; missing or client-gated inventory is unknown, never a guessed zero.
 
@@ -145,11 +147,11 @@ Turn this off with the *Add Grok Build usage to bb's usage card* setting, then r
 ### New installations
 
 ```sh
-bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.4.3'
+bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.4.4'
 bb plugin config usage-pace set showStrip true
 ```
 
-The compact footer is off by default; the second command enables it, including Codex and Claude resets. Use `@^0.4.3` instead of `@v0.4.3` to track compatible release tags with `bb plugin update usage-pace`.
+The compact footer card is off by default; the second command enables it, including Codex and Claude resets. Reload the app UI after changing `showStrip`. Use `@^0.4.4` instead of `@v0.4.4` to track compatible release tags with `bb plugin update usage-pace`.
 
 ### Upgrades
 
@@ -159,21 +161,21 @@ First inspect the installed source:
 bb plugin source usage-pace
 ```
 
-For an install tracking the repository's default branch or another branch containing 0.4.3, update in place. The same command updates a Git semver-range install when a published release satisfies its range. This keeps the plugin's settings:
+For an install tracking the repository's default branch or another branch containing 0.4.4, update in place. The same command updates a Git semver-range install when a published release satisfies its range. This keeps the plugin's settings:
 
 ```sh
 bb plugin update usage-pace
 ```
 
-An exact tag or commit is pinned: `update` does not move it to a newer release. To move a pinned install to 0.4.3, or change any existing install to a tag or range, remove it and install the new source. **Removal deletes the plugin's settings, secrets, and schedules.** Record your configuration first with `bb plugin config usage-pace`, then restore the settings you need after reinstalling:
+An exact tag or commit is pinned: `update` does not move it to a newer release. To move a pinned install to 0.4.4, or change any existing install to a tag or range, remove it and install the new source. **Removal deletes the plugin's settings, secrets, and schedules.** Record your configuration first with `bb plugin config usage-pace`, then restore the settings you need after reinstalling:
 
 ```sh
 bb plugin config usage-pace
 bb plugin remove usage-pace
-bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.4.3'
+bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.4.4'
 ```
 
-Use `@^0.4.3` in that final command to track compatible releases instead. Running `plugin install` over an existing managed install is not an upgrade; bb 0.46.1 refuses the duplicate plugin ID.
+Use `@^0.4.4` in that final command to track compatible releases instead. Running `plugin install` over an existing managed install is not an upgrade; bb 0.46.1 refuses the duplicate plugin ID.
 
 ### Installation details
 
@@ -185,7 +187,7 @@ For a new install from a local checkout:
 bb plugin install ./
 ```
 
-If you turn on the strip, do not also install Usage Bar. Both plugins put a strip in the same footer. With the Grok setting on (the default), do not also install Grok Build Usage.
+If you turn on the strip, do not also install Usage Bar. Both plugins show similar usage information; Usage Pace now uses bb's managed footer card. With the Grok setting on (the default), do not also install Grok Build Usage.
 
 ## From the terminal
 

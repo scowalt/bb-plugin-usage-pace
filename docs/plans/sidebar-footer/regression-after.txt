@@ -1,0 +1,9 @@
+RUN  v3.2.7 <worktree>
+
+ ✓ |dom| sidebar-footer.test.tsx (5 tests | 4 skipped) 1987ms
+   ✓ opens one sidebar footer disclosure at startup without injecting footer DOM  1986ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 4 skipped (5)
+   Start at  18:38:47
+   Duration  2.84s (transform 289ms, setup 0ms, collect 99ms, tests 1.99s, environment 469ms, prepare 86ms)
