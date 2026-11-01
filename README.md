@@ -46,7 +46,7 @@ G  ⌛ resets in 2h 14m
 - `⌛` (amber hourglass): a window is confirmed exhausted. A countdown **replaces pace and quota percentages on the same line**, updating each minute to the **latest reset among exhausted windows**, including model-specific limits (`resets in 2h 14m`, or `resets in <1m`). Hover for individual window percentages and resets. If any exhausted window has a missing or invalid reset time, it shows `reset unknown`. When the countdown reaches zero, the plugin requests fresh usage once, bypassing its cache, and shows `awaiting refresh` until updated data establishes the new state—even if that refresh fails. The countdown describes scheduled quota renewal, not a guarantee of service availability.
 - `too early` or `unknown`: a multiplier cannot be judged or the data may be stale/incomplete. Fresh reported percentages remain visible; stale or unobserved quota shows “usage unknown,” without a numeric pace claim, a zero-usage implication, or a stale forecast. Stale rows' tooltips, dialog details, and CLI text show the last successful reading's age (for example, `last read 29h ago`), or say that no successful reading is known. They name a source that couldn't refresh the account and include its reason when supplied, rather than advising another refresh immediately afterward. A reported exhausted or overshooting window still warns even if another window's pace is unknown. `other pace unknown` keeps uncertainty in an undisplayed window visible beside known selected windows.
 
-Status considers **all** reported windows, including model-specific limits not displayed in the strip. Healthy weekly pace never removes their warnings. Hover for full window names, reset times and run-out estimates; click or keyboard-activate the row for the full dialog. Accessible descriptions explain the multiplier and account-level constraints without relying on colour. Token totals remain in the dialog, not the footer.
+Status considers **all** reported windows, including model-specific limits not displayed in the strip. Healthy weekly pace never removes their warnings. Hover for full window names, reset times and run-out estimates; click or keyboard-activate the row for the full dialog. Accessible descriptions explain the multiplier and account-level constraints without relying on colour. The dialog opens directly to quota and reset details, with a single-row header. Token totals are available only through `bb usage-pace --tokens`; the UI no longer fetches them.
 
 ### Multiple accounts and pools (0.4.0)
 
@@ -54,7 +54,7 @@ Usage Pace discovers every `provider-usage.v1` source, including machine-local p
 
 **Reading freshness (0.4.3).** A passed window reset makes the reading stale. Age alone does not prove a failure: normal polling permits sources to answer from cache. When an `ok` reading is at least one **Cache usage for (minutes)** period old (default five minutes; minimum 30 seconds), or has no observation timestamp, Usage Pace requests `refresh: true` for that resource alone, at most once per cache period. If a forced read still has no observation or returns a reading at least one cache period older than the request's start, it is stale even before any reset passes. A recent reading within that period is accepted; timestamps need not exactly equal the request time. Failed freshness checks and supplied reasons survive subsequent cached reads until a recent observation or a new refresh result replaces them. Manual refresh / `--force` bypasses the probe limit. A healthy on-demand source can therefore return old cached data and then fresh data without ending up stale. Generic refresh advice is reserved for an unknown/passed-reset reading without a reported failure; Usage Pace cannot repair a source's login or renew its credentials.
 
-Each account has a strip row. With two or more accounts, the provider also has a pool row; the dialog places the pool before that provider's accounts. Account labels use **Account aliases** (`email=Alias` pairs, separated by commas or newlines), then the email prefix, then the resource label. Labels that only repeat the provider name (ignoring case) are omitted from text and UI headings. A failed resource read with no identity keeps that resource's last known `accountKey`. Errors for the same identity also retain its email, plan, and plan label wherever the error omits them; a resource that has never reported an identity stays separate.
+The strip and dialog use the same account filter. Uninstalled providers and discoveries with no quota windows, account identity, or previous reading are hidden, including subscription errors from providers never used. Known accounts remain visible if their usage fails or login expires; a generic plan label alone is not evidence of an account. Raw CLI account output remains available for diagnosis. Each displayed account has a strip row. With two or more accounts, the provider also has a pool row; the dialog places the pool before that provider's accounts. Account labels use **Account aliases** (`email=Alias` pairs, separated by commas or newlines), then the email prefix, then the resource label. Labels that only repeat the provider name (ignoring case) are omitted from text and UI headings. A failed resource read with no identity keeps that resource's last known `accountKey`. Errors for the same identity also retain its email, plan, and plan label wherever the error omits them; a resource that has never reported an identity stays separate.
 
 Pool weekly use and pace are plan-weighted: Max 20x weighs 20, Max 5x weighs 5, and Pro weighs 1. **Pool weight overrides** accepts `email=weight` pairs. Unknown plans, stale measurements, and missing weekly windows are excluded from weighted values and mark the result **partial**. Pool pace divides weighted consumption by weighted elapsed budget, rather than averaging the account multipliers. Weekly pool figures say **est.** because session plan multipliers do not establish weekly quota sizes. There is no pool run-out forecast.
 
@@ -69,7 +69,7 @@ bb plugin config usage-pace set poolWeights 'a@example.test=20,b@example.test=5'
 
 Codex calls these **banked resets**; its count is provider-reported and details may be incomplete. Claude's **limit resets** are classified by the quota windows they affect: Full, 5-hour, or other saved resets. The Claude badge sums remaining uses in current, unpaused grants, not the number of grant records. A saved grant can count even when it is not currently redeemable. An explicit `no_grant` response with an empty grant list confirms zero saved resets; absent, gated, or malformed inventory remains unknown.
 
-Claude's **conditional 5-hour reset availability** is shown separately in the dialog and never added to the badge. It may be available, unavailable now (for example, the session limit has not been reached), or unknown. Its next-availability time is not an expiry, and reaching that time does not prove the offer is available. Session-only resets still count toward the weekly usage limit.
+Claude's **conditional 5-hour reset availability** is shown separately in the dialog and never added to the badge. It may be available, unavailable with a concise provider-reported reason (for example, `Not available · session limit not reached`), or unknown. A confirmed zero saved balance is shown once; it does not mean the conditional reset status is missing. Its next-availability time is not an expiry, and reaching that time does not prove the offer is available. Session-only resets still count toward the weekly usage limit.
 
 This is read-only: opening details never redeems a reset. Saved resets do not change quota percentages or pace calculations. The footer card and dialog share one inventory, refreshed every five minutes while either is open and the page is visible, on focus/return to visibility, or with the dialog's refresh button. Closing both stops saved-reset reads, without stopping quota polling when `showStrip` is on.
 
@@ -98,7 +98,7 @@ The setting is off by default, persists across reloads, is shared across browser
 
 Only an unknown, missing, or offline server host, or an unreadable host list, makes the server scope unavailable. A failed account read stays on that account and never hides healthy accounts. Snapshot warnings are reserved for discovery, host-list, and source-list failures. If the server is missing or offline, machine-only rows disappear with an actionable error; shared rows remain. Saved-reset reads are limited to the server host and require a matching account identity. The view never substitutes another machine.
 
-This is a display filter: all-host quota collection, bb's separately owned Provider Usage card, `bb usage-pace` output, and **Tokens · across BB** remain unchanged. Saved-reset inventory reads in the strip/dialog follow the displayed accounts. To restore the all-machines view, set `serverOnly` to `false`.
+This is a display filter: all-host quota collection, bb's separately owned Provider Usage card, `bb usage-pace` account output, and CLI token totals remain unchanged. Saved-reset inventory reads in the strip/dialog follow the displayed accounts. To restore the all-machines view, set `serverOnly` to `false`.
 
 ## How pace is calculated
 
@@ -147,11 +147,11 @@ Turn this off with the *Add Grok Build usage to bb's usage card* setting, then r
 ### New installations
 
 ```sh
-bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.4.4'
+bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.4.5'
 bb plugin config usage-pace set showStrip true
 ```
 
-The compact footer card is off by default; the second command enables it, including Codex and Claude resets. Reload the app UI after changing `showStrip`. Use `@^0.4.4` instead of `@v0.4.4` to track compatible release tags with `bb plugin update usage-pace`.
+The compact footer card is off by default; the second command enables it, including Codex and Claude resets. Reload the app UI after changing `showStrip`. Use `@^0.4.5` instead of `@v0.4.5` to track compatible release tags with `bb plugin update usage-pace`.
 
 ### Upgrades
 
@@ -161,21 +161,21 @@ First inspect the installed source:
 bb plugin source usage-pace
 ```
 
-For an install tracking the repository's default branch or another branch containing 0.4.4, update in place. The same command updates a Git semver-range install when a published release satisfies its range. This keeps the plugin's settings:
+For an install tracking the repository's default branch or another branch containing 0.4.5, update in place. The same command updates a Git semver-range install when a published release satisfies its range. This keeps the plugin's settings:
 
 ```sh
 bb plugin update usage-pace
 ```
 
-An exact tag or commit is pinned: `update` does not move it to a newer release. To move a pinned install to 0.4.4, or change any existing install to a tag or range, remove it and install the new source. **Removal deletes the plugin's settings, secrets, and schedules.** Record your configuration first with `bb plugin config usage-pace`, then restore the settings you need after reinstalling:
+An exact tag or commit is pinned: `update` does not move it to a newer release. To move a pinned install to 0.4.5, or change any existing install to a tag or range, remove it and install the new source. **Removal deletes the plugin's settings, secrets, and schedules.** Record your configuration first with `bb plugin config usage-pace`, then restore the settings you need after reinstalling:
 
 ```sh
 bb plugin config usage-pace
 bb plugin remove usage-pace
-bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.4.4'
+bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.4.5'
 ```
 
-Use `@^0.4.4` in that final command to track compatible releases instead. Running `plugin install` over an existing managed install is not an upgrade; bb 0.46.1 refuses the duplicate plugin ID.
+Use `@^0.4.5` in that final command to track compatible releases instead. Running `plugin install` over an existing managed install is not an upgrade; bb 0.46.1 refuses the duplicate plugin ID.
 
 ### Installation details
 

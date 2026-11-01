@@ -139,46 +139,6 @@ function ProviderMark({
   );
 }
 
-type TokenTotals = { day: number; month: number; timeZone: string; fetchedAt: string | null; error: string | null };
-
-function useTokenTotals() {
-  const [tokens, setTokens] = useState<TokenTotals | null>(null);
-  useEffect(() => {
-    const controller = new AbortController();
-    let pending = false;
-    const refresh = async () => {
-      if (pending || document.visibilityState !== "visible") return;
-      pending = true;
-      try {
-        const response = await fetch(`/api/v1/plugins/${PLUGIN_ID}/rpc/getTokens`, {
-          method: "POST", headers: { "content-type": "application/json" },
-          body: JSON.stringify({ timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
-          signal: controller.signal,
-        });
-        const body = await response.json();
-        if (!response.ok || !body.ok) throw new Error("Token usage unavailable");
-        if (!controller.signal.aborted) setTokens(body.result);
-      } catch {
-        if (!controller.signal.aborted) setTokens((prior) => ({
-          day: 0, month: 0, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          fetchedAt: null, ...prior, error: "Could not refresh token usage",
-        }));
-      } finally { pending = false; }
-    };
-    const onVisible = () => { void refresh(); };
-    void refresh();
-    const timer = window.setInterval(onVisible, 60_000);
-    document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("focus", onVisible);
-    return () => {
-      controller.abort(); window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("focus", onVisible);
-    };
-  }, []);
-  return tokens;
-}
-
 export function UsageBar({ onOpen }: { onOpen: (target?: BankedResetTarget) => void }) {
   const state = useUsage();
   useMinuteTick();
@@ -394,7 +354,7 @@ export function ProviderBlock({
   );
 }
 
-function UsageDialog({ tokens, bankedTarget }: { tokens: TokenTotals | null; bankedTarget: BankedResetTarget | null }) {
+function UsageDialog({ bankedTarget }: { bankedTarget: BankedResetTarget | null }) {
   const open = useSyncExternalStore(subscribeOverlay, isOverlayOpen);
   const refreshBankedResets = useRefreshBankedResets();
   const state = useUsage();
@@ -404,14 +364,22 @@ function UsageDialog({ tokens, bankedTarget }: { tokens: TokenTotals | null; ban
   const hostCount = new Set(providers.flatMap(provider => provider.hosts.map(host => host.id))).size;
   return (
     <Dialog open={open} onOpenChange={setOverlayOpen}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            Usage Pace
+      <DialogContent className="max-w-md gap-3 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <DialogHeader className="flex-row items-center justify-between gap-2 space-y-0 pr-6">
+          <DialogTitle className="shrink-0 text-sm">Usage Pace</DialogTitle>
+          <div className="flex min-w-0 items-center gap-1">
+            <DialogDescription
+              className="truncate text-[11px]"
+              title={state.data ? `${state.data.serverOnly ? "Server machine · " : ""}Updated ${new Date(state.data.fetchedAt).toLocaleString()}` : undefined}
+            >
+              {state.data
+                ? `${state.data.serverOnly ? "Server · " : "Updated "}${new Date(state.data.fetchedAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`
+                : "Loading usage…"}
+            </DialogDescription>
             <Button
               variant="ghost"
               size="icon"
-              className="size-7"
+              className="size-7 shrink-0"
               aria-label="Refresh usage"
               disabled={state.loading}
               onClick={() => {
@@ -424,24 +392,9 @@ function UsageDialog({ tokens, bankedTarget }: { tokens: TokenTotals | null; ban
                 className={state.loading ? "size-4 animate-spin" : "size-4"}
               />
             </Button>
-          </DialogTitle>
-          <DialogDescription>
-            {state.data
-              ? `${state.data.serverOnly ? "Server machine · " : ""}Updated ${new Date(state.data.fetchedAt).toLocaleTimeString()}`
-              : "Loading usage…"}
-          </DialogDescription>
+          </div>
         </DialogHeader>
         <div className="flex max-h-[60vh] flex-col gap-3 overflow-y-auto">
-          <section className="rounded-lg border p-3" aria-label="Token usage across BB">
-            <h3 className="text-sm font-semibold">Tokens · across BB</h3>
-            <dl className="mt-2 grid grid-cols-2 gap-3 text-sm tabular-nums">
-              <div><dt className="text-muted-foreground">Today</dt><dd className="font-semibold">{tokens?.fetchedAt ? tokens.day.toLocaleString("en-US") : "—"}</dd></div>
-              <div><dt className="text-muted-foreground">This month</dt><dd className="font-semibold">{tokens?.fetchedAt ? tokens.month.toLocaleString("en-US") : "—"}</dd></div>
-            </dl>
-            <p className="mt-2 text-[11px] text-muted-foreground">All projects, archived threads, and hidden agents. Includes usage reported by providers to BB. Cache and reasoning tokens are not counted again.</p>
-            <p className="mt-1 text-[11px] text-muted-foreground">{tokens?.timeZone ?? ""}{tokens?.fetchedAt ? ` · Updated ${new Date(tokens.fetchedAt).toLocaleTimeString()}` : " · Loading…"}</p>
-            {tokens?.error ? <p role="status" className="mt-1 text-xs text-muted-foreground">{tokens.error}</p> : null}
-          </section>
           {providers.length === 0 ? (
             <p className="text-xs text-muted-foreground">
               {state.error ?? state.data?.error ?? (state.loading ? "Loading…" : state.data?.serverOnly ? "No providers with usage reporting on the server." : "No providers with usage reporting.")}
@@ -481,7 +434,6 @@ export function UsageStrip() {
 }
 
 export function UsageOverlay() {
-  const tokens = useTokenTotals();
   const host = useSyncExternalStore(subscribeStripHost, getStripHost);
   const state = useUsage();
   const showStrip = state.data?.showStrip === true;
@@ -509,7 +461,7 @@ export function UsageOverlay() {
       {host === null || !showStrip
         ? null
         : createPortal(<UsageBar onOpen={openDetails} />, host)}
-      <UsageDialog tokens={tokens} bankedTarget={bankedTarget} />
+      <UsageDialog bankedTarget={bankedTarget} />
     </BankedResetsProvider>
   );
 }

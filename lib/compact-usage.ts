@@ -50,6 +50,7 @@ function statusFor(windows: UsageWindow[], paces: (Pace | null)[], error: string
     return { glyph: "⌛", tone: "warning", detail: `Scheduled reset passed. Awaiting refreshed usage.${error ? ` Usage may be stale or incomplete. ${error}` : ""}` };
   }
   if (error) return { glyph: "—", tone: null, detail: `Usage may be stale or incomplete. ${error}` };
+  if (windows.length === 0) return { glyph: "—", tone: null, detail: "No quota windows reported." };
   if (reset !== null) {
     return { glyph: "⌛", tone: "warning", detail: "A quota window is exhausted." };
   }

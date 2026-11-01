@@ -546,13 +546,49 @@ it("keeps shared accounts visible in the server-only view without reading a remo
 
 async function renderOverlay() {
   vi.spyOn(usageStore, "getStripHost").mockReturnValue(container);
-  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ ok: true, result: {
-    day: 123, month: 456, timeZone: "UTC", fetchedAt: new Date(NOW).toISOString(), error: null,
-  } }))));
+  vi.stubGlobal("fetch", vi.fn());
   await act(async () => usageStore.setOverlayOpen(true));
   await render(<UsageOverlay />);
   return document.querySelector<HTMLElement>('[role="dialog"]')!;
 }
+
+it("hides never-used providers from both the strip and dialog", async () => {
+  const unused = { ...provider, accountKey: null, accountEmail: null, observedAt: null, windows: [], stale: true };
+  state.data = { ...state.data!, showStrip: true, providers: [
+    provider,
+    { ...unused, id: "acp-cursor", displayName: "Cursor", accountLabel: "Cursor", status: "not_installed" },
+    { ...unused, id: "acp-opencode", displayName: "opencode", accountLabel: "opencode", status: "error", planLabel: "OpenCode Go", message: "No active Go subscription." },
+  ] };
+  const dialog = await renderOverlay();
+  expect.soft(dialog.textContent).not.toMatch(/Cursor|opencode|No active Go subscription/iu);
+  expect.soft(dialog.textContent).toContain("Claude Code");
+  expect.soft(container.querySelectorAll('button[aria-label*="Open usage details."]')).toHaveLength(1);
+  expect.soft(container.textContent).not.toContain("usage unknown");
+});
+
+it.each(["error", "expired", "unauthenticated"] as const)("keeps a known account visible when its usage is %s", async status => {
+  state.data = { ...state.data!, showStrip: true, providers: [{ ...provider, status, stale: true, windows: [], message: "Sign in again." }] };
+  const dialog = await renderOverlay();
+  expect(dialog.textContent).toContain("Claude Code");
+  expect(dialog.textContent).toContain("Sign in again.");
+  expect(container.querySelectorAll('button[aria-label*="Open usage details."]')).toHaveLength(1);
+});
+
+it("keeps reset details for a known account even when no quota windows are reported", async () => {
+  state.data = { ...state.data!, showStrip: true, providers: [{ ...provider, windows: [] }] };
+  const dialog = await renderOverlay();
+  expect(dialog.textContent).toContain("No limit windows reported.");
+  expect(dialog.querySelector('[aria-label="Claude limit resets"]')).not.toBeNull();
+  expect(container.querySelector('button[aria-label*="Open usage details."]')?.getAttribute("aria-label")).not.toContain("All quota windows last to reset");
+});
+
+it("opens directly to quota details without token totals or token polling", async () => {
+  const dialog = await renderOverlay();
+  expect.soft(dialog.querySelector('[aria-label="Token usage across BB"]')).toBeNull();
+  expect.soft(dialog.textContent).not.toMatch(/Tokens · across BB|All projects, archived threads|Cache and reasoning/iu);
+  await act(async () => { vi.advanceTimersByTime(60_000); window.dispatchEvent(new Event("focus")); });
+  expect.soft(fetch).not.toHaveBeenCalled();
+});
 
 it("updates the strip, dialog, and reset targets together when the display setting changes", async () => {
   const remote = { ...provider, hostId: "remote", hostName: "Laptop", hosts: [{ id: "remote", name: "Laptop" }], windows: [{ ...provider.windows[0]!, usedPercent: 80 }] };
@@ -568,21 +604,23 @@ it("updates the strip, dialog, and reset targets together when the display setti
   state = { ...state, data: { ...state.data!, serverOnly: true } };
   await render(<UsageOverlay />);
   expect(container.querySelectorAll('button[aria-label*="Open usage details."]')).toHaveLength(1);
-  expect(dialog.textContent).toContain("Server machine · Updated");
+  expect(dialog.textContent).toContain("Server · ");
+  expect(dialog.querySelector('[title^="Server machine · Updated"]')).not.toBeNull();
   expect(dialog.textContent).toContain("one@example.test");
   expect(dialog.textContent).toContain("52%");
   expect(dialog.textContent).not.toContain("remote@example.test");
   expect(dialog.textContent).not.toContain("80%");
   expect(dialog.querySelectorAll('section[aria-label="Claude limit resets"]')).toHaveLength(1);
   expect(rpc).toHaveBeenCalledExactlyOnceWith("getBankedResets", { hostId: provider.hostId, providerId: provider.id, force: false });
-  expect(dialog.querySelector('[aria-label="Token usage across BB"]')?.textContent).toContain("Tokens · across BBToday123This month456");
+  expect(dialog.querySelector('[aria-label="Token usage across BB"]')).toBeNull();
   rpc.mockClear();
 
   state = { ...state, data: { ...state.data!, serverOnly: false } };
   await render(<UsageOverlay />);
   expect(container.querySelectorAll('button[aria-label*="Open usage details."]')).toHaveLength(2);
   expect(dialog.textContent).toContain("remote@example.test");
-  expect(dialog.textContent).not.toContain("Server machine ·");
+  expect(dialog.textContent).not.toContain("Server · ");
+  expect(dialog.querySelector('[title^="Server machine · Updated"]')).toBeNull();
   expect(rpc).toHaveBeenCalledTimes(2);
   expect(rpc.mock.calls.map(([, input]) => input.hostId)).toEqual(["remote", "third"]);
 });
@@ -635,9 +673,7 @@ it.each([
 
 it("honours the optional strip setting without reading saved resets while hidden", async () => {
   vi.spyOn(usageStore, "getStripHost").mockReturnValue(container);
-  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ ok: true, result: {
-    day: 0, month: 0, timeZone: "UTC", fetchedAt: new Date(NOW).toISOString(), error: null,
-  } }))));
+  vi.stubGlobal("fetch", vi.fn());
   state.data!.showStrip = false;
   await render(<UsageOverlay />);
   expect(container.querySelector('[aria-label="BB usage limits"]')).toBeNull();

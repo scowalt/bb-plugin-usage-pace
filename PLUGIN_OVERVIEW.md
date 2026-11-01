@@ -32,7 +32,7 @@ Provider usage card.
   near-limit warnings. Unknown/stale or too-early pace replaces the multiplier.
   When exhausted, an amber hourglass and reset countdown replace the ordinary
   values on one line, using the latest exhausted reset; missing times show
-  “reset unknown.” Hover for details; click for the dialog and token totals.
+  “reset unknown.” Hover for details; click for quota and reset details. The dialog has a single-row header, no token totals, and hides unused provider discoveries while retaining known accounts with read failures.
 - **Multiple quota accounts.** Discovers machine and shared usage sources, merges only matching provider-issued identities, and shows each account once. Optional email aliases label accounts. The dialog lists sources, available machines, and measurement age.
 - **Provider pools.** Two or more displayed accounts add a pool row with shared availability and plan-weighted weekly use/pace. Weekly numbers are estimates; unknown plans and stale reads make them partial. Model-family exhaustion is separate, and there is no pool run-out forecast.
 - **Server-only view.** An optional, shared setting limits Usage Pace's strip,
