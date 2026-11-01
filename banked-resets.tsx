@@ -17,20 +17,24 @@ function remaining(expiresAt: string, now: number): string {
 function SessionResetStatus({ data, now }: { data: SessionReset | undefined; now: number }) {
   const passed = data?.nextAvailableAt !== null && data?.nextAvailableAt !== undefined && Date.parse(data.nextAvailableAt) <= now;
   const reasons: Record<string, string> = {
-    not_at_wall: "The session limit has not been reached. Eligibility will be checked again later.",
-    weekly_limit: "The weekly limit is exhausted.",
-    no_weekly_limit: "No qualifying weekly limit was reported.",
-    tier: "Not offered for the current plan.",
-    tenure: "Account eligibility requirements are not met.",
-    extra_usage: "Not offered with the current extra-usage settings.",
-    other_experiment: "Not offered for this account's current eligibility.",
+    not_at_wall: "session limit not reached",
+    weekly_limit: "weekly limit exhausted",
+    no_weekly_limit: "no qualifying weekly limit",
+    tier: "not offered for this plan",
+    tenure: "account not eligible",
+    extra_usage: "not offered with extra usage",
+    other_experiment: "account not eligible",
   };
-  return <div role="group" className="mt-3 rounded-md border border-border p-2 text-xs" aria-label="5-hour reset availability">
-    <h4 className="font-medium">5-hour reset availability</h4>
-    <p className="mt-1">{passed ? "Availability time passed — refresh" : data?.availability === "available" ? "Available at last update" : data?.availability === "unavailable" ? "Not available now" : "Availability unknown"}</p>
-    {data?.reason && reasons[data.reason] ? <p className="mt-1 text-muted-foreground">{reasons[data.reason]}</p> : null}
+  const reason = data?.reason ? reasons[data.reason] : undefined;
+  const status = passed ? "Availability time passed — refresh"
+    : data?.availability === "available" ? "Available at last update"
+    : data?.availability === "unavailable" ? reason ? `Not available · ${reason}` : "Not available now"
+    : "Availability unknown";
+  return <div role="group" className="mt-2 text-xs" aria-label="5-hour reset availability">
+    <h4 className="font-medium" title="Conditional session reset, separate from the saved balance.">5-hour reset</h4>
+    <p className="mt-1 text-muted-foreground">{status}</p>
     {data?.nextAvailableAt && !passed ? <p className="mt-1 text-muted-foreground">Next availability reported: <time dateTime={data.nextAvailableAt}>{new Date(data.nextAvailableAt).toLocaleString()}</time></p> : null}
-    <p className="mt-1 text-[11px] text-muted-foreground">Conditional session-only reset; the weekly limit still applies. Not included in saved-reset counts.</p>
+    {data?.availability === "available" && !passed ? <p className="mt-1 text-muted-foreground">Session only; the weekly limit still applies.</p> : null}
   </div>;
 }
 
@@ -53,21 +57,20 @@ export function BankedResetsList({ data, loading, hostName, id, providerId = "co
   const claude = providerId === "claude-code";
   const label = claude ? "saved" : "banked";
   return (
-    <section ref={section} id={id} tabIndex={-1} className="mt-1 border-t border-border pt-3" aria-label={claude ? "Claude limit resets" : "Codex banked resets"} aria-busy={loading}>
+    <section ref={section} id={id} tabIndex={-1} className="mt-1 border-t border-border pt-2" aria-label={claude ? "Claude limit resets" : "Codex banked resets"} aria-busy={loading}>
       <div className="flex flex-wrap items-baseline justify-between gap-1">
-        <h3 className="text-xs font-semibold">{claude ? "Limit resets" : "Banked resets"}</h3>
+        <h3 className="text-xs font-semibold" title="Read-only saved-reset balance, separate from scheduled quota renewals. Redemption depends on provider eligibility.">{claude ? "Limit resets" : "Banked resets"}</h3>
         {data?.status === "ok" && data.availableCount !== null ? <span className="text-xs tabular-nums">{data.availableCount} {label}{expiredSinceRead ? " at last update" : ""}</span> : null}
       </div>
-      <p className="mt-1 text-[11px] text-muted-foreground">Saved resets, not scheduled quota resets. Read-only; not necessarily redeemable now.</p>
       {loading ? <p role="status" className="mt-2 text-xs text-muted-foreground">{data ? `Refreshing ${label} resets…` : `Loading ${label} resets…`}</p> : null}
       {data?.status === "ok" ? (
         <>
-          {data.credits.length === 0 ? <p className="mt-2 text-xs">{data.availableCount === 0 ? `No ${label} resets available.` : "The provider did not return the reported reset details."}</p> : (
+          {data.credits.length === 0 ? (data.availableCount === 0 ? null : <p className="mt-2 text-xs">The provider did not return the reported reset details.</p>) : (
             <ul className="mt-2 flex flex-col gap-2">
               {data.credits.map(credit => {
                 const ms = credit.expiresAt ? Date.parse(credit.expiresAt) - now : Infinity;
                 const soon = ms > 0 && ms <= 7 * DAY;
-                return <li key={credit.id} className="rounded-md border border-border p-2 text-xs">
+                return <li key={credit.id} className="text-xs">
                   <div className="flex flex-wrap items-center justify-between gap-1">
                     <span className="font-medium">{credit.scope ? scopeLabels[credit.scope] : credit.title}{credit.remaining !== undefined ? ` · ${credit.remaining} saved` : ""}</span>
                     {soon ? <span className="font-medium text-amber-600 dark:text-amber-400">Expiring soon</span> : null}

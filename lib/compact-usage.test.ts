@@ -61,9 +61,16 @@ describe("compact usage rows", () => {
     expect(compactUsageRows(state(providers), NOW)).toHaveLength(4);
   });
 
-  it("skips providers without reportable quota windows", () => {
-    expect(compactUsageRows(state([{ ...provider, status: "not_installed" }, { ...provider, windows: [] }]), NOW)).toEqual([]);
+  it("skips uninstalled providers and discoveries with no account or reading", () => {
+    expect(compactUsageRows(state([{ ...provider, status: "not_installed" }, { ...provider, windows: [], accountKey: null, accountEmail: null, observedAt: null }]), NOW)).toEqual([]);
     expect(compactUsageRows({ data: null, error: null, loading: true }, NOW)).toEqual([]);
+  });
+
+  it("keeps known accounts without windows without claiming quota will last", () => {
+    const result = row([]);
+    expect(result.notice?.label).toBe("usage unknown");
+    expect(result.status.glyph).toBe("—");
+    expect(result.title).not.toContain("All quota windows last to reset");
   });
 
   it("keeps weekly-only and session-only rows without fabricated percentages", () => {

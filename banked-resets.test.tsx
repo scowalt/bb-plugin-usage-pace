@@ -238,6 +238,15 @@ const claudeBadge = () => container.querySelector<HTMLButtonElement>('button[ari
 
 describe("Claude limit resets", () => {
   const claude = { ...provider, id: "claude-code", displayName: "Claude" };
+  it("explains the confirmed unavailable session reset without suggesting a missing reading", async () => {
+    await render(<BankedResetsList providerId="claude-code" data={claudeInventory(0)} loading={false} hostName="One" now={NOW} />);
+    const availability = container.querySelector('[aria-label="5-hour reset availability"]')!;
+    expect.soft(availability.textContent).toContain("Not available · session limit not reached");
+    expect.soft(availability.textContent).not.toContain("Eligibility will be checked again later");
+    expect.soft(container.textContent).toContain("0 saved");
+    expect.soft(container.textContent).not.toContain("No saved resets available.");
+    expect.soft(container.textContent).not.toContain("Saved resets, not scheduled quota resets.");
+  });
   it("shares refreshes, shows scope/expiry, and never counts conditional availability", async () => {
     rpc.mockResolvedValue(claudeInventory(2));
     await render(surfaces([claude]));
@@ -250,7 +259,7 @@ describe("Claude limit resets", () => {
     expect(section.textContent).toContain("Full reset · 2 saved");
     expect(section.textContent).toContain("Affects: 5-hour session, weekly");
     expect(section.textContent).toContain("Not currently redeemable");
-    expect(section.textContent).toContain("Not available now");
+    expect(section.textContent).toContain("Not available · session limit not reached");
     expect(section.querySelector("time")?.dateTime).toBe("2026-10-03T12:00:00Z");
     const syntheticSessionReset: BankedResets["sessionReset"] = { availability: "available", reason: null, nextAvailableAt: null };
     rpc.mockResolvedValue({ ...claudeInventory(0), sessionReset: syntheticSessionReset });
@@ -259,7 +268,8 @@ describe("Claude limit resets", () => {
     expect(claudeBadge().textContent).toBe("↺0");
     expect(claudeBadge().className).toContain("opacity-50");
     expect(section.textContent).toContain("Available at last update");
-    expect(section.textContent).toContain("Not included in saved-reset counts");
+    expect(section.textContent).toContain("Session only; the weekly limit still applies.");
+    expect(section.querySelector('[title="Conditional session reset, separate from the saved balance."]')).not.toBeNull();
     expect(container.querySelectorAll("button")).toHaveLength(2);
     expect(section.querySelector("button")).toBeNull();
   });
@@ -298,6 +308,6 @@ describe("Claude limit resets", () => {
     data.credits[0]!.scope = "five-hour";
     await render(<BankedResetsList providerId="claude-code" data={data} loading={false} hostName="One" />);
     expect(container.querySelector("li")?.textContent).toContain("5-hour reset · 1 saved");
-    expect(container.querySelector('[aria-label="5-hour reset availability"]')?.textContent).toContain("Not available now");
+    expect(container.querySelector('[aria-label="5-hour reset availability"]')?.textContent).toContain("Not available · session limit not reached");
   });
 });

@@ -32,6 +32,26 @@ describe("usage display scope", () => {
     expect(usageForDisplay(input)).toBe(input);
   });
 
+  it.each([true, false])("filters unused discoveries without mutating the collected snapshot (server-only: %s)", serverOnly => {
+    const unused = { ...server, accountKey: null, accountEmail: null, observedAt: null, windows: [], planLabel: "OpenCode Go", stale: true };
+    const providers: UsageProvider[] = [server,
+      ...(["not_installed", "unauthenticated", "expired", "error", "ok"] as const).map(status => ({ ...unused, status })),
+    ];
+    const input = state({ serverOnly, providers, accounts: providers });
+    const display = usageForDisplay(input);
+    expect(display.data?.accounts).toEqual([server]);
+    expect(display.data?.providers).toEqual([server]);
+    expect(input.data?.accounts).toHaveLength(6);
+    expect(input.data?.providers).toHaveLength(6);
+  });
+
+  it.each([
+    { accountKey: "known" }, { accountEmail: "known@example.test" }, { observedAt: NOW }, { windows: server.windows },
+  ])("preserves failed accounts with prior usage or identity (%j)", evidence => {
+    const account: UsageProvider = { ...server, status: "error", accountKey: null, accountEmail: null, observedAt: null, windows: [], ...evidence };
+    expect(usageForDisplay(state({ providers: [account] })).data?.providers).toEqual([account]);
+  });
+
   it("filters by server host ID before account deduplication without changing collection", () => {
     const input = state();
     const display = usageForDisplay(input);
