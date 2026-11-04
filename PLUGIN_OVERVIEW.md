@@ -18,6 +18,9 @@ Provider usage card.
 - **Grok Build in the card.** bb's Grok provider reports no usage. Usage
   Pace adds a Grok Build tab with the weekly or monthly credits and their
   pace.
+- **Claude Code and Codex while disabled in bb.** bb's own providers stop
+  reporting usage when disabled. Usage Pace then reads each machine's
+  Claude Code or Codex login itself, so those accounts stay visible.
 - **Which provider failed.** When one provider fails, bb shows "Couldn't
   refresh usage" on every tab. Usage Pace shows it only on the failed
   provider's tab, with that provider's error, and puts a red dot on that

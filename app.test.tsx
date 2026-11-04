@@ -424,9 +424,20 @@ it.each([null, "invalid"])("warns about hidden reported usage near a limit even 
   expect(button.getAttribute("aria-label")).toContain("Weekly model limit: 96% used");
 });
 
+it("does not call a hidden window that is too early to judge unknown", async () => {
+  state.data!.providers = [{ ...provider, windows: [...provider.windows, {
+    label: "Monthly", usedPercent: 0, resetsAt: "2026-10-31T11:00:00Z",
+  }] }];
+  await render();
+  const button = container.querySelector("button")!;
+  expect(button.textContent).toContain("W0.7× pace");
+  expect(button.textContent).toContain("S0.5× pace");
+  expect(button.textContent).not.toContain("other pace unknown");
+  expect(button.getAttribute("aria-label")).toContain("Monthly: 0% used");
+});
+
 it.each([
   { label: "Model quota", usedPercent: 1, resetsAt: null },
-  { label: "Weekly model limit", usedPercent: 1, resetsAt: "2026-10-08T11:00:00Z" },
 ])("shows hidden pace uncertainty alongside known selected windows ($label)", async hidden => {
   state.data!.providers = [{ ...provider, windows: [...provider.windows, hidden] }];
   await render();

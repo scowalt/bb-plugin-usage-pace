@@ -1,7 +1,9 @@
 import { defineRpcContract, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { registerGrokProvider } from "./lib/grok-provider";
-import { createGrokUsageSource, grokUsageSourceContract } from "./lib/grok-usage-source";
+import { createGrokUsageSource } from "./lib/grok-usage-source";
+import { createSubscriptionUsageSource } from "./lib/subscription-usage-source";
+import { combineUsageSources, usageSourceContract, type UsageSource } from "./lib/usage-source-contract";
 import { describePace, paceForWindows } from "./lib/pace";
 import { createTokenTotals } from "./lib/token-totals";
 import { bankedResetsSchema, bankedResetsUnavailable, resetProviderSchema, type BankedResets, type ResetProviderId } from "./lib/banked-resets-contract";
@@ -55,14 +57,14 @@ export function parseProviderList(value: string): string[] {
 
 export default async function plugin(bb: BbPluginApi) {
   const getTokens = createTokenTotals(bb);
-  const bankedHost = bb.hosts.experimental_client({ contract: bankedResetsHostContract });
+  const hostEntry = bb.hosts.experimental_client({ contract: bankedResetsHostContract });
   const bankedController = new AbortController();
   bb.onDispose(() => bankedController.abort());
   async function getBankedResets(hostId: string, force = false, providerId: ResetProviderId = "codex"): Promise<BankedResets> {
     try {
       const host = (await bb.sdk.hosts.list()).find(host => host.id === hostId);
       if (!host || host.status === "disconnected") return bankedResetsUnavailable("Host is offline or no longer available. Reconnect it, then refresh.");
-      return await bankedHost.call("readBankedResets", { force, providerId }, { hostId, signal: bankedController.signal });
+      return await hostEntry.call("readBankedResets", { force, providerId }, { hostId, signal: bankedController.signal });
     } catch {
       return bankedResetsUnavailable("Could not read banked resets from this host. Reconnect it, then refresh.");
     }
@@ -121,14 +123,17 @@ export default async function plugin(bb: BbPluginApi) {
     weights = parsePairs(String(values.poolWeights ?? ""));
   };
   await applySettings();
+  const usageSources: UsageSource[] = [createSubscriptionUsageSource(bb, (hostId, providerId) =>
+    hostEntry.call("readUsage", { providerId }, { hostId, signal: bankedController.signal }))];
   if ((await settings.get()).grokUsage !== false) {
     registerGrokProvider(bb);
-    bb.rpc.register(grokUsageSourceContract, createGrokUsageSource(bb), {
-      experimental_discoverable: true,
-      experimental_description:
-        "Grok Build usage from Usage Pace. Inventory reads metadata only.",
-    });
+    usageSources.push(createGrokUsageSource(bb));
   }
+  bb.rpc.register(usageSourceContract, combineUsageSources(usageSources), {
+    experimental_discoverable: true,
+    experimental_description:
+      "Usage from Usage Pace: Grok Build, plus Claude Code and Codex on machines where bb's own provider is disabled. Inventory reads metadata only.",
+  });
   settings.onChange?.(async () => {
     await applySettings();
     bb.realtime.publish("usage-changed", { fetchedAt: new Date().toISOString() });

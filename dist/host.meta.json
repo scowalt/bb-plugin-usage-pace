@@ -1,12 +1,12 @@
 {
   "sdkMajor": 0,
-  "sdkVersion": "0.5.29",
+  "sdkVersion": "0.6.104",
   "artifactFormatVersion": 1,
   "pluginId": "usage-pace",
-  "pluginVersion": "0.4.5",
+  "pluginVersion": "0.4.6",
   "builtWith": {
-    "bbVersion": "0.44.0",
-    "pluginSdkVersion": "0.5.29"
+    "bbVersion": "0.48.1",
+    "pluginSdkVersion": "0.6.104"
   },
-  "artifactDigest": "bdba79b15439cad1e15e8c1a25099e8670ec6a70301bc167b5cc5549238da0cb"
+  "artifactDigest": "faccec047a057a33f17e625be5229bc844b564c54cdd937d52175e3279fa8864"
 }

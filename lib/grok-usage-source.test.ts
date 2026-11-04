@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import type { z } from "zod";
 import { GROK_PROVIDER_ID } from "./grok-provider";
-import { createGrokUsageSource, grokUsageSourceContract, toSourceUsage } from "./grok-usage-source";
+import { createGrokUsageSource, toSourceUsage } from "./grok-usage-source";
+import { usageSourceContract } from "./usage-source-contract";
 
 const okUsage = {
   status: "ok" as const,
@@ -36,15 +37,15 @@ type Handlers = ReturnType<typeof createGrokUsageSource>;
 const LIST = "provider-usage.v1.listResources";
 const GET = "provider-usage.v1.getResource";
 
-function call(handlers: Handlers, method: typeof LIST, input: unknown): Promise<z.infer<typeof grokUsageSourceContract[typeof LIST]["output"]>>;
-function call(handlers: Handlers, method: typeof GET, input: unknown): Promise<z.infer<typeof grokUsageSourceContract[typeof GET]["output"]>>;
+function call(handlers: Handlers, method: typeof LIST, input: unknown): Promise<z.infer<typeof usageSourceContract[typeof LIST]["output"]>>;
+function call(handlers: Handlers, method: typeof GET, input: unknown): Promise<z.infer<typeof usageSourceContract[typeof GET]["output"]>>;
 async function call(handlers: Handlers, method: typeof LIST | typeof GET, input: unknown) {
   if (method === LIST) {
-    grokUsageSourceContract[LIST].input.parse(input);
-    return grokUsageSourceContract[LIST].output.parse(await handlers[LIST]());
+    usageSourceContract[LIST].input.parse(input);
+    return usageSourceContract[LIST].output.parse(await handlers[LIST]());
   }
-  const parsed = grokUsageSourceContract[GET].input.parse(input);
-  return grokUsageSourceContract[GET].output.parse(await handlers[GET](parsed));
+  const parsed = usageSourceContract[GET].input.parse(input);
+  return usageSourceContract[GET].output.parse(await handlers[GET](parsed));
 }
 
 describe("Grok usage source", () => {

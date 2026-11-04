@@ -108,9 +108,11 @@ function normalize(raw: unknown, email: string, now: number): { data: BankedRese
   };
 }
 
-async function readCredentials(signal?: AbortSignal): Promise<string> {
+export const claudeConfigDir = () => (process.env.CLAUDE_SECURESTORAGE_CONFIG_DIR ?? process.env.CLAUDE_CONFIG_DIR) || join(homedir(), ".claude");
+
+export async function readClaudeCredentials(signal?: AbortSignal): Promise<string> {
   const configured = process.env.CLAUDE_SECURESTORAGE_CONFIG_DIR ?? process.env.CLAUDE_CONFIG_DIR;
-  const directory = (configured || join(homedir(), ".claude")).normalize("NFC");
+  const directory = claudeConfigDir().normalize("NFC");
   if (process.platform === "darwin") {
     const suffix = configured ? `-${createHash("sha256").update(directory).digest("hex").slice(0, 8)}` : "";
     return (await exec("/usr/bin/security", ["find-generic-password", "-s", `Claude Code-credentials${suffix}`, "-w"], { signal, timeout: 3000, maxBuffer: 1024 * 1024 })).stdout;
@@ -154,7 +156,7 @@ export function createClaudeLimitResetsReader(deps: {
   fetch?: typeof fetch;
   now?: () => number;
 } = {}) {
-  const readAuth = deps.readAuth ?? readCredentials;
+  const readAuth = deps.readAuth ?? readClaudeCredentials;
   const readVersion = deps.readVersion ?? (async signal => (await exec("claude", ["--version"], { signal, timeout: 3000, maxBuffer: 4096 })).stdout);
   const request = deps.fetch ?? fetch;
   const now = deps.now ?? Date.now;
