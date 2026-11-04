@@ -11,15 +11,21 @@ import { experimental_defineHostEntry } from "@get-bb/plugin-sdk/host";
 import { bankedResetsHostContract } from "./lib/banked-resets-host-contract";
 import { createBankedResetsReader } from "./lib/banked-resets";
 import { createClaudeLimitResetsReader } from "./lib/claude-limit-resets";
+import { createClaudeUsageReader, createCodexUsageReader } from "./lib/subscription-usage";
 
 const readBankedResets = createBankedResetsReader();
 const readClaudeLimitResets = createClaudeLimitResetsReader();
+const readClaudeUsage = createClaudeUsageReader();
+const readCodexUsage = createCodexUsageReader();
 export default experimental_defineHostEntry({
   contract: bankedResetsHostContract,
   handlers: {
     readBankedResets: (input, context) => input.providerId === "claude-code"
       ? readClaudeLimitResets(input.force, context.signal)
       : readBankedResets(input.force, context.signal),
+    readUsage: (input, context) => input.providerId === "claude-code"
+      ? readClaudeUsage(context.signal)
+      : readCodexUsage(context.signal),
   },
 });
 

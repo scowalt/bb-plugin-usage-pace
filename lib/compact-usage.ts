@@ -140,7 +140,7 @@ export function compactUsageRows(state: UsageState, now = Date.now()): CompactUs
     const warningLabel = allWindows.some(entry => toneForUsed(entry.window.usedPercent) !== "ok")
       ? "near limit" : "high projected use";
     const noticeLabel = [
-      !unreliable && allWindows.some(entry => !selected.includes(entry) && entry.paceState !== "known") ? "other pace unknown" : null,
+      !unreliable && allWindows.some(entry => !selected.includes(entry) && entry.paceState === "unknown") ? "other pace unknown" : null,
       quotaWarning ? warningLabel : null,
     ].filter(Boolean).join(" · ");
     const notice: CompactUsageRow["notice"] = selected.length === 0 ? { label: "usage unknown", tone: null }

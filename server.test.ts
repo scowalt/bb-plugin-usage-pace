@@ -115,6 +115,48 @@ describe("account CLI schema", () => {
   });
 });
 
+describe("Claude and Codex fallback source", () => {
+  it("reads usage through the host entry when bb's own providers are disabled", async () => {
+    vi.useFakeTimers({ now: Date.parse("2026-11-04T16:00:00Z") });
+    const callHost = vi.fn(async ({ method, input }: { method: string; input: unknown }) => {
+      expect(method).toBe("readUsage");
+      const { providerId } = bankedResetsHostContract.readUsage.input.parse(input);
+      return { accountKey: providerId === "codex" ? "openai:chatgpt:acct-1" : "anthropic:account:uuid-1", usage: {
+        status: "ok", plan: null, accountEmail: "one@example.test", planLabel: null,
+        windows: [{ kind: "weekly", id: "0:Weekly limit", label: "Weekly limit", usedPercent: 30, resetsAt: "2026-11-09T00:00:00.000Z", model: null, cost: null }],
+      } };
+    });
+    let behavior: { callRpc(method: string, input: unknown): Promise<unknown> } | null = null;
+    const { bb, harness } = createFakePluginHost({
+      pluginId: "usage-pace", settings: { grokUsage: false },
+      sdk: {
+        hosts: { list: async () => [makeHostResponse({ id: "server", name: "Server", status: "connected" })] },
+        providers: { list: async () => [] },
+        system: { config: async () => ({ primaryHostId: "server" }) },
+        plugins: {
+          experimental_discoverRpc: async () => [{ pluginId: "usage-pace", displayName: "Usage Pace" }],
+          callRpc: async ({ pluginId, method, input }: { pluginId: string; method: string; input: unknown }) => {
+            expect(pluginId).toBe("usage-pace");
+            return behavior!.callRpc(method, input);
+          },
+        },
+      },
+      experimental_callHostRpc: callHost,
+    });
+    behavior = harness.behavior;
+    cleanups.push(() => harness.lifecycle.dispose());
+    await plugin(bb);
+    const output = rpcContract.getUsage.output.parse(await harness.behavior.callRpc("getUsage", {}));
+    expect(output.accounts?.map(account => [account.id, account.displayName, account.accountKey, account.status])).toEqual([
+      ["claude-code", "Claude Code", "anthropic:account:uuid-1", "ok"],
+      ["codex", "Codex", "openai:chatgpt:acct-1", "ok"],
+    ]);
+    expect(output.accounts?.[0]?.sources).toEqual([{ pluginId: "usage-pace", label: "Usage Pace", resourceId: "claude-code:server", scope: { kind: "host", hostId: "server", hostName: "Server" } }]);
+    expect(callHost).toHaveBeenCalledWith(expect.objectContaining({ hostId: "server", input: { providerId: "claude-code" } }));
+    expect(callHost).toHaveBeenCalledWith(expect.objectContaining({ hostId: "server", input: { providerId: "codex" } }));
+  });
+});
+
 type SourceFailure = "usage error" | "getResource rejection" | "listResources rejection";
 async function setupSourceFailure() {
   const hosts = [makeHostResponse({ id: "server", name: "Server", status: "connected" }), makeHostResponse({ id: "laptop", name: "Laptop", status: "connected" })];

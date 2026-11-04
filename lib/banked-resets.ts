@@ -64,34 +64,52 @@ function normalize(raw: unknown, accountEmail: string | null, now: number): Bank
   };
 }
 
+export const codexHome = () => process.env.CODEX_HOME?.trim() || join(homedir(), ".codex");
+export const readCodexAuth = () => readFile(join(codexHome(), "auth.json"), "utf8");
+
+export type CodexLogin =
+  | { kind: "apiKey" }
+  | { kind: "chatgpt"; token: string | null; accountId: string | null; email: string | null; expiresAtMs: number | null; fedramp: boolean };
+
+export function parseCodexLogin(text: string): CodexLogin {
+  const auth = authSchema.parse(JSON.parse(text));
+  if (auth.auth_mode === "apikey" || auth.auth_mode === "apiKey" || (!auth.auth_mode && auth.OPENAI_API_KEY)) return { kind: "apiKey" };
+  const token = auth.tokens?.access_token ?? null;
+  const access = claims(token);
+  const identity = claims(auth.tokens?.id_token);
+  return {
+    kind: "chatgpt", token,
+    accountId: auth.tokens?.account_id || access["https://api.openai.com/auth"]?.chatgpt_account_id || identity["https://api.openai.com/auth"]?.chatgpt_account_id || null,
+    email: access.email ?? access["https://api.openai.com/profile"]?.email ?? identity.email ?? null,
+    expiresAtMs: access.exp === undefined ? null : access.exp * 1000,
+    fedramp: access["https://api.openai.com/auth"]?.chatgpt_account_is_fedramp === true || identity["https://api.openai.com/auth"]?.chatgpt_account_is_fedramp === true,
+  };
+}
+
 export function createBankedResetsReader(deps: {
   readAuth?: () => Promise<string>;
   fetch?: typeof fetch;
   now?: () => number;
 } = {}) {
-  const readAuth = deps.readAuth ?? (() => readFile(join(process.env.CODEX_HOME?.trim() || join(homedir(), ".codex"), "auth.json"), "utf8"));
+  const readAuth = deps.readAuth ?? readCodexAuth;
   const request = deps.fetch ?? fetch;
   const now = deps.now ?? Date.now;
   let cache: { key: string; until: number; data: BankedResets } | null = null;
   let pending: { key: string; work: Promise<BankedResets> } | null = null;
 
   return async function readBankedResets(force = false, signal?: AbortSignal): Promise<BankedResets> {
-    let auth: z.infer<typeof authSchema>;
-    try { auth = authSchema.parse(JSON.parse(await readAuth())); }
+    let login: CodexLogin;
+    try { login = parseCodexLogin(await readAuth()); }
     catch {
       cache = null;
       return bankedResetsUnavailable("Could not read a Codex ChatGPT login on this host. Sign in with Codex, then refresh.", "unauthenticated");
     }
-    if (auth.auth_mode === "apikey" || auth.auth_mode === "apiKey" || (!auth.auth_mode && auth.OPENAI_API_KEY)) {
+    if (login.kind === "apiKey") {
       cache = null;
       return bankedResetsUnavailable("API-key logins do not have banked subscription resets.", "unsupported");
     }
-    const token = auth.tokens?.access_token;
-    const access = claims(token);
-    const identity = claims(auth.tokens?.id_token);
-    const accountId = auth.tokens?.account_id || access["https://api.openai.com/auth"]?.chatgpt_account_id || identity["https://api.openai.com/auth"]?.chatgpt_account_id;
-    const email = access.email ?? access["https://api.openai.com/profile"]?.email ?? identity.email ?? null;
-    if (!token || !accountId || (access.exp !== undefined && access.exp * 1000 <= now())) {
+    const { token, accountId, email } = login;
+    if (!token || !accountId || (login.expiresAtMs !== null && login.expiresAtMs <= now())) {
       cache = null;
       return bankedResetsUnavailable("Codex login is missing or expired on this host. Sign in with Codex, then refresh.", "unauthenticated", email);
     }
@@ -106,7 +124,7 @@ export function createBankedResetsReader(deps: {
           Authorization: `Bearer ${token}`, "chatgpt-account-id": accountId,
           Accept: "application/json", originator: "bb", "User-Agent": "bb-usage-pace",
         };
-        if (access["https://api.openai.com/auth"]?.chatgpt_account_is_fedramp || identity["https://api.openai.com/auth"]?.chatgpt_account_is_fedramp) headers["X-OpenAI-Fedramp"] = "true";
+        if (login.fedramp) headers["X-OpenAI-Fedramp"] = "true";
         const timeout = AbortSignal.timeout(15_000);
         const response = await request(URL, {
           method: "GET", redirect: "error", headers,

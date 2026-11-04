@@ -48,8 +48,8 @@ current checkout with Git metadata is sufficient. No custom clone is needed.
 
 The README's TypeScript/application tests, BB builds, production-only install
 checks, release smoke checks, generated bundles and tagging remain local release
-verification, not new hosted gates. Preserve their toolchain baseline
-BB 0.44.0 / SDK 0.5.29, locks and hooks unchanged. This repository authors no
+verification, not new hosted gates. They build with the installed bb (baseline
+BB 0.48.1 / SDK 0.6.104 since 0.4.6); keep locks and hooks unchanged. This repository authors no
 hosted publishing/deployment job or deployment controller configuration. CI must
 not install/reload a live plugin or contact provider/account/reset/auth APIs.
 
