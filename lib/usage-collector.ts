@@ -32,6 +32,10 @@ type RefreshAttempt = { at: number; accountKey: string | null; message: string |
 export type CollectedUsage = { accounts: UsageAccount[]; error: string | null; hostsError: string | null };
 
 const names: Record<string, string> = { "claude-code": "Claude Code", codex: "Codex", "usage-pace-grok": "Grok Build (usage)" };
+const disabledProviderMarks: Record<string, { logoUrl: string; iconTint: { light: string; dark: string } | null }> = {
+  "claude-code": { logoUrl: "/api/v1/system/providers/claude-code/logo", iconTint: { light: "#D97757", dark: "#D97757" } },
+  codex: { logoUrl: "/api/v1/system/providers/codex/logo", iconTint: null },
+};
 const messageOf = (error: unknown) => error instanceof Error ? error.message : String(error);
 
 export function createUsageCollector(bb: Pick<BbPluginApi, "sdk">, signal: AbortSignal, now: () => number = Date.now, cachePeriod: () => number = () => 5 * 60_000) {
@@ -117,8 +121,9 @@ export function createUsageCollector(bb: Pick<BbPluginApi, "sdk">, signal: Abort
           const base: UsageAccount = accountSchema.parse({
             id: resource.providerId, displayName: provider?.displayName ?? names[resource.providerId] ?? resource.providerId,
             hostId: scope.kind === "host" ? scope.hostId : "", hostName: scope.kind === "host" ? scope.hostName : source.displayName,
-            logoUrl: provider?.logoUrl ?? null, icon: provider?.icon?.glyph ? { glyph: provider.icon.glyph } : null,
-            iconTint: provider?.strings?.iconTint ?? null,
+            logoUrl: provider ? provider.logoUrl ?? null : disabledProviderMarks[resource.providerId]?.logoUrl ?? null,
+            icon: provider?.icon?.glyph ? { glyph: provider.icon.glyph } : null,
+            iconTint: provider ? provider.strings?.iconTint ?? null : disabledProviderMarks[resource.providerId]?.iconTint ?? null,
             status: "error", message: null, accountEmail: null, planLabel: null, windows: [],
             accountKey: null, observedAt: null, plan: null, accountLabel: resource.label, weight: null, stale: true,
             hosts: scope.kind === "host" ? [{ id: scope.hostId, name: scope.hostName }] : [],
