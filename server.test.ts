@@ -151,6 +151,10 @@ describe("Claude and Codex fallback source", () => {
       ["claude-code", "Claude Code", "anthropic:account:uuid-1", "ok"],
       ["codex", "Codex", "openai:chatgpt:acct-1", "ok"],
     ]);
+    expect(output.accounts?.map(account => [account.logoUrl, account.iconTint])).toEqual([
+      ["/api/v1/system/providers/claude-code/logo", { light: "#D97757", dark: "#D97757" }],
+      ["/api/v1/system/providers/codex/logo", null],
+    ]);
     expect(output.accounts?.[0]?.sources).toEqual([{ pluginId: "usage-pace", label: "Usage Pace", resourceId: "claude-code:server", scope: { kind: "host", hostId: "server", hostName: "Server" } }]);
     expect(callHost).toHaveBeenCalledWith(expect.objectContaining({ hostId: "server", input: { providerId: "claude-code" } }));
     expect(callHost).toHaveBeenCalledWith(expect.objectContaining({ hostId: "server", input: { providerId: "codex" } }));

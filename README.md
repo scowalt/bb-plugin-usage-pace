@@ -150,18 +150,18 @@ bb's Claude Code and Codex providers report their usage only while enabled. Afte
 - The plugin's host entry reads the same local login bb's provider would: `~/.claude/.credentials.json` (or the macOS keychain) and `~/.claude.json` for Claude Code, `~/.codex/auth.json` for Codex. It asks Anthropic (`api.anthropic.com/api/oauth/usage`) or OpenAI (`chatgpt.com/backend-api/wham/usage`) for the session, weekly, and per-model windows. Readings are cached for five minutes unless a refresh is requested.
 - Accounts carry the same provider-issued `accountKey` as bb's provider, so they merge with Account Pooler or Claude Accounts readings of the same login. As with other sources, a machine with no login and no earlier reading is hidden.
 
-Because the source is discoverable, bb's usage card may also show these tabs. Disabled providers supply no logo, so their rows use the generic provider mark.
+Because the source is discoverable, bb's usage card may also show these tabs. bb lists no metadata for a disabled provider, so Usage Pace's strip and dialog use the logo bb still serves for it, with bb's Claude Code tint; bb's own card may show the generic provider mark.
 
 ## Install
 
 ### New installations
 
 ```sh
-bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.4.6'
+bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.4.7'
 bb plugin config usage-pace set showStrip true
 ```
 
-The compact footer card is off by default; the second command enables it, including Codex and Claude resets. Reload the app UI after changing `showStrip`. Use `@^0.4.6` instead of `@v0.4.6` to track compatible release tags with `bb plugin update usage-pace`.
+The compact footer card is off by default; the second command enables it, including Codex and Claude resets. Reload the app UI after changing `showStrip`. Use `@^0.4.7` instead of `@v0.4.7` to track compatible release tags with `bb plugin update usage-pace`.
 
 ### Upgrades
 
@@ -171,21 +171,21 @@ First inspect the installed source:
 bb plugin source usage-pace
 ```
 
-For an install tracking the repository's default branch or another branch containing 0.4.6, update in place. The same command updates a Git semver-range install when a published release satisfies its range. This keeps the plugin's settings:
+For an install tracking the repository's default branch or another branch containing 0.4.7, update in place. The same command updates a Git semver-range install when a published release satisfies its range. This keeps the plugin's settings:
 
 ```sh
 bb plugin update usage-pace
 ```
 
-An exact tag or commit is pinned: `update` does not move it to a newer release. To move a pinned install to 0.4.6, or change any existing install to a tag or range, remove it and install the new source. **Removal deletes the plugin's settings, secrets, and schedules.** Record your configuration first with `bb plugin config usage-pace`, then restore the settings you need after reinstalling:
+An exact tag or commit is pinned: `update` does not move it to a newer release. To move a pinned install to 0.4.7, or change any existing install to a tag or range, remove it and install the new source. **Removal deletes the plugin's settings, secrets, and schedules.** Record your configuration first with `bb plugin config usage-pace`, then restore the settings you need after reinstalling:
 
 ```sh
 bb plugin config usage-pace
 bb plugin remove usage-pace
-bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.4.6'
+bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.4.7'
 ```
 
-Use `@^0.4.6` in that final command to track compatible releases instead. Running `plugin install` over an existing managed install is not an upgrade; bb 0.46.1 refuses the duplicate plugin ID.
+Use `@^0.4.7` in that final command to track compatible releases instead. Running `plugin install` over an existing managed install is not an upgrade; bb 0.46.1 refuses the duplicate plugin ID.
 
 ### Installation details
 
