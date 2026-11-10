@@ -50,8 +50,19 @@ export function accountId(account: UsageAccount): string {
   return JSON.stringify([account.id, account.accountKey ?? account.sources.map(source => [source.pluginId, source.resourceId])]);
 }
 
+function planWeight(plan: UsageAccount["plan"]): number | null {
+  return plan?.multiplier ?? (plan?.id.toLowerCase() === "pro" ? 1 : null);
+}
+
+function sizedPlanSource(prior: UsageAccount, account: UsageAccount): UsageAccount {
+  const priorSized = planWeight(prior.plan) !== null;
+  if (priorSized !== (planWeight(account.plan) !== null)) return priorSized ? prior : account;
+  return (account.observedAt ?? -1) > (prior.observedAt ?? -1) ? account : prior;
+}
+
 export function mergeAccounts(accounts: UsageAccount[]): UsageAccount[] {
   const merged: UsageAccount[] = [];
+  const planSources: UsageAccount[] = [];
   const known = new Map<string, number>();
   for (const account of accounts) {
     const key = account.accountKey === null ? null : JSON.stringify([account.id, account.accountKey]);
@@ -59,6 +70,7 @@ export function mergeAccounts(accounts: UsageAccount[]): UsageAccount[] {
     if (index === undefined) {
       if (key !== null) known.set(key, merged.length);
       merged.push(account);
+      planSources.push(account);
       continue;
     }
     const prior = merged[index]!;
@@ -72,7 +84,9 @@ export function mergeAccounts(accounts: UsageAccount[]): UsageAccount[] {
       all.findIndex(other => other.pluginId === source.pluginId && other.resourceId === source.resourceId) === i);
     const hosts = [...prior.hosts, ...account.hosts].filter((host, i, all) => all.findIndex(other => other.id === host.id) === i);
     const errors = [...new Set([prior.message, account.message].filter(Boolean))].join("; ");
-    merged[index] = { ...freshest, sources, hosts, message: errors || null };
+    const planSource = sizedPlanSource(planSources[index]!, account);
+    planSources[index] = planSource;
+    merged[index] = { ...freshest, plan: planSource.plan, planLabel: planSource.planLabel, sources, hosts, message: errors || null };
   }
   return merged.sort((a, b) => a.displayName.localeCompare(b.displayName) || a.accountLabel.localeCompare(b.accountLabel));
 }
@@ -93,7 +107,7 @@ export function withAccountSettings(account: UsageAccount, aliases: Map<string, 
   const email = account.accountEmail;
   const key = email?.toLowerCase() ?? "";
   const override = Number(weights.get(key));
-  const multiplier = account.plan?.multiplier ?? (account.plan?.id.toLowerCase() === "pro" ? 1 : null);
+  const multiplier = planWeight(account.plan);
   return {
     ...account,
     accountLabel: aliases.get(key) ?? email?.split("@")[0] ?? account.accountLabel,

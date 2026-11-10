@@ -14,6 +14,24 @@ describe("quota account identities", () => {
     expect(account?.hosts.map(host => host.name)).toEqual(["Beelink", "MacBook"]);
     expect(account?.sources).toHaveLength(3);
   });
+  it("keeps the freshest plan that has a known size when a newer source names an unsized plan, regardless of row order", () => {
+    const sized = makeAccount({ observedAt: NOW - 90_000, plan: { id: "max", multiplier: 5 }, planLabel: "Max (5x)",
+      sources: [{ pluginId: "claude-accounts", label: "Claude Accounts", resourceId: "a", scope: { kind: "shared" } }] });
+    const newerSized = makeAccount({ observedAt: NOW - 60_000, plan: { id: "max", multiplier: 20 }, planLabel: "Max (20x)",
+      sources: [{ pluginId: "account-pool", label: "Account Pooler", resourceId: "a", scope: { kind: "shared" } }] });
+    const unsized = makeAccount({ observedAt: NOW, plan: { id: "ultra", multiplier: null }, planLabel: "Ultra",
+      windows: [{ ...sized.windows[1]!, usedPercent: 64 }] });
+    for (const rows of [[sized, newerSized, unsized], [unsized, newerSized, sized], [newerSized, unsized, sized], [unsized, sized, newerSized]]) {
+      const [account] = mergeAccounts(rows);
+      expect(account).toMatchObject({ observedAt: NOW, windows: unsized.windows, plan: { id: "max", multiplier: 20 }, planLabel: "Max (20x)" });
+      expect(withAccountSettings(account!, new Map(), new Map()).weight).toBe(20);
+    }
+  });
+  it("keeps the freshest unsized plan when no source knows the size", () => {
+    const older = makeAccount({ observedAt: NOW - 90_000, plan: { id: "team", multiplier: null }, planLabel: "Team" });
+    const newer = makeAccount({ observedAt: NOW, plan: { id: "ultra", multiplier: null }, planLabel: "Ultra" });
+    for (const rows of [[older, newer], [newer, older]]) expect(mergeAccounts(rows)[0]).toMatchObject({ plan: newer.plan, planLabel: "Ultra" });
+  });
   it("never merges null identities or two issued identities with the same email", () => {
     expect(mergeAccounts([makeAccount({ accountKey: null }), makeAccount({ accountKey: null }), makeAccount(), makeAccount({ accountKey: "anthropic:account:b" })])).toHaveLength(4);
     expect(accountId(makeAccount())).not.toBe(accountId(makeAccount({ accountKey: "anthropic:account:b" })));
