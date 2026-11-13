@@ -67,7 +67,7 @@ bb plugin config usage-pace set poolWeights 'a@example.test=20,b@example.test=5'
 
 **Saved resets (Codex and Claude).** A supported account whose host login identity matches also shows `↺ 3` for three saved resets. Hover for the earliest reported expiration; the badge turns amber when a reset expires within seven days. Click the badge to open and focus that provider account's reset details. `↺ 0` is dimmed, `↺ …` is refreshing a previously verified inventory, and `↺ ?` means a verified inventory read failed or expired since reading—not zero. Unread inventories and mismatched account identities have no badge. Claude matches the profile account UUID; identical email addresses never share a balance. Claude and Codex balances remain separate even when their account emails match.
 
-Codex calls these **banked resets**; its count is provider-reported and details may be incomplete. Claude's **limit resets** are classified by the quota windows they affect: Full, 5-hour, or other saved resets. The Claude badge sums remaining uses in current, unpaused grants, not the number of grant records. A saved grant can count even when it is not currently redeemable. An explicit `no_grant` response with an empty grant list confirms zero saved resets; absent, gated, or malformed inventory remains unknown.
+Codex calls these **banked resets**; its count is provider-reported and details may be incomplete. Claude's **limit resets** list one row per grant: its name, a countdown to expiry, and the limits it clears with the usage Claude reported for that grant, such as `Clears weekly · 69% used`. A grant that clears only Claude's undocumented `seven_day_overage_included` meter reads `Clears a second weekly meter`; hover the tag for Claude's raw meter names. The Claude badge sums remaining uses in current, unpaused grants, not the number of grant records. A saved grant can count even when it is not currently redeemable. An explicit `no_grant` response with an empty grant list confirms zero saved resets; absent, gated, or malformed inventory remains unknown.
 
 Claude's **conditional 5-hour reset availability** is shown separately in the dialog and never added to the badge. It may be available, unavailable with a concise provider-reported reason (for example, `Not available · session limit not reached`), or unknown. A confirmed zero saved balance is shown once; it does not mean the conditional reset status is missing. Its next-availability time is not an expiry, and reaching that time does not prove the offer is available. Session-only resets still count toward the weekly usage limit.
 
@@ -157,11 +157,11 @@ Because the source is discoverable, bb's usage card may also show these tabs. bb
 ### New installations
 
 ```sh
-bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.4.8'
+bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.4.9'
 bb plugin config usage-pace set showStrip true
 ```
 
-The compact footer card is off by default; the second command enables it, including Codex and Claude resets. Reload the app UI after changing `showStrip`. Use `@^0.4.8` instead of `@v0.4.8` to track compatible release tags with `bb plugin update usage-pace`.
+The compact footer card is off by default; the second command enables it, including Codex and Claude resets. Reload the app UI after changing `showStrip`. Use `@^0.4.9` instead of `@v0.4.9` to track compatible release tags with `bb plugin update usage-pace`.
 
 ### Upgrades
 
@@ -171,21 +171,21 @@ First inspect the installed source:
 bb plugin source usage-pace
 ```
 
-For an install tracking the repository's default branch or another branch containing 0.4.8, update in place. The same command updates a Git semver-range install when a published release satisfies its range. This keeps the plugin's settings:
+For an install tracking the repository's default branch or another branch containing 0.4.9, update in place. The same command updates a Git semver-range install when a published release satisfies its range. This keeps the plugin's settings:
 
 ```sh
 bb plugin update usage-pace
 ```
 
-An exact tag or commit is pinned: `update` does not move it to a newer release. To move a pinned install to 0.4.8, or change any existing install to a tag or range, remove it and install the new source. **Removal deletes the plugin's settings, secrets, and schedules.** Record your configuration first with `bb plugin config usage-pace`, then restore the settings you need after reinstalling:
+An exact tag or commit is pinned: `update` does not move it to a newer release. To move a pinned install to 0.4.9, or change any existing install to a tag or range, remove it and install the new source. **Removal deletes the plugin's settings, secrets, and schedules.** Record your configuration first with `bb plugin config usage-pace`, then restore the settings you need after reinstalling:
 
 ```sh
 bb plugin config usage-pace
 bb plugin remove usage-pace
-bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.4.8'
+bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.4.9'
 ```
 
-Use `@^0.4.8` in that final command to track compatible releases instead. Running `plugin install` over an existing managed install is not an upgrade; bb 0.46.1 refuses the duplicate plugin ID.
+Use `@^0.4.9` in that final command to track compatible releases instead. Running `plugin install` over an existing managed install is not an upgrade; bb 0.46.1 refuses the duplicate plugin ID.
 
 ### Installation details
 
