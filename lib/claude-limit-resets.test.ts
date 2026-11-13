@@ -41,7 +41,7 @@ it("reads the verified full-reset grant and keeps conditional availability separ
   expect(bankedResetsSchema.parse(result)).toEqual(result);
   expect(result).toMatchObject({
     status: "ok", accountEmail: "one@example.test", accountKey: "anthropic:account:account", availableCount: 1, fetchedAt: new Date(NOW).toISOString(),
-    credits: [{ title: "Model launch reset", remaining: 1, scope: "full", expiresAt: "2026-10-22T16:00:00.000Z", usableNow: true }],
+    credits: [{ title: "Model launch reset", remaining: 1, clears: ["five_hour", "seven_day", "seven_day_overage_included"], expiresAt: "2026-10-22T16:00:00.000Z", usableNow: true }],
     sessionReset: { availability: "unavailable", reason: "not_at_wall", nextAvailableAt: null },
   });
 });
@@ -74,17 +74,20 @@ it("only makes bounded read-only requests to fixed first-party endpoints, with t
   expect(JSON.stringify(result)).not.toContain('"uuid"');
 });
 
-it("sums remaining uses rather than grant records and classifies scope without trusting the label", async () => {
+it("sums remaining uses rather than grant records and passes through each grant's cleared meters and usage", async () => {
   const { read } = setup(usage([
-    grant({ id: "full", resets_total: 5, resets_left: 3, usable_now: false }),
+    grant({ id: "full", resets_total: 5, resets_left: 3, usable_now: false, percent_used: { seven_day: 69, seven_day_overage_included: 5 } }),
     grant({ id: "session", label: "Full reset misleading label", resets_total: 2, resets_left: 2, clears: ["five_hour"], ends_at: "2026-10-08T00:00:00Z" }),
-    grant({ id: "model", label: null, clears: ["seven_day_future_model"], starts_at: null, ends_at: null }),
+    grant({ id: "model", label: null, clears: ["seven_day_future_model"], starts_at: null, ends_at: null, percent_used: { seven_day_future_model: "high" } }),
   ]));
   const result = await read();
   expect(result.availableCount).toBe(6);
-  expect(result.credits.map(credit => [credit.id, credit.scope, credit.remaining])).toEqual([
-    ["session", "five-hour", 2], ["full", "full", 3], ["model", "other", 1],
+  expect(result.credits[2]?.usedPercent).toBeUndefined();
+  expect(result.credits.map(credit => [credit.id, credit.clears, credit.remaining])).toEqual([
+    ["session", ["five_hour"], 2], ["full", ["five_hour", "seven_day", "seven_day_overage_included"], 3], ["model", ["seven_day_future_model"], 1],
   ]);
+  expect(result.credits[1]?.usedPercent).toEqual({ seven_day: 69, seven_day_overage_included: 5 });
+  expect(result.credits[0]?.usedPercent).toBeUndefined();
   expect(result.credits[1]?.usableNow).toBe(false);
   expect(result.credits[2]).toMatchObject({ title: "Saved reset", expiresAt: null });
 });
