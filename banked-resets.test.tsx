@@ -230,7 +230,7 @@ it("shows compact provider rows, keeps hover details, and opens the reset accoun
 
 function claudeInventory(count = 1): BankedResets {
   return { ...inventory(count),
-    credits: count === 0 ? [] : [{ id: "grant", title: "Launch reset", remaining: count, scope: "full", clears: ["five_hour", "seven_day"], usableNow: false, supported: null, expiresAt: "2026-10-03T12:00:00Z" }],
+    credits: count === 0 ? [] : [{ id: "grant", title: "Launch reset", remaining: count, clears: ["five_hour", "seven_day"], usableNow: false, supported: null, expiresAt: "2026-10-03T12:00:00Z" }],
     sessionReset: { availability: "unavailable", reason: "not_at_wall", nextAvailableAt: null },
   };
 }
@@ -256,9 +256,9 @@ describe("Claude limit resets", () => {
     expect(claudeBadge().className).toContain("text-amber-600");
     const section = container.querySelector("section")!;
     expect(section.getAttribute("aria-label")).toBe("Claude limit resets");
-    expect(section.textContent).toContain("Full reset · 2 saved");
-    expect(section.textContent).toContain("Affects: 5-hour session, weekly");
-    expect(section.textContent).toContain("Not currently redeemable");
+    expect(section.querySelector("li")?.textContent).toContain("Launch reset ×2");
+    expect(section.textContent).toContain("Clears session + weekly");
+    expect(section.textContent).toContain("Not redeemable now");
     expect(section.textContent).toContain("Not available · session limit not reached");
     expect(section.querySelector("time")?.dateTime).toBe("2026-10-03T12:00:00Z");
     const syntheticSessionReset: BankedResets["sessionReset"] = { availability: "available", reason: null, nextAvailableAt: null };
@@ -305,9 +305,35 @@ describe("Claude limit resets", () => {
   });
   it("distinguishes a saved five-hour grant from conditional session availability", async () => {
     const data = claudeInventory();
-    data.credits[0]!.scope = "five-hour";
-    await render(<BankedResetsList providerId="claude-code" data={data} loading={false} hostName="One" />);
-    expect(container.querySelector("li")?.textContent).toContain("5-hour reset · 1 saved");
+    data.credits[0]!.clears = ["five_hour"];
+    await render(<BankedResetsList providerId="claude-code" data={data} loading={false} hostName="One" now={NOW} />);
+    expect(container.querySelector("li")?.textContent).toContain("Clears session");
     expect(container.querySelector('[aria-label="5-hour reset availability"]')?.textContent).toContain("Not available · session limit not reached");
+  });
+  it("names what each reset clears with the usage the grant reported, keeping raw meters in the tooltip", async () => {
+    const data = claudeInventory();
+    data.credits = [
+      { id: "weekly", title: "One full limit reset (November 2026)", remaining: 1, clears: ["seven_day", "seven_day_overage_included"], usedPercent: { seven_day: 69, seven_day_overage_included: 5 }, usableNow: true, supported: null, expiresAt: "2026-10-28T15:00:00Z" },
+      { id: "fable", title: "New model launch: one Fable reset", remaining: 1, clears: ["seven_day_overage_included"], usedPercent: { seven_day_overage_included: 5 }, usableNow: true, supported: null, expiresAt: "2027-01-24T07:59:00Z" },
+    ];
+    await render(<BankedResetsList providerId="claude-code" data={data} loading={false} hostName="One" now={NOW} />);
+    const [weekly, fable] = [...container.querySelectorAll("li")];
+    expect.soft(weekly!.textContent).toContain("Clears weekly · 69% used");
+    expect.soft(fable!.textContent).toContain("Clears a second weekly meter · 5% used");
+    expect.soft(fable!.textContent).toContain("One Fable reset");
+    expect.soft(fable!.textContent).not.toContain("New model launch");
+    expect.soft(fable!.querySelector('[title^="New model launch"]')?.getAttribute("title")).toBe("New model launch: one Fable reset");
+    expect.soft(fable!.querySelector('[title^="Claude meters"]')?.getAttribute("title")).toBe("Claude meters: seven_day_overage_included 5%");
+    expect.soft(weekly!.querySelector("time")?.textContent).toBe("27d");
+    expect.soft(fable!.querySelector("time")?.textContent).toBe("114d");
+    expect.soft(container.textContent).not.toContain("×1");
+  });
+  it("flags resets expiring within a week and ones that expired since the last read", async () => {
+    const data = claudeInventory();
+    await render(<BankedResetsList providerId="claude-code" data={data} loading={false} hostName="One" now={NOW} />);
+    expect(container.querySelector("li time")?.className).toContain("text-amber-600");
+    await render(<BankedResetsList providerId="claude-code" data={data} loading={false} hostName="One" now={Date.parse("2026-10-04T12:00:00Z")} />);
+    expect(container.querySelector("li time")?.textContent).toBe("Expired");
+    expect(container.textContent).toContain("1 saved at last update");
   });
 });

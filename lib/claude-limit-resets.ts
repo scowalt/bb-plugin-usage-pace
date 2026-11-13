@@ -31,6 +31,7 @@ const grantSchema = z.object({
   clears: z.array(z.string().min(1).max(80)).max(32),
   paused: z.boolean(),
   usable_now: z.boolean().nullish(),
+  percent_used: z.record(z.string(), z.number().finite()).nullish().catch(null),
 }).refine(grant => grant.resets_left <= grant.resets_total, "Invalid remaining balance");
 const inventorySchema = z.discriminatedUnion("eligible", [
   z.object({
@@ -92,13 +93,10 @@ function normalize(raw: unknown, email: string, now: number): { data: BankedRese
     if (grant.paused || grant.resets_left === 0 || end <= now) continue;
     if (start > now) { until = Math.min(until, start); continue; }
     until = Math.min(until, end);
-    const session = grant.clears.includes("five_hour");
-    const weekly = grant.clears.includes("seven_day");
-    const scope = session && weekly ? "full" : session && grant.clears.length === 1 ? "five-hour" : "other";
     credits.push({
       id: grant.id, title: grant.label?.trim() || "Saved reset", remaining: grant.resets_left,
       expiresAt: grant.ends_at ? new Date(end).toISOString() : null, supported: null,
-      scope, clears: grant.clears, usableNow: grant.usable_now ?? null,
+      clears: grant.clears, usedPercent: grant.percent_used ?? undefined, usableNow: grant.usable_now ?? null,
     });
   }
   credits.sort((a, b) => (a.expiresAt ? Date.parse(a.expiresAt) : Infinity) - (b.expiresAt ? Date.parse(b.expiresAt) : Infinity) || a.id.localeCompare(b.id));
