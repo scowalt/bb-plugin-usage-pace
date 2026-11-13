@@ -9,12 +9,12 @@ const DAY = 86_400_000;
 type Credit = BankedResets["credits"][number];
 
 function countdown(expiresAt: string | null, now: number) {
-  if (!expiresAt) return { text: "No expiry", title: "Expiry not reported", soon: false };
+  if (!expiresAt) return { text: "—", title: "Expiry not reported", soon: false };
   const date = new Date(expiresAt);
   const full = date.toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" });
   const ms = date.getTime() - now;
   if (ms <= 0) return { text: "Expired", title: `Expired ${full} — refresh`, soon: true };
-  return { text: formatResetShort(expiresAt, now), title: `Expires ${full}`, soon: ms <= 7 * DAY };
+  return { text: ms < 60_000 ? "<1m" : formatResetShort(expiresAt, now), title: `Expires ${full}`, soon: ms <= 7 * DAY };
 }
 
 function shortDate(expiresAt: string, now: number) {
@@ -25,10 +25,11 @@ function shortDate(expiresAt: string, now: number) {
 
 const meterNames: Record<string, string> = { five_hour: "session", seven_day: "weekly" };
 function clearsLabel(clears: string[], usedPercent: Record<string, number> = {}) {
-  const known = clears.filter(meter => meter in meterNames);
-  const shown = known.length ? known : clears.slice(0, 1);
+  const known = clears.filter(meter => Object.hasOwn(meterNames, meter));
+  const shown = known.length ? known : clears;
+  const weekly = clears.every(meter => meter.startsWith("seven_day"));
   const names = known.length ? known.map(meter => meterNames[meter])
-    : [clears.every(meter => meter.startsWith("seven_day")) ? "a second weekly meter" : "another limit"];
+    : [clears.length > 1 ? weekly ? "other weekly meters" : "other limits" : weekly ? "a second weekly meter" : "another limit"];
   const used = shown.length === 1 ? usedPercent[shown[0]!] : undefined;
   return {
     text: `Clears ${names.join(" + ")}${used === undefined ? "" : ` · ${Math.round(used)}% used`}`,

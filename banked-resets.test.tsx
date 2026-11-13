@@ -328,6 +328,21 @@ describe("Claude limit resets", () => {
     expect.soft(fable!.querySelector("time")?.textContent).toBe("114d");
     expect.soft(container.textContent).not.toContain("×1");
   });
+  it("does not attribute one meter's usage to a grant that clears several unrecognised meters", async () => {
+    const data = claudeInventory();
+    data.credits[0] = { ...data.credits[0]!, remaining: 1, clears: ["seven_day_opus", "seven_day_sonnet"], usedPercent: { seven_day_opus: 40, seven_day_sonnet: 10 } };
+    await render(<BankedResetsList providerId="claude-code" data={data} loading={false} hostName="One" now={NOW} />);
+    const tag = container.querySelector('li [title^="Claude meters"]');
+    expect.soft(tag?.textContent).toBe("Clears other weekly meters");
+    expect.soft(tag?.getAttribute("title")).toBe("Claude meters: seven_day_opus 40%, seven_day_sonnet 10%");
+  });
+  it("does not claim a Codex reset never expires when its expiry is unreported", async () => {
+    const data = inventory(1);
+    data.credits[0] = { ...data.credits[0]!, expiresAt: null };
+    await render(<BankedResetsList data={data} loading={false} hostName="One" now={NOW} />);
+    expect.soft(container.querySelector("li time")?.getAttribute("title")).toBe("Expiry not reported");
+    expect.soft(container.textContent).not.toContain("No expiry");
+  });
   it("flags resets expiring within a week and ones that expired since the last read", async () => {
     const data = claudeInventory();
     await render(<BankedResetsList providerId="claude-code" data={data} loading={false} hostName="One" now={NOW} />);
