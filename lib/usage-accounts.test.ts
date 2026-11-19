@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { accountId, isWeeklyWindow, mergeAccounts, parsePairs, withAccountSettings } from "./usage-accounts";
+import { accountId, currentClaudePlan, isWeeklyWindow, mergeAccounts, parsePairs, withAccountSettings } from "./usage-accounts";
 import { makeAccount, NOW } from "../tests/usage-fixtures";
 import { paceForWindows } from "./pace";
 
@@ -75,4 +75,14 @@ it("uses aliases and positive weight overrides without using display labels as i
   expect(withAccountSettings(account, new Map(), parsePairs("a@example.test=0"))).toMatchObject({ weight: 20, accountLabel: "A" });
   expect(withAccountSettings(makeAccount({ plan: { id: "pro", multiplier: null }, accountEmail: null }), new Map(), new Map())).toMatchObject({ weight: 1 });
   expect(withAccountSettings(makeAccount({ plan: null }), new Map(), new Map())).toMatchObject({ weight: null });
+});
+
+it("shows Claude's current plan names and weighs plans by their weekly limit", () => {
+  const ultra = { plan: { id: "ultra", multiplier: 10 }, planLabel: "Ultra" };
+  expect(currentClaudePlan({ plan: { id: "max", multiplier: 20 }, planLabel: "Max 20x" })).toEqual(ultra);
+  expect(currentClaudePlan({ plan: { id: "ultra", multiplier: null }, planLabel: "Ultra" })).toEqual(ultra);
+  expect(currentClaudePlan({ plan: { id: "max", multiplier: 5 }, planLabel: "Max (5x)" })).toEqual({ plan: { id: "max", multiplier: 5 }, planLabel: "Max" });
+  const unsized = { plan: { id: "max", multiplier: null }, planLabel: "Max" };
+  expect(currentClaudePlan(unsized)).toBe(unsized);
+  expect(withAccountSettings(makeAccount(currentClaudePlan({ plan: { id: "max", multiplier: 20 }, planLabel: "Max 20x" })), new Map(), new Map()).weight).toBe(10);
 });

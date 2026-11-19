@@ -87,7 +87,7 @@ export default async function plugin(bb: BbPluginApi) {
     },
     poolWeights: {
       type: "string", label: "Pool weight overrides",
-      description: "email=positive weight pairs. Defaults to the plan multiplier; weekly pool numbers are estimates.", default: "",
+      description: "email=positive weight pairs. Defaults to the plan's weekly limit as a multiple of Pro (Claude Max 5, Ultra 10); weekly pool numbers are estimates.", default: "",
     },
     serverOnly: {
       type: "boolean",

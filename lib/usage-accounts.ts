@@ -50,6 +50,16 @@ export function accountId(account: UsageAccount): string {
   return JSON.stringify([account.id, account.accountKey ?? account.sources.map(source => [source.pluginId, source.resourceId])]);
 }
 
+type PlanFields = Pick<UsageAccount, "plan" | "planLabel">;
+
+export function currentClaudePlan(fields: PlanFields): PlanFields {
+  const id = fields.plan?.id.toLowerCase();
+  const multiplier = fields.plan?.multiplier;
+  if (id === "ultra" || (id === "max" && multiplier === 20)) return { plan: { id: "ultra", multiplier: 10 }, planLabel: "Ultra" };
+  if (id === "max" && multiplier === 5) return { plan: { id: "max", multiplier: 5 }, planLabel: "Max" };
+  return fields;
+}
+
 function planWeight(plan: UsageAccount["plan"]): number | null {
   return plan?.multiplier ?? (plan?.id.toLowerCase() === "pro" ? 1 : null);
 }

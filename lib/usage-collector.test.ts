@@ -166,11 +166,11 @@ describe("discoverable usage collection", () => {
       const account = failed.accounts.find(account => account.accountKey === "anthropic:account:a")!;
       expect(account).toMatchObject({
         status: "ok", stale: false, observedAt: NOW - 90_000, accountEmail: "a@example.test",
-        plan: { id: "max", multiplier: 20 }, planLabel: "Max 20x",
+        plan: { id: "ultra", multiplier: 10 }, planLabel: "Ultra",
         hosts: expect.arrayContaining([{ id: "beelink", name: "beelink" }, { id: "mac", name: "mac" }]),
         message: "Machine source: fetch failed",
       });
-      expect(withAccountSettings(account, new Map([["a@example.test", "Work"]]), new Map())).toMatchObject({ accountLabel: "Work", weight: 20 });
+      expect(withAccountSettings(account, new Map([["a@example.test", "Work"]]), new Map())).toMatchObject({ accountLabel: "Work", weight: 10 });
       expect(account.sources).toHaveLength(3);
       expect(failed.error).toBeNull();
     }
@@ -203,11 +203,11 @@ describe("discoverable usage collection", () => {
       const account = result.accounts.find(account => account.accountKey === "anthropic:account:a")!;
       expect(account).toMatchObject({
         stale: true, observedAt: NOW - 30_000, accountEmail: "a@example.test",
-        plan: { id: "max", multiplier: 20 }, planLabel: "Max 20x", message: "Machine source: fetch failed",
+        plan: { id: "ultra", multiplier: 10 }, planLabel: "Ultra", message: "Machine source: fetch failed",
       });
       expect(account.sources).toHaveLength(1);
       expect(account.windows).toHaveLength(3);
-      expect(withAccountSettings(account, new Map([["a@example.test", "Work"]]), new Map())).toMatchObject({ accountLabel: "Work", weight: 20 });
+      expect(withAccountSettings(account, new Map([["a@example.test", "Work"]]), new Map())).toMatchObject({ accountLabel: "Work", weight: 10 });
       expect(usagePools(result.accounts.map(account => withAccountSettings(account, new Map(), new Map())),
         new Date(NOW).toISOString(), NOW)[0]).toMatchObject({ accounts: 2, available: 1, unknown: 1, partial: true });
       expect(result.error).toBeNull();

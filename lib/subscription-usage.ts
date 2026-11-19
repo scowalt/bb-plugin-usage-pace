@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { z } from "zod";
 import { codexHome, parseCodexLogin, readCodexAuth } from "./banked-resets";
 import { claudeConfigDir, readClaudeCredentials } from "./claude-limit-resets";
+import { currentClaudePlan } from "./usage-accounts";
 import type { SourceUsage, SourceWindow } from "./usage-source-contract";
 
 export type HostUsage = { accountKey: string | null; usage: SourceUsage };
@@ -54,12 +55,12 @@ function parseClaudeAuth(text: string) {
 }
 
 function claudePlan(auth: NonNullable<ReturnType<typeof parseClaudeAuth>>) {
-  const multiplier = auth.rateLimitTier?.match(/max_(\d+)x/u)?.[1];
-  const label = multiplier ? `Max (${multiplier}x)` : auth.subscriptionType ? auth.subscriptionType.charAt(0).toUpperCase() + auth.subscriptionType.slice(1) : null;
-  return {
-    planLabel: label,
-    plan: auth.subscriptionType ? { id: auth.subscriptionType.toLowerCase(), multiplier: Number(multiplier) || null } : null,
-  };
+  const multiplier = Number(auth.rateLimitTier?.match(/max_(\d+)x/u)?.[1]) || null;
+  const type = auth.subscriptionType;
+  return currentClaudePlan({
+    planLabel: type ? type.charAt(0).toUpperCase() + type.slice(1) : null,
+    plan: type ? { id: type.toLowerCase(), multiplier } : null,
+  });
 }
 
 export function normalizeClaudeUsage(raw: unknown): SourceWindow[] | null {

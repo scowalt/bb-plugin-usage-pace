@@ -225,7 +225,7 @@ function PoolSummary({ pool, provider, onOpen }: { pool: UsagePool; provider: Us
   ) : <section aria-label={`${provider.displayName} pool`} className="border-b border-border pb-3 text-xs">
     <h3 className="font-medium">{provider.displayName} pool</h3>
     <p className="mt-1 tabular-nums">{description}</p>
-    <p className="mt-1 text-[11px] text-muted-foreground">Plan-weighted estimates; weekly limits may not scale with the session multiplier. No pool run-out forecast.</p>
+    <p className="mt-1 text-[11px] text-muted-foreground">Weighted by each plan's weekly limit; Claude Pro is 1, Max 5, Ultra 10. No pool run-out forecast.</p>
   </section>;
 }
 

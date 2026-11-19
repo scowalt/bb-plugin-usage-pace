@@ -1,6 +1,6 @@
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import { accountSchema, isWeeklyWindow, mergeAccounts, planSchema, scopeSchema, usageIsStale, windowKindSchema, type UsageAccount } from "./usage-accounts";
+import { accountSchema, currentClaudePlan, isWeeklyWindow, mergeAccounts, planSchema, scopeSchema, usageIsStale, windowKindSchema, type UsageAccount } from "./usage-accounts";
 
 export const sourceListSchema = z.object({
   label: z.string().optional(),
@@ -129,9 +129,11 @@ export function createUsageCollector(bb: Pick<BbPluginApi, "sdk">, signal: Abort
             hosts: scope.kind === "host" ? [{ id: scope.hostId, name: scope.hostName }] : [],
             sources: [{ pluginId: source.pluginId, label: source.displayName, resourceId: resource.id, scope }],
           });
+          const planFields = (fields: Pick<UsageAccount, "plan" | "planLabel">) =>
+            resource.providerId === "claude-code" ? currentClaudePlan(fields) : fields;
           const measured = (value: z.infer<typeof measurementSchema>): UsageAccount => ({
             ...base, accountKey: value.accountKey, observedAt: value.observedAt, status: value.usage.status,
-            plan: value.usage.plan, accountEmail: value.usage.accountEmail, planLabel: value.usage.planLabel,
+            accountEmail: value.usage.accountEmail, ...planFields(value.usage),
             windows: value.usage.status === "ok" ? value.usage.windows.map(window => ({ ...window, weekly: isWeeklyWindow(window) })) : [],
           });
           let prior = old.get(resource.id);
@@ -174,7 +176,7 @@ export function createUsageCollector(bb: Pick<BbPluginApi, "sdk">, signal: Abort
               account = { ...retained, status: usage.status === "error" ? retained.status : usage.status, stale: true, message,
                 accountKey, observedAt: sameAccount ? retained.observedAt : measurement.observedAt,
                 accountEmail: usage.accountEmail ?? retained.accountEmail,
-                plan: usage.plan ?? retained.plan, planLabel: usage.planLabel ?? retained.planLabel };
+                ...planFields({ plan: usage.plan ?? retained.plan, planLabel: usage.planLabel ?? retained.planLabel }) };
             } else {
               const latestAttempt = attempts.get(resource.id);
               const refreshFailed = usage.status === "ok" && latestAttempt?.accountKey === measurement.accountKey &&
