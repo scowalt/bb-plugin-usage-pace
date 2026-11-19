@@ -3,10 +3,10 @@
   "sdkVersion": "0.6.104",
   "artifactFormatVersion": 1,
   "pluginId": "usage-pace",
-  "pluginVersion": "0.4.9",
+  "pluginVersion": "0.4.10",
   "builtWith": {
     "bbVersion": "0.48.1",
     "pluginSdkVersion": "0.6.104"
   },
-  "artifactDigest": "3d37c5f47347a012bc3a2a654b803b0d360a2978b3141ec70d9d1f618aa8f8a3"
+  "artifactDigest": "a5580e2516c6ffd4a217233d41022166667631f73154c975d5f4da515a0cd841"
 }

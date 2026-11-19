@@ -37,7 +37,7 @@ describe("Claude usage reader", () => {
     expect(result).toEqual({
       accountKey: "anthropic:account:uuid-1",
       usage: {
-        status: "ok", accountEmail: "one@example.test", planLabel: "Max (20x)", plan: { id: "max", multiplier: 20 },
+        status: "ok", accountEmail: "one@example.test", planLabel: "Ultra", plan: { id: "ultra", multiplier: 10 },
         windows: [
           { kind: "five-hour", id: "0:Current session", label: "Current session", usedPercent: 12, resetsAt: "2026-11-04T18:00:00.000Z", model: null, cost: null },
           { kind: "weekly", id: "1:Weekly limit", label: "Weekly limit", usedPercent: 40, resetsAt: "2026-11-09T00:00:00.000Z", model: null, cost: null },

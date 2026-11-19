@@ -56,13 +56,13 @@ Usage Pace discovers every `provider-usage.v1` source, including machine-local p
 
 The strip and dialog use the same account filter. Uninstalled providers and discoveries with no quota windows, account identity, or previous reading are hidden, including subscription errors from providers never used. Known accounts remain visible if their usage fails or login expires; a generic plan label alone is not evidence of an account. Raw CLI account output remains available for diagnosis. Each displayed account has a strip row. With two or more accounts, the provider also has a pool row; the dialog places the pool before that provider's accounts. Account labels use **Account aliases** (`email=Alias` pairs, separated by commas or newlines), then the email prefix, then the resource label. Labels that only repeat the provider name (ignoring case) are omitted from text and UI headings. A failed resource read with no identity keeps that resource's last known `accountKey`. Errors for the same identity also retain its email, plan, and plan label wherever the error omits them; a resource that has never reported an identity stays separate.
 
-Pool weekly use and pace are plan-weighted: Max 20x weighs 20, Max 5x weighs 5, and Pro weighs 1. When sources for the same account disagree, the account keeps the freshest plan whose size is known, even if a newer source names a plan without a size; usage still comes from the freshest healthy reading. **Pool weight overrides** accepts `email=weight` pairs. Unknown plans, stale measurements, and missing weekly windows are excluded from weighted values and mark the result **partial**. Pool pace divides weighted consumption by weighted elapsed budget, rather than averaging the account multipliers. Weekly pool figures say **est.** because session plan multipliers do not establish weekly quota sizes. There is no pool run-out forecast.
+Pool weekly use and pace are weighted by each plan's weekly limit: Claude Ultra (formerly Max 20x) weighs 10, Max (formerly Max 5x) weighs 5, and Pro weighs 1. Sources that still report the old names show the new ones. When sources for the same account disagree, the account keeps the freshest plan whose size is known, even if a newer source names a plan without a size; usage still comes from the freshest healthy reading. **Pool weight overrides** accepts `email=weight` pairs. Unknown plans, stale measurements, and missing weekly windows are excluded from weighted values and mark the result **partial**. Pool pace divides weighted consumption by weighted elapsed budget, rather than averaging the account multipliers. Weekly pool figures say **est.** because Anthropic publishes weekly limits only as multiples of Pro, not as absolute sizes. There is no pool run-out forecast.
 
 Pool availability requires readable shared session/weekly quota; unknown accounts are shown separately. Model-family exhaustion does not block shared availability and is listed separately. A pool is exhausted only when every account is confirmed exhausted; it counts down to the earliest account renewal. Each individual account still counts down to its latest exhausted reset.
 
 ```sh
 bb plugin config usage-pace set accountAliases 'a@example.test=Work,b@example.test=Personal'
-bb plugin config usage-pace set poolWeights 'a@example.test=20,b@example.test=5'
+bb plugin config usage-pace set poolWeights 'a@example.test=10,b@example.test=5'
 ```
 
 **Saved resets (Codex and Claude).** A supported account whose host login identity matches also shows `↺ 3` for three saved resets. Hover for the earliest reported expiration; the badge turns amber when a reset expires within seven days. Click the badge to open and focus that provider account's reset details. `↺ 0` is dimmed, `↺ …` is refreshing a previously verified inventory, and `↺ ?` means a verified inventory read failed or expired since reading—not zero. Unread inventories and mismatched account identities have no badge. Claude matches the profile account UUID; identical email addresses never share a balance. Claude and Codex balances remain separate even when their account emails match.
@@ -157,11 +157,11 @@ Because the source is discoverable, bb's usage card may also show these tabs. bb
 ### New installations
 
 ```sh
-bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.4.9'
+bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.4.10'
 bb plugin config usage-pace set showStrip true
 ```
 
-The compact footer card is off by default; the second command enables it, including Codex and Claude resets. Reload the app UI after changing `showStrip`. Use `@^0.4.9` instead of `@v0.4.9` to track compatible release tags with `bb plugin update usage-pace`.
+The compact footer card is off by default; the second command enables it, including Codex and Claude resets. Reload the app UI after changing `showStrip`. Use `@^0.4.10` instead of `@v0.4.10` to track compatible release tags with `bb plugin update usage-pace`.
 
 ### Upgrades
 
@@ -171,21 +171,21 @@ First inspect the installed source:
 bb plugin source usage-pace
 ```
 
-For an install tracking the repository's default branch or another branch containing 0.4.9, update in place. The same command updates a Git semver-range install when a published release satisfies its range. This keeps the plugin's settings:
+For an install tracking the repository's default branch or another branch containing 0.4.10, update in place. The same command updates a Git semver-range install when a published release satisfies its range. This keeps the plugin's settings:
 
 ```sh
 bb plugin update usage-pace
 ```
 
-An exact tag or commit is pinned: `update` does not move it to a newer release. To move a pinned install to 0.4.9, or change any existing install to a tag or range, remove it and install the new source. **Removal deletes the plugin's settings, secrets, and schedules.** Record your configuration first with `bb plugin config usage-pace`, then restore the settings you need after reinstalling:
+An exact tag or commit is pinned: `update` does not move it to a newer release. To move a pinned install to 0.4.10, or change any existing install to a tag or range, remove it and install the new source. **Removal deletes the plugin's settings, secrets, and schedules.** Record your configuration first with `bb plugin config usage-pace`, then restore the settings you need after reinstalling:
 
 ```sh
 bb plugin config usage-pace
 bb plugin remove usage-pace
-bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.4.9'
+bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.4.10'
 ```
 
-Use `@^0.4.9` in that final command to track compatible releases instead. Running `plugin install` over an existing managed install is not an upgrade; bb 0.46.1 refuses the duplicate plugin ID.
+Use `@^0.4.10` in that final command to track compatible releases instead. Running `plugin install` over an existing managed install is not an upgrade; bb 0.46.1 refuses the duplicate plugin ID.
 
 ### Installation details
 
@@ -212,7 +212,7 @@ bb usage-pace --resets --json # Codex banked resets on the primary host (unchang
 Text output groups by provider and prints the pool before its accounts. JSON contains `accounts[]` (including `accountKey`, `sources`, `hosts`, `observedAt`, and per-window `pace`) and `pools[]`. `providers[]` is a deprecated alias of `accounts[]` for the 0.4 minor series. Unknown pool values and pace remain null rather than zero. Stale account windows retain the last reported values in JSON with `stale: true` and null pace; text and UI show unknown usage, the last successful reading's age, and any source failure reason. A forced refresh that returns an old reading says the named source couldn't refresh the account, not that the user should refresh again. Claude reset details are in the strip/dialog; `--resets` retains its existing Codex-only behavior.
 
 ```
-Claude Code · Max (5x) (MacBook Pro)
+Claude Code · Max (MacBook Pro)
   Weekly limit        44%  resets in 5d 2h
                      runs out Sun 00:03, 2d 15h before reset · 1.6× pace · on track for 161% · budget 11%/day
 ```
