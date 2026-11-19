@@ -157,11 +157,11 @@ Because the source is discoverable, bb's usage card may also show these tabs. bb
 ### New installations
 
 ```sh
-bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.4.9'
+bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.4.10'
 bb plugin config usage-pace set showStrip true
 ```
 
-The compact footer card is off by default; the second command enables it, including Codex and Claude resets. Reload the app UI after changing `showStrip`. Use `@^0.4.9` instead of `@v0.4.9` to track compatible release tags with `bb plugin update usage-pace`.
+The compact footer card is off by default; the second command enables it, including Codex and Claude resets. Reload the app UI after changing `showStrip`. Use `@^0.4.10` instead of `@v0.4.10` to track compatible release tags with `bb plugin update usage-pace`.
 
 ### Upgrades
 
@@ -171,21 +171,21 @@ First inspect the installed source:
 bb plugin source usage-pace
 ```
 
-For an install tracking the repository's default branch or another branch containing 0.4.9, update in place. The same command updates a Git semver-range install when a published release satisfies its range. This keeps the plugin's settings:
+For an install tracking the repository's default branch or another branch containing 0.4.10, update in place. The same command updates a Git semver-range install when a published release satisfies its range. This keeps the plugin's settings:
 
 ```sh
 bb plugin update usage-pace
 ```
 
-An exact tag or commit is pinned: `update` does not move it to a newer release. To move a pinned install to 0.4.9, or change any existing install to a tag or range, remove it and install the new source. **Removal deletes the plugin's settings, secrets, and schedules.** Record your configuration first with `bb plugin config usage-pace`, then restore the settings you need after reinstalling:
+An exact tag or commit is pinned: `update` does not move it to a newer release. To move a pinned install to 0.4.10, or change any existing install to a tag or range, remove it and install the new source. **Removal deletes the plugin's settings, secrets, and schedules.** Record your configuration first with `bb plugin config usage-pace`, then restore the settings you need after reinstalling:
 
 ```sh
 bb plugin config usage-pace
 bb plugin remove usage-pace
-bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.4.9'
+bb plugin install 'git:https://github.com/scowalt/bb-plugin-usage-pace.git@v0.4.10'
 ```
 
-Use `@^0.4.9` in that final command to track compatible releases instead. Running `plugin install` over an existing managed install is not an upgrade; bb 0.46.1 refuses the duplicate plugin ID.
+Use `@^0.4.10` in that final command to track compatible releases instead. Running `plugin install` over an existing managed install is not an upgrade; bb 0.46.1 refuses the duplicate plugin ID.
 
 ### Installation details
 
