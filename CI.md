@@ -3,14 +3,12 @@
 ## Native Linux routing
 
 The workflow selects `ci_os: linux`, matching the supported Woodpecker 3.19
-agent setting `WOODPECKER_AGENT_LABELS=ci_os=linux`. Before merging this change,
-the parent must configure and read back that label and actual Linux ARM64
-platform on the current agent, then verify the label and Linux AMD64 platform
-on its replacement. Include no other OS or unsupported CPU; retain native platform
-reporting. This routing label is not a security boundary or hardware attestation.
-The original image index supports both targets, without a matrix or emulation.
-ARM64 rollout guidance below is historical, not native AMD64 proof. Commands,
-pins and status layout stay unchanged; actual AMD64 acceptance is separate.
+agent setting `WOODPECKER_AGENT_LABELS=ci_os=linux`. The parent must configure
+and read back that label and the actual `linux/amd64` platform on the current
+agent. Include no other OS or unsupported CPU; retain native platform reporting.
+This routing label is not a security boundary or hardware attestation. The
+pinned image index includes a `linux/amd64` manifest; there is no matrix or
+emulation. Commands, pins and status layout stay unchanged.
 
 ## Authored contract
 
@@ -27,7 +25,7 @@ The original Actions job uses `ubuntu-latest`, a 10-minute timeout, read-only
 contents permission, checkout `11d5960a326750d5838078e36cf38b85af677262`,
 and setup-uv `d0d8abe699bfb85fec6de9f7adb5ae17292296ff` with uv `0.11.32`
 and caching keyed by `.comment-policy/requirements.txt`.
-Woodpecker uses the approved Linux ARM64/AMD64-capable Python 3.14 / uv 0.11.32
+Woodpecker uses the approved `linux/amd64` Python 3.14 / uv 0.11.32
 Trixie image pinned by digest in the pipeline. Its disposable environment uses
 uv's normal dependency cache, not the Actions cache service.
 The five unchanged requirement pins are tree-sitter `0.25.2`,
@@ -55,9 +53,10 @@ not install/reload a live plugin or contact provider/account/reset/auth APIs.
 
 ## Parent-owned rollout
 
-This source port does not activate Woodpecker or disable Actions. Use the existing
-single CAX11 in hel1: ARM64, 4 GiB, capacity one, 2 GiB job limit. Do not add
-capacity, secrets, privileges or infrastructure spend.
+This source port does not activate Woodpecker or disable Actions. Use the single
+Woodpecker agent on the x86-64 `woodpecker` host (`linux/amd64`): capacity one,
+2 GiB job limit. Do not add capacity, secrets, privileges or infrastructure
+spend.
 
 1. Complete separate source review and integration. The parent activates the
    exact repository using native supported interfaces, then reads settings back:
@@ -74,7 +73,7 @@ capacity, secrets, privileges or infrastructure spend.
    extra test PRs, fresh tags/forks or per-target post-disable revisions.
    On the actual exact delivery head, retain native PR pipeline/clone/job success,
    both original command logs, the actual full-index policy count, all 13 tests,
-   runtime pins and Linux ARM64 execution evidence, plus matching exact-SHA
+   runtime pins and `linux/amd64` execution evidence, plus matching exact-SHA
    GitHub Woodpecker success. Local x86_64 lint is not hosted acceptance. Observe
    rather than invent the reported context; Actions run lists do not prove all
    third-party or protection requirements pass.
@@ -121,4 +120,4 @@ See the [native workflow syntax](https://woodpecker-ci.org/docs/usage/workflow-s
 [3.19.0 schema](https://github.com/woodpecker-ci/woodpecker/blob/v3.19.0/pipeline/frontend/yaml/linter/schema/schema.json),
 [clone contract](https://woodpecker-ci.org/plugins/git-clone), and
 [repository settings](https://woodpecker-ci.org/docs/usage/project-settings).
-Source/local success is not ARM64 hosted acceptance or migration completion.
+Source/local success is not hosted acceptance or migration completion.
