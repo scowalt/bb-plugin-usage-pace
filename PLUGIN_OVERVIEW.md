@@ -96,8 +96,10 @@ Antigravity (usage)", so bb's provider picker shows it next to bb's own
 "Google Antigravity". bb lists it only on machines where `agy` is installed. It
 runs `agy -p /usage --output-format json`, and never reads agy's files or calls
 a Google service. A signed-out machine shows as unauthenticated. agy reports no
-account or plan, so none is shown. Reads are cached for five minutes. A setting
-turns this off.
+account or plan, so none is shown. Usage Pace caches each machine's read for
+five minutes. The companion keeps a good read for up to five minutes, but bb
+stops its idle bridge after a minute, and the next read runs agy again. A
+setting turns this off.
 
 Usage Pace is a fork of Usage Bar by Dmitrii Kapustin (MIT). The optional
 Usage Bar footer strip is still in the plugin, off by default. The Grok Build

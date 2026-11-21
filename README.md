@@ -161,7 +161,9 @@ bb runs Google Antigravity through its built-in ACP provider (`acp-antigravity-a
 
 Usage Pace only runs the `agy` command. It never reads agy's files under `~/.gemini/` and never calls a Google service, because Antigravity's terms forbid reusing its credentials.
 
-Two five-minute caches keep reads rare. Usage Pace's own source caches each machine's read, and a refresh bypasses that cache. The companion provider caches a successful read for the same time and shares one read between concurrent callers. It does not cache a failure. Another plugin can read the companion's cache with `bb.sdk.system.usageLimits({ hostId, providerId: "usage-pace-antigravity" })`.
+Usage Pace's own source caches each machine's read for five minutes, and a refresh bypasses that cache.
+
+Another plugin reads the companion provider with `bb.sdk.system.usageLimits({ hostId, providerId: "usage-pace-antigravity" })`. The companion keeps a successful read for up to five minutes and shares one read between concurrent callers. It does not keep a failure. The read lives in the companion's bridge process, and bb stops that process after a minute with no requests. The first call after a quiet minute therefore runs `agy` again and takes about 2 to 5 seconds. If `agy` hangs, the call returns an error after about 15 seconds.
 
 Turn this off with the *Add Google Antigravity usage to bb's usage card* setting (`antigravityUsage`), then reload the plugin.
 
