@@ -7,6 +7,8 @@ import { usageCliSchema } from "./lib/usage-cli";
 import { usageForDisplay } from "./lib/usage-scope";
 import { parseFailures } from "./lib/card-pace";
 import { makeAccount, NOW } from "./tests/usage-fixtures";
+import { agyFixture } from "./tests/fake-agy";
+import { parseAgyUsage } from "./lib/antigravity-usage";
 
 const inventory: BankedResets = { status: "ok", availableCount: 0, credits: [], accountEmail: "one@example.test", fetchedAt: "2026-10-07T20:00:00Z", message: null };
 const cleanups: (() => Promise<void>)[] = [];
@@ -158,6 +160,77 @@ describe("Claude and Codex fallback source", () => {
     expect(output.accounts?.[0]?.sources).toEqual([{ pluginId: "usage-pace", label: "Usage Pace", resourceId: "claude-code:server", scope: { kind: "host", hostId: "server", hostName: "Server" } }]);
     expect(callHost).toHaveBeenCalledWith(expect.objectContaining({ hostId: "server", input: { providerId: "claude-code" } }));
     expect(callHost).toHaveBeenCalledWith(expect.objectContaining({ hostId: "server", input: { providerId: "codex" } }));
+  });
+});
+
+describe("Google Antigravity source", () => {
+  const server = makeHostResponse({ id: "server", name: "Server", status: "connected" });
+  const listed = [{ id: "claude-code" }, { id: "codex" }, { id: "usage-pace-antigravity", displayName: "Google Antigravity (usage)" }];
+
+  async function setupAntigravity(settings: Record<string, boolean> = {}) {
+    vi.useFakeTimers({ now: Date.parse("2026-11-20T21:00:00Z") });
+    const callHost = vi.fn(async ({ method, input }: { method: string; input: unknown }) => {
+      expect(method).toBe("readUsage");
+      bankedResetsHostContract.readUsage.input.parse(input);
+      return { accountKey: null, usage: parseAgyUsage(JSON.parse(agyFixture("agy-usage.json"))) };
+    });
+    let behavior: { callRpc(method: string, input: unknown): Promise<unknown> } | null = null;
+    const { bb, harness } = createFakePluginHost({
+      pluginId: "usage-pace", settings: { grokUsage: false, ...settings },
+      sdk: {
+        hosts: { list: async () => [server] },
+        providers: { list: async () => listed },
+        system: { config: async () => ({ primaryHostId: "server" }) },
+        plugins: {
+          experimental_discoverRpc: async () => [{ pluginId: "usage-pace", displayName: "Usage Pace" }],
+          callRpc: async ({ method, input }: { method: string; input: unknown }) => behavior!.callRpc(method, input),
+        },
+      },
+      experimental_callHostRpc: callHost,
+    });
+    behavior = harness.behavior;
+    cleanups.push(() => harness.lifecycle.dispose());
+    await plugin(bb);
+    return { harness, callHost };
+  }
+
+  it("registers the companion provider by default", async () => {
+    const { harness } = await setupAntigravity({});
+    expect(harness.inspection.registrations.providerRegistrations.find(provider => provider.id === "usage-pace-antigravity")).toMatchObject({
+      displayName: "Google Antigravity (usage)", maintenance: { health: true, usage: true },
+    });
+  });
+
+  it("registers nothing and reads nothing when the setting is off", async () => {
+    const { harness, callHost } = await setupAntigravity({ antigravityUsage: false });
+    expect(harness.inspection.registrations.providerRegistrations.map(provider => provider.id)).not.toContain("usage-pace-antigravity");
+    const output = rpcContract.getUsage.output.parse(await harness.behavior.callRpc("getUsage", {}));
+    expect(output.accounts ?? []).toEqual([]);
+    expect(callHost).not.toHaveBeenCalled();
+  });
+
+  it("shows agy's quota groups as one account with a window per bucket, read through the host entry", async () => {
+    const { harness, callHost } = await setupAntigravity();
+    const output = rpcContract.getUsage.output.parse(await harness.behavior.callRpc("getUsage", {}));
+    expect(callHost).toHaveBeenCalledTimes(1);
+    expect(callHost).toHaveBeenCalledWith(expect.objectContaining({ hostId: "server", input: { providerId: "usage-pace-antigravity" } }));
+    expect(output.accounts).toHaveLength(1);
+    const [account] = output.accounts!;
+    expect(account).toMatchObject({
+      id: "usage-pace-antigravity", displayName: "Google Antigravity (usage)", status: "ok",
+      accountKey: null, accountEmail: null, planLabel: null, hostId: "server",
+      sources: [{ pluginId: "usage-pace", resourceId: "antigravity:server" }],
+    });
+    expect(account!.windows.map(window => [window.label, window.kind, window.weekly, window.usedPercent])).toEqual([
+      ["Gemini Models · Weekly", "weekly", true, 1],
+      ["Gemini Models · 5h", "five-hour", false, 1.01],
+      ["Claude and GPT models · Weekly", "weekly", true, 0],
+      ["Claude and GPT models · 5h", "five-hour", false, 0],
+      ["Gemini 4 Argon · Weekly", "weekly", true, 0],
+    ]);
+    const text = (await harness.behavior.runCli(["--all"])).stdout ?? "";
+    expect(text).toContain("Google Antigravity (usage)");
+    expect(text).toContain("Gemini Models · Weekly");
   });
 });
 

@@ -31,7 +31,7 @@ type Source = { pluginId: string; displayName: string };
 type RefreshAttempt = { at: number; accountKey: string | null; message: string | null };
 export type CollectedUsage = { accounts: UsageAccount[]; error: string | null; hostsError: string | null };
 
-const names: Record<string, string> = { "claude-code": "Claude Code", codex: "Codex", "usage-pace-grok": "Grok Build (usage)" };
+const names: Record<string, string> = { "claude-code": "Claude Code", codex: "Codex", "usage-pace-grok": "Grok Build (usage)", "usage-pace-antigravity": "Google Antigravity (usage)" };
 const disabledProviderMarks: Record<string, { logoUrl: string; iconTint: { light: string; dark: string } | null }> = {
   "claude-code": { logoUrl: "/api/v1/system/providers/claude-code/logo", iconTint: { light: "#D97757", dark: "#D97757" } },
   codex: { logoUrl: "/api/v1/system/providers/codex/logo", iconTint: null },
