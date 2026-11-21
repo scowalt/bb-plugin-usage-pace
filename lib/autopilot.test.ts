@@ -367,6 +367,7 @@ describe("geminiRunnability", () => {
     ["provider disabled", new Map([[GEMINI_NEON.providerId, false]]), listed, "Antigravity is not available on Mac"],
     ["catalog unreadable", available, null, "could not list Antigravity's models on Mac"],
     ["model load error", available, { modelLoadError: { code: "missing_executable" }, models: [] }, "Antigravity cannot start on Mac (missing_executable)"],
+    ["model load error with detail", available, { modelLoadError: { code: "failed", detail: "Host is not connected" }, models: [] }, "Antigravity cannot start on Mac (failed: Host is not connected)"],
     ["model not listed", available, { modelLoadError: null, models: [{ model: "gemini-4-argon" }] }, "Antigravity does not list gemini-4-neon on Mac"],
   ] as const)("is not runnable when %s", (_name, providers, catalog, reason) => {
     expect(geminiRunnability(providers, catalog, "Mac")).toEqual({ runnable: false, reason });

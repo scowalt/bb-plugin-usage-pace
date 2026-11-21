@@ -86,7 +86,7 @@ export function clampEffort(model: AutopilotModel, wanted: Effort): Effort {
 export type Runnability = { runnable: true } | { runnable: false; reason: string };
 
 export interface ModelCatalog {
-  modelLoadError: { code: string } | null;
+  modelLoadError: { code: string; detail?: string | null } | null;
   models: readonly { model: string }[];
 }
 
@@ -99,7 +99,10 @@ export function geminiRunnability(
   if (providers === null) return no(`could not check Antigravity on ${where}`);
   if (providers.get(GEMINI_NEON.providerId) !== true) return no(`Antigravity is not available on ${where}`);
   if (catalog === null) return no(`could not list Antigravity's models on ${where}`);
-  if (catalog.modelLoadError !== null) return no(`Antigravity cannot start on ${where} (${catalog.modelLoadError.code})`);
+  if (catalog.modelLoadError !== null) {
+    const { code, detail } = catalog.modelLoadError;
+    return no(`Antigravity cannot start on ${where} (${detail ? `${code}: ${detail}` : code})`);
+  }
   if (!catalog.models.some(entry => entry.model === GEMINI_NEON.model)) return no(`Antigravity does not list ${GEMINI_NEON.model} on ${where}`);
   return { runnable: true };
 }
