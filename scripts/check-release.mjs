@@ -17,7 +17,7 @@ assert.deepEqual(lock.packages[""].engines, pkg.engines);
 assert.deepEqual(lock.packages[""].dependencies, pkg.dependencies);
 assert.deepEqual(lock.packages[""].devDependencies, pkg.devDependencies);
 const version = value => {
-  const match = /^(\d+)\.(\d+)\.(\d+)$/u.exec(value ?? "");
+  const match = /^(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?$/u.exec(value ?? "");
   assert.ok(match, `Not an exact version: ${value}`);
   return match.slice(1).map(Number);
 };

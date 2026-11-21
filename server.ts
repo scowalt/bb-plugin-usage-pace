@@ -2,6 +2,9 @@ import { defineRpcContract, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { ANTIGRAVITY_PROVIDER_ID, registerAntigravityProvider } from "./lib/antigravity-provider";
 import { createAntigravityUsageSource } from "./lib/antigravity-usage-source";
+import { DEFAULT_BANDS_TEXT, parseEffortBands, type EffortBands, type UsageReading } from "./lib/autopilot";
+import { createAutopilot } from "./lib/autopilot-shell";
+import { hasNewThreadSeam, registerNewThreadChooser } from "./lib/new-thread-seam";
 import { registerGrokProvider } from "./lib/grok-provider";
 import { createGrokUsageSource } from "./lib/grok-usage-source";
 import { createSubscriptionUsageSource } from "./lib/subscription-usage-source";
@@ -113,11 +116,26 @@ export default async function plugin(bb: BbPluginApi) {
       label: "Add Google Antigravity usage to bb's usage card (takes effect after a plugin reload)",
       default: true,
     },
+    autopilot: {
+      type: "boolean",
+      label: "Choose each new thread's model and effort",
+      description: "Picks Opus or Gemini Neon from subscription pace, and sets the effort from overall pace. Applies to threads that name no model. Needs a bb with the new-thread chooser.",
+      default: true,
+    },
+    autopilotEffortBands: {
+      type: "string",
+      label: "Autopilot effort bands",
+      description: "Overall pace below each number gets that level; the last entry covers the rest. Levels: low, medium, high, xhigh, max. A level the model lacks drops to the nearest lower one.",
+      default: DEFAULT_BANDS_TEXT,
+    },
   });
   let cacheMs = 5 * 60_000;
   let showStrip = false;
   let serverOnly = false;
   let hiddenProviders: string[] = [];
+  let autopilotEnabled = true;
+  let autopilotBands: EffortBands = parseEffortBands("").bands;
+  let autopilotRegistered = false;
   let aliases = new Map<string, string>();
   let weights = new Map<string, string>();
   const applySettings = async () => {
@@ -128,6 +146,10 @@ export default async function plugin(bb: BbPluginApi) {
     hiddenProviders = parseProviderList(String(values.hiddenCardProviders ?? ""));
     aliases = parsePairs(String(values.accountAliases ?? ""));
     weights = parsePairs(String(values.poolWeights ?? ""));
+    autopilotEnabled = values.autopilot !== false;
+    const bands = parseEffortBands(String(values.autopilotEffortBands ?? ""));
+    autopilotBands = bands.bands;
+    if (bands.warning !== null) bb.log.warn(bands.warning);
   };
   await applySettings();
   const usageSources: UsageSource[] = [createSubscriptionUsageSource(bb, (hostId, providerId) =>
@@ -149,6 +171,7 @@ export default async function plugin(bb: BbPluginApi) {
   });
   settings.onChange?.(async () => {
     await applySettings();
+    registerAutopilot();
     bb.realtime.publish("usage-changed", { fetchedAt: new Date().toISOString() });
   });
 
@@ -187,6 +210,62 @@ export default async function plugin(bb: BbPluginApi) {
         pending = null;
       });
     return pending;
+  }
+
+  async function readUsageForAutopilot(): Promise<UsageReading | null> {
+    const loading = getUsage(false);
+    const soon = await Promise.race([loading, new Promise<null>(resolve => setTimeout(resolve, 50, null))]);
+    const loaded = soon ?? cached?.usage ?? await loading;
+    const snapshot = configuredSnapshot(loaded.snapshot);
+    return { accounts: snapshot.accounts ?? snapshot.providers, fetchedAt: snapshot.fetchedAt };
+  }
+
+  const autopilot = createAutopilot({
+    bb,
+    signal: bankedController.signal,
+    settings: () => ({ enabled: autopilotEnabled, bands: autopilotBands }),
+    readUsage: readUsageForAutopilot,
+  });
+
+  function registerAutopilot() {
+    if (autopilotRegistered || !autopilotEnabled) return;
+    if (!hasNewThreadSeam(bb)) {
+      bb.log.info("Autopilot is on, but this bb has no new-thread chooser yet, so it chooses nothing.");
+      return;
+    }
+    try {
+      registerNewThreadChooser(bb, request => autopilot.choose(request));
+      autopilotRegistered = true;
+      autopilot.warm();
+    } catch (error) {
+      bb.log.warn(`Autopilot could not register its chooser: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  registerAutopilot();
+
+  async function autopilotCli(args: string[]) {
+    const usage = "Usage: bb usage-pace autopilot [--json] [--host <id>]";
+    let json = false;
+    let hostId: string | null = null;
+    for (let index = 0; index < args.length; index++) {
+      const arg = args[index]!;
+      if (arg === "--json") json = true;
+      else if (arg === "--host" || arg.startsWith("--host=")) {
+        hostId = arg === "--host" ? (args[++index] ?? "") : arg.slice("--host=".length);
+        if (hostId === "" || hostId.startsWith("--")) return { exitCode: 1, stderr: `--host needs a machine id.\n${usage}` };
+      } else return { exitCode: 1, stderr: usage };
+    }
+    const choice = await autopilot.choose({ origin: "cli", hostId, requested: { providerId: null, model: null, reasoningLevel: null }, sources: { providerId: null, model: null, reasoningLevel: null } });
+    if (json) return { exitCode: 0, stdout: JSON.stringify({ enabled: autopilotEnabled, active: autopilotRegistered, hostId, choice }) };
+    if (choice === null) return { exitCode: 0, stdout: "Autopilot is off. New threads get the model they name, or bb's usual default." };
+    return {
+      exitCode: 0,
+      stdout: [
+        `New threads get ${choice.providerId} · ${choice.model} at effort ${choice.reasoningLevel}.`,
+        `Why: ${choice.reason}`,
+        ...(autopilotRegistered ? [] : ["Not active: this bb has no new-thread chooser yet, so nothing uses this choice."]),
+      ].join("\n"),
+    };
   }
 
   async function getServerScope(usage: LoadedUsage) {
@@ -284,12 +363,15 @@ export default async function plugin(bb: BbPluginApi) {
   const usageText = [
     "Usage:",
     "  bb usage-pace [--all] [--force] [--json]",
+    "  bb usage-pace autopilot [--json] [--host <id>]",
     "",
     "  --resets read-only Codex banked resets (primary host; --json for details)",
     "  --tokens total tokens across BB for today and this month (JSON)",
     "  --all    show every window, not only weekly ones",
     "  --force  bypass the cache and query providers now",
     "  --json   accounts, pools, and per-window pace; providers is a deprecated accounts alias",
+    "",
+    "  autopilot  the model and effort a new thread would get now, and why",
   ].join("\n");
 
   bb.cli.register({
@@ -301,8 +383,14 @@ export default async function plugin(bb: BbPluginApi) {
         summary: "Print usage windows with pace",
         usage: "bb usage-pace [show] [--all] [--force] [--json]",
       },
+      {
+        name: "autopilot",
+        summary: "Print the model and effort a new thread would get now, and why",
+        usage: "bb usage-pace autopilot [--json] [--host <id>]",
+      },
     ],
     async run(argv) {
+      if (argv[0] === "autopilot") return autopilotCli(argv.slice(1));
       if (argv.includes("--resets")) {
         const hostId = (await bb.sdk.system.config()).primaryHostId;
         const snapshot = hostId ? await getBankedResets(hostId, argv.includes("--force")) : bankedResetsUnavailable("No primary host is configured.");
