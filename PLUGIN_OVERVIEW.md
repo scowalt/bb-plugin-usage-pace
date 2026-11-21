@@ -18,6 +18,10 @@ Provider usage card.
 - **Grok Build in the card.** bb's Grok provider reports no usage. Usage
   Pace adds a Grok Build tab with the weekly or monthly credits and their
   pace.
+- **Google Antigravity in the card.** bb's Antigravity provider reports no
+  usage. Usage Pace adds a Google Antigravity tab with each quota group's
+  five-hour and weekly windows and their pace. Another plugin can read the
+  same numbers from bb.
 - **Claude Code and Codex while disabled in bb.** bb's own providers stop
   reporting usage when disabled. Usage Pace then reads each machine's
   Claude Code or Codex login itself, so those accounts stay visible.
@@ -86,6 +90,14 @@ For Grok Build, it registers a companion provider, "Grok Build (usage)", so
 bb's provider picker shows it next to bb's own "Grok Build". It reads the
 Grok CLI login from `grok login` and asks xAI's billing service for the
 credit window. A setting turns this off.
+
+For Google Antigravity, it registers a companion provider, "Google
+Antigravity (usage)", so bb's provider picker shows it next to bb's own
+"Google Antigravity". bb lists it only on machines where `agy` is installed. It
+runs `agy -p /usage --output-format json`, and never reads agy's files or calls
+a Google service. A signed-out machine shows as unauthenticated. agy reports no
+account or plan, so none is shown. Reads are cached for five minutes. A setting
+turns this off.
 
 Usage Pace is a fork of Usage Bar by Dmitrii Kapustin (MIT). The optional
 Usage Bar footer strip is still in the plugin, off by default. The Grok Build

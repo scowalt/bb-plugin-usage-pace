@@ -25,6 +25,11 @@ Originally a fork of [Usage Bar](https://github.com/dmitriikapustin/bb-plugins-b
 
 The first line is the difference from even pace, in percentage points and in time. The second line is the time without quota before the reset, or the daily budget that lasts.
 
+Usage Pace also adds a tab for each provider whose bb provider reports no usage. Each tab gets the tick, the band and the hover lines.
+
+- [Grok Build](#grok-build): the credit window.
+- [Google Antigravity](#google-antigravity): the five-hour and weekly window of each quota group, such as Gemini Models.
+
 The card belongs to another plugin. Usage Pace only adds nodes to it, and reads the card's own data (`bb--provider-usage` `getUsage`, with the visible provider IDs and cached measurements), so the labels always match. If a bb update changes the card's markup, the tick and the delta stop showing, and nothing else breaks.
 
 **Optional compact footer card (0.4.4).** Turn on *Also show the Usage Pace strip in a sidebar footer card* in the plugin settings, then reload the app UI. Usage Pace registers a disclosure through bb's supported sidebar footer API, not by inserting into bb's footer markup. The host places the bordered, scrollable card above the footer buttons (up to 320px tall), including in bb 0.47's macOS desktop layout. Each provider account leads with pace, with one compact line per displayed quota window (provider icons represented by letters here):
@@ -50,7 +55,7 @@ Status considers **all** reported windows, including model-specific limits not d
 
 ### Multiple accounts and pools (0.4.0)
 
-Usage Pace discovers every `provider-usage.v1` source, including machine-local providers, Account Pooler, Claude Accounts, and its own Grok, Claude Code, and Codex sources. Accounts merge only by the provider-issued `accountKey`, never by email, label, or plan. A merged account prefers the freshest healthy measurement (`status: "ok"`, not stale) and lists all reporting sources and machines, including failed sources' messages. If no healthy measurement remains, it uses the newest observation as before. Unknown identities stay separate. Failed sources keep their last measurements, marked stale; healthy sources still show pace. Known accounts also keep their historical windows, timestamp, and omitted identity metadata through `expired` and `unauthenticated` results, with the source name and state as the reason. Explicit identity changes never inherit another account's windows or metadata. Measurements are fetched at most three at a time, with five-second source timeouts.
+Usage Pace discovers every `provider-usage.v1` source, including machine-local providers, Account Pooler, Claude Accounts, and its own Grok Build, Google Antigravity, Claude Code, and Codex sources. Accounts merge only by the provider-issued `accountKey`, never by email, label, or plan. A merged account prefers the freshest healthy measurement (`status: "ok"`, not stale) and lists all reporting sources and machines, including failed sources' messages. If no healthy measurement remains, it uses the newest observation as before. Unknown identities stay separate. Failed sources keep their last measurements, marked stale; healthy sources still show pace. Known accounts also keep their historical windows, timestamp, and omitted identity metadata through `expired` and `unauthenticated` results, with the source name and state as the reason. Explicit identity changes never inherit another account's windows or metadata. Measurements are fetched at most three at a time, with five-second source timeouts.
 
 **Reading freshness (0.4.3).** A passed window reset makes the reading stale. Age alone does not prove a failure: normal polling permits sources to answer from cache. When an `ok` reading is at least one **Cache usage for (minutes)** period old (default five minutes; minimum 30 seconds), or has no observation timestamp, Usage Pace requests `refresh: true` for that resource alone, at most once per cache period. If a forced read still has no observation or returns a reading at least one cache period older than the request's start, it is stale even before any reset passes. A recent reading within that period is accepted; timestamps need not exactly equal the request time. Failed freshness checks and supplied reasons survive subsequent cached reads until a recent observation or a new refresh result replaces them. Manual refresh / `--force` bypasses the probe limit. A healthy on-demand source can therefore return old cached data and then fresh data without ending up stale. Generic refresh advice is reserved for an unknown/passed-reset reading without a reported failure; Usage Pace cannot repair a source's login or renew its credentials.
 
@@ -142,6 +147,24 @@ Because the companion is a full provider, bb's provider picker shows it next to 
 
 Turn this off with the *Add Grok Build usage to bb's usage card* setting, then reload the plugin. Do not also install Grok Build Usage: both plugins then add a Grok tab.
 
+## Google Antigravity
+
+bb runs Google Antigravity through its built-in ACP provider (`acp-antigravity-acp`). That provider reports no usage, so bb's usage card has no Antigravity tab. Usage Pace adds one:
+
+- It registers a companion provider, `usage-pace-antigravity` ("Google Antigravity (usage)"). It runs the same `agy acp` agent, and it answers bb's usage request. bb's provider picker shows it next to "Google Antigravity". Threads on either one run the same agent.
+- bb lists the companion only on machines where the `agy` command is installed. A machine without `agy` reports `not_installed`.
+- It reads the quota by running `agy -p /usage --output-format json` on that machine. This runs agy's `/usage` command, not an agent turn. Usage Pace refuses any output that did not come from `/usage`.
+- Each quota bucket agy reports becomes one window. A window is named `<group> · 5h` or `<group> · Weekly`, for example `Gemini Models · 5h` and `Gemini Models · Weekly`. The used percent is 100 minus the remaining percent that agy reports, rounded to two decimals. A bucket also has a reset time, so it gets a pace like every other window.
+- A machine where agy is signed out shows as `unauthenticated`. agy then waits for a pasted login code, so Usage Pace stops it as soon as it asks. Run `agy` on the machine and sign in.
+- agy's JSON names no account and no plan, so Usage Pace shows neither. Each machine shows as its own account.
+- A failed read is an error, never 0% used.
+
+Usage Pace only runs the `agy` command. It never reads agy's files under `~/.gemini/` and never calls a Google service, because Antigravity's terms forbid reusing its credentials.
+
+Two five-minute caches keep reads rare. Usage Pace's own source caches each machine's read, and a refresh bypasses that cache. The companion provider caches a successful read for the same time and shares one read between concurrent callers. It does not cache a failure. Another plugin can read the companion's cache with `bb.sdk.system.usageLimits({ hostId, providerId: "usage-pace-antigravity" })`.
+
+Turn this off with the *Add Google Antigravity usage to bb's usage card* setting (`antigravityUsage`), then reload the plugin.
+
 ## Claude Code and Codex with bb's provider disabled
 
 bb's Claude Code and Codex providers report their usage only while enabled. After `bb provider disable claude-code` or `bb provider disable codex`, bb's source lists no accounts and the usage would vanish. Usage Pace covers this gap with its own source:
@@ -189,7 +212,7 @@ Use `@^0.4.10` in that final command to track compatible releases instead. Runni
 
 ### Installation details
 
-**Use 0.3.1 or newer for Git installs**: 0.3.0 fails when development dependencies are absent. Release tags include prebuilt bundles, but BB's Git installer rebuilds source with its own build tooling after installing production dependencies. The required SDK runtime is installed automatically; you do not need to install it manually. Sign into Codex with a ChatGPT account or Claude Code with a Claude subscription on each host where you want that provider's reset information.
+**Use 0.3.1 or newer for Git installs**: 0.3.0 fails when development dependencies are absent. Release tags include prebuilt bundles, but BB's Git installer rebuilds source with its own build tooling after installing production dependencies. The required SDK runtime is installed automatically; you do not need to install it manually. Sign into Codex with a ChatGPT account or Claude Code with a Claude subscription on each host where you want that provider's reset information. Install `agy` and sign in on each host where you want Google Antigravity usage.
 
 For a new install from a local checkout:
 
@@ -226,14 +249,16 @@ bb **0.48.1+** with bundled Plugin SDK **0.6.104+**. The plugin uses the provide
 ```sh
 bun install
 bun run check   # tsc
-bun run test    # vitest (pace, reset badge/UI) + node:test (token totals)
+bun run test    # vitest (pace, reset badge/UI, Antigravity) + node:test (token totals)
 bun run build   # bb plugin build
 bun run check:install # rebuild an isolated copy with production dependencies only
 bun run check:release # includes check:install, metadata/digest and bundle smoke tests
 bb plugin reload usage-pace
 ```
 
-Keep `@get-bb/plugin-sdk` pinned in **dependencies**, not devDependencies: the Grok host bridge imports its runtime during install-time bundling. `bb plugin types` repins it to the running bb's SDK but moves it to devDependencies; move it back afterwards. Browser-shared data must not import the backend SDK; host RPC wiring lives separately in `lib/banked-resets-host-contract.ts`.
+Keep `@get-bb/plugin-sdk` pinned in **dependencies**, not devDependencies: the Grok Build and Google Antigravity host bridge imports its runtime during install-time bundling. `bb plugin types` repins it to the running bb's SDK but moves it to devDependencies; move it back afterwards. Browser-shared data must not import the backend SDK; host RPC wiring lives separately in `lib/banked-resets-host-contract.ts`.
+
+Tests never run the real `agy`. Tests that reach the spawn boundary use temporary fake executables from `tests/fake-agy.ts`. `tests/fixtures/agy-usage.json` is a capture of agy's real output.
 
 `check:install` defaults to Bun. Set `BB_INSTALL_NPM_CLI` to the absolute `npm-cli.js` shipped with the BB version under test for exact dependency-install parity (`--ignore-scripts --omit=dev --omit=optional`). Both modes invoke `bb plugin build` in a disposable checkout and make no provider requests. `check:release` honors the same setting.
 
