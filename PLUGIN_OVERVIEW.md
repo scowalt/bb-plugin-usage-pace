@@ -53,6 +53,10 @@ Provider usage card.
   Claude distinguishes full and five-hour saved grants; conditional five-hour
   reset availability is shown separately and never added to the saved count.
   Saved resets do not alter the pace calculation. Badges require a matching provider-issued account identity; unread inventories have no badge.
+- **Model autopilot.** On a bb with the new-thread chooser, Usage Pace picks
+  Opus or Gemini Neon for each new thread from the two subscriptions' weekly
+  pace, and sets the effort from the overall pace. `bb usage-pace autopilot`
+  shows what a new thread would get and why.
 - **`bb usage-pace`** prints each window with its pace in a terminal, and
   `--json` gives agents a `pace` object for each window.
 

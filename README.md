@@ -30,6 +30,8 @@ Usage Pace also adds a tab for each provider whose bb provider reports no usage.
 - [Grok Build](#grok-build): the credit window.
 - [Google Antigravity](#google-antigravity): the five-hour and weekly window of each quota group, such as Gemini Models.
 
+Usage Pace can also [choose each new thread's model and effort](#model-autopilot) from this usage.
+
 The card belongs to another plugin. Usage Pace only adds nodes to it, and reads the card's own data (`bb--provider-usage` `getUsage`, with the visible provider IDs and cached measurements), so the labels always match. If a bb update changes the card's markup, the tick and the delta stop showing, and nothing else breaks.
 
 **Optional compact footer card (0.4.4).** Turn on *Also show the Usage Pace strip in a sidebar footer card* in the plugin settings, then reload the app UI. Usage Pace registers a disclosure through bb's supported sidebar footer API, not by inserting into bb's footer markup. The host places the bordered, scrollable card above the footer buttons (up to 320px tall), including in bb 0.47's macOS desktop layout. Each provider account leads with pace, with one compact line per displayed quota window (provider icons represented by letters here):
@@ -167,6 +169,44 @@ Another plugin reads the companion provider with `bb.sdk.system.usageLimits({ ho
 
 Turn this off with the *Add Google Antigravity usage to bb's usage card* setting (`antigravityUsage`), then reload the plugin.
 
+## Model autopilot
+
+Usage Pace can pick the model and effort of every new thread, so nobody picks a model by hand. It chooses between Opus (`pi`, `claude-bridge/claude-opus-5-5`) and Gemini Neon (`acp-antigravity-acp`, `gemini-4-neon`), using the usage it already reads.
+
+It needs a bb that has the new-thread chooser (`bb.providers.experimental_chooseNewThreadExecution`). On an older bb the setting does nothing, and `bb usage-pace autopilot` says so. bb allows one chooser, so another plugin's chooser makes Usage Pace log a warning and carry on.
+
+**Which threads.** Threads made in the composer, and threads made by the CLI, an agent or a plugin that name no provider and no model. A thread that names a provider or a model keeps it. Follow-up messages and forks keep their thread's model.
+
+**Which model.** The one with the lower weekly pace wins. Pace is the share of the week's quota used divided by the share of the week that has passed.
+
+- Claude uses the plan-weighted pool of your Claude accounts. Gemini uses the `Gemini Models · Weekly` window.
+- Early in a window the ratio is not shown, so autopilot divides used by elapsed time with elapsed time floored at 5%.
+- A subscription is skipped when its 5-hour window is at 85% or more, or its weekly use is at 90% or more. For Claude that means the pool's weekly use, or every account's 5-hour window.
+- Gemini Neon is also skipped when it cannot start on the thread's machine: Antigravity is missing or disabled there, its model list failed to load, or `gemini-4-neon` is not listed. Autopilot reads this in the background and keeps the answer for five minutes.
+- Unknown usage, a tie (paces within 0.02) or both subscriptions skipped all go to Opus.
+
+**Which effort.** It follows the overall pace, the mean of the Claude and Gemini paces (one alone if the other is unknown). The default bands, in the `autopilotEffortBands` setting:
+
+| Overall pace | Opus | Gemini Neon |
+| --- | --- | --- |
+| below 0.7× | max | xhigh (its top) |
+| 0.7× to 0.9× | xhigh | xhigh |
+| 0.9× to 1.0× | high | high |
+| 1.0× to 1.2× | medium | medium |
+| 1.2× and up | low | low |
+| unknown | high | high |
+
+The setting is written `0.7=max,0.9=xhigh,1.0=high,1.2=medium,low`: each number is the overall pace below which that level applies, and the last entry covers the rest. Text that does not parse is ignored with a logged warning, and the defaults apply. A level the model lacks drops to the nearest lower one.
+
+Autopilot never waits on a slow read. When usage has not loaded yet, it waits at most 1.5 seconds, then treats usage as unknown. Turn it off with the *Choose each new thread's model and effort* setting (`autopilot`). It takes effect at once; turning it on again registers the chooser if it was not registered at load.
+
+To see what a new thread would get now, run `bb usage-pace autopilot` (add `--host <id>` for another machine, `--json` for scripts). It prints the choice and the reason, for example:
+
+```
+New threads get acp-antigravity-acp · gemini-4-neon at effort xhigh.
+Why: Gemini Neon: weekly pace 0.00× vs Claude 0.97×; effort xhigh (max is not offered) at overall pace 0.48×
+```
+
 ## Claude Code and Codex with bb's provider disabled
 
 bb's Claude Code and Codex providers report their usage only while enabled. After `bb provider disable claude-code` or `bb provider disable codex`, bb's source lists no accounts and the usage would vanish. Usage Pace covers this gap with its own source:
@@ -232,6 +272,7 @@ bb usage-pace --all        # every window
 bb usage-pace --json       # each window has a `pace` object
 bb usage-pace --tokens     # token totals across BB
 bb usage-pace --resets --json # Codex banked resets on the primary host (unchanged)
+bb usage-pace autopilot    # the model and effort a new thread would get now, and why
 ```
 
 Text output groups by provider and prints the pool before its accounts. JSON contains `accounts[]` (including `accountKey`, `sources`, `hosts`, `observedAt`, and per-window `pace`) and `pools[]`. `providers[]` is a deprecated alias of `accounts[]` for the 0.4 minor series. Unknown pool values and pace remain null rather than zero. Stale account windows retain the last reported values in JSON with `stale: true` and null pace; text and UI show unknown usage, the last successful reading's age, and any source failure reason. A forced refresh that returns an old reading says the named source couldn't refresh the account, not that the user should refresh again. Claude reset details are in the strip/dialog; `--resets` retains its existing Codex-only behavior.
@@ -251,7 +292,7 @@ bb **0.48.1+** with bundled Plugin SDK **0.6.104+**. The plugin uses the provide
 ```sh
 bun install
 bun run check   # tsc
-bun run test    # vitest (pace, reset badge/UI, Antigravity) + node:test (token totals)
+bun run test    # vitest (pace, reset badge/UI, Antigravity, autopilot) + node:test (token totals)
 bun run build   # bb plugin build
 bun run check:install # rebuild an isolated copy with production dependencies only
 bun run check:release # includes check:install, metadata/digest and bundle smoke tests
