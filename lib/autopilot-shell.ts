@@ -4,6 +4,7 @@ import type { NewThreadExecutionChoice } from "./new-thread-seam";
 
 export const COLD_WAIT_MS = 1_500;
 export const RUNNABILITY_FRESH_MS = 5 * 60_000;
+export const RUNNABILITY_RETRY_MS = 30_000;
 export const RUNNABILITY_STALE_MS = 30 * 60_000;
 const RUNNABILITY_READ_MS = 10_000;
 
@@ -73,9 +74,10 @@ export function createAutopilot(deps: AutopilotDeps): Autopilot {
   async function runnabilityOn(hostId: string): Promise<Runnability> {
     const entry = known.get(hostId);
     const age = entry ? now() - entry.at : Infinity;
-    if (age > RUNNABILITY_FRESH_MS) {
+    const blocked = entry !== undefined && !entry.value.runnable;
+    if (age > (blocked ? RUNNABILITY_RETRY_MS : RUNNABILITY_FRESH_MS)) {
       const refreshing = refresh(hostId);
-      if (age > RUNNABILITY_STALE_MS) await within(COLD_WAIT_MS, refreshing);
+      if (blocked || age > RUNNABILITY_STALE_MS) await within(COLD_WAIT_MS, refreshing);
     }
     const current = known.get(hostId);
     if (current && now() - current.at <= RUNNABILITY_STALE_MS) return current.value;
