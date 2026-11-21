@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { NOW, at, makeAccount } from "../tests/usage-fixtures";
 import { ANTIGRAVITY_PROVIDER_ID } from "./antigravity-provider";
 import { GEMINI_NEON, OPUS, parseEffortBands, type UsageReading } from "./autopilot";
-import { COLD_WAIT_MS, RUNNABILITY_FRESH_MS, createAutopilot } from "./autopilot-shell";
+import { COLD_WAIT_MS, RUNNABILITY_FRESH_MS, RUNNABILITY_RETRY_MS, createAutopilot } from "./autopilot-shell";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -86,6 +86,21 @@ describe("the autopilot shell", () => {
     expect((await autopilot.choose(appRequest))?.providerId).toBe(GEMINI_NEON.providerId);
     await vi.waitFor(() => expect(bb.sdk.providers.models).toHaveBeenCalledTimes(2));
     await vi.waitFor(async () => expect((await autopilot.choose(appRequest))?.providerId).toBe(OPUS.providerId));
+  });
+
+  it("checks again soon after Gemini Neon could not start, and waits for that check", async () => {
+    const hostDown = { modelLoadError: { code: "failed", detail: "Host is not connected" }, models: [] };
+    const { autopilot, bb, clock } = setup({ models: async () => hostDown });
+    const first = await autopilot.choose(appRequest);
+    expect(first?.providerId).toBe(OPUS.providerId);
+    expect(first?.reason).toContain("Antigravity cannot start on this machine (failed: Host is not connected)");
+    bb.sdk.providers.models.mockImplementation(async () => listsNeon);
+    clock.now += RUNNABILITY_RETRY_MS - 1;
+    expect((await autopilot.choose(appRequest))?.providerId).toBe(OPUS.providerId);
+    expect(bb.sdk.providers.models).toHaveBeenCalledTimes(1);
+    clock.now += 2;
+    expect((await autopilot.choose(appRequest))?.providerId).toBe(GEMINI_NEON.providerId);
+    expect(bb.sdk.providers.models).toHaveBeenCalledTimes(2);
   });
 
   it("decides as unknown instead of waiting past the cold-cache budget", async () => {
