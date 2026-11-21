@@ -114,7 +114,7 @@ export interface AutopilotSettings {
   bands: EffortBands;
 }
 
-export type AutopilotRequest = Pick<NewThreadExecutionRequest, "origin" | "requested">;
+export type AutopilotRequest = Pick<NewThreadExecutionRequest, "origin" | "requested" | "sources">;
 
 export interface AutopilotInput {
   usage: UsageReading | null;
@@ -134,7 +134,7 @@ export interface AutopilotChoice {
 
 export function autopilotApplies(settings: Pick<AutopilotSettings, "enabled">, request: AutopilotRequest): boolean {
   if (!settings.enabled) return false;
-  if (request.origin === "app") return true;
+  if (request.origin === "app") return request.sources.providerId !== "explicit" && request.sources.model !== "explicit";
   return request.requested.providerId === null && request.requested.model === null;
 }
 
@@ -211,6 +211,8 @@ function mean(values: (number | null)[]): number | null {
   return known.length === 0 ? null : known.reduce((sum, value) => sum + value, 0) / known.length;
 }
 
+const namedEffort = (level: string | null): Effort | null => (level !== null && isEffort(level) ? level : null);
+
 export function chooseExecution(input: AutopilotInput): AutopilotChoice | null {
   const { usage, settings, request, now } = input;
   if (!autopilotApplies(settings, request)) return null;
@@ -248,13 +250,20 @@ export function chooseExecution(input: AutopilotInput): AutopilotChoice | null {
       : `weekly pace ${times(claude.pace)} vs Gemini Neon ${times(gemini.pace)}`;
   }
 
-  const overall = mean([claude.pace, gemini.pace]);
-  const wanted = effortForPace(settings.bands, overall);
+  const named = request.origin === "app" ? null : namedEffort(request.requested.reasoningLevel);
+  const counted = [
+    ...(claude.blocked === null ? [claude.pace] : []),
+    ...(geminiSkipped === null ? [gemini.pace] : []),
+  ];
+  const overall = mean(counted.length > 0 ? counted : [claude.pace, gemini.pace]);
+  const wanted = named ?? effortForPace(settings.bands, overall);
   const level = clampEffort(model, wanted);
   const clamp = level === wanted ? "" : ` (${wanted} is not offered)`;
-  const effort = overall === null
-    ? `effort ${level}, overall pace unknown`
-    : `effort ${level}${clamp} at overall pace ${times(overall)}`;
+  const effort = named !== null
+    ? `effort ${level}${clamp} as requested`
+    : overall === null
+      ? `effort ${level}, overall pace unknown`
+      : `effort ${level}${clamp} at overall pace ${times(overall)}`;
   return {
     providerId: model.providerId,
     model: model.model,

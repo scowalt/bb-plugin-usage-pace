@@ -175,7 +175,7 @@ Usage Pace can pick the model and effort of every new thread, so nobody picks a 
 
 It needs a bb that has the new-thread chooser (`bb.providers.experimental_chooseNewThreadExecution`). On an older bb the setting does nothing, and `bb usage-pace autopilot` says so. bb allows one chooser, so another plugin's chooser makes Usage Pace log a warning and carry on.
 
-**Which threads.** Threads made in the composer, and threads made by the CLI, an agent or a plugin that name no provider and no model. A thread that names a provider or a model keeps it. Follow-up messages and forks keep their thread's model.
+**Which threads.** Threads made in the composer, and threads made by the CLI, an agent or a plugin that name no provider and no model. A composer thread keeps its model when a person picked it with the picker shown, or when a plugin's embedded composer named it; the composer's remembered model does not count. A spawn that names a provider or a model keeps it. Follow-up messages and forks keep their thread's model.
 
 **Which model.** The one with the lower weekly pace wins. Pace is the share of the week's quota used divided by the share of the week that has passed.
 
@@ -185,7 +185,7 @@ It needs a bb that has the new-thread chooser (`bb.providers.experimental_choose
 - Gemini Neon is also skipped when it cannot start on the thread's machine: Antigravity is missing or disabled there, its model list failed to load, or `gemini-4-neon` is not listed. Autopilot reads this in the background and keeps the answer for five minutes.
 - Unknown usage, a tie (paces within 0.02) or both subscriptions skipped all go to Opus.
 
-**Which effort.** It follows the overall pace, the mean of the Claude and Gemini paces (one alone if the other is unknown). The default bands, in the `autopilotEffortBands` setting:
+**Which effort.** It follows the overall pace, the mean of the Claude and Gemini paces. A subscription that was skipped for this thread (at its limit, or Gemini Neon unable to start on the machine) and one with unknown usage are left out, so an Opus thread on a machine without Antigravity takes its effort from Claude's pace alone. When both are skipped, the mean of the paces it knows applies. A spawn that names only an effort keeps it, lowered to the nearest level the chosen model has. The default bands, in the `autopilotEffortBands` setting:
 
 | Overall pace | Opus | Gemini Neon |
 | --- | --- | --- |

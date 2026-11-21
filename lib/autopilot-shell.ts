@@ -18,7 +18,7 @@ export interface AutopilotDeps {
 }
 
 export interface Autopilot {
-  choose(request: Pick<AutopilotRequest, "origin" | "requested"> & { hostId: string | null }): Promise<NewThreadExecutionChoice | null>;
+  choose(request: Pick<AutopilotRequest, "origin" | "requested" | "sources"> & { hostId: string | null }): Promise<NewThreadExecutionChoice | null>;
   warm(): void;
 }
 

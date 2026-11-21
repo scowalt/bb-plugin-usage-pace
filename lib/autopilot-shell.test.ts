@@ -18,7 +18,8 @@ const gemini = makeAccount({
 });
 const usage: UsageReading = { accounts: [claude, gemini], fetchedAt: new Date(NOW).toISOString() };
 
-const appRequest = { origin: "app", hostId: "mac", requested: { providerId: null, model: null, reasoningLevel: null } };
+const noSources = { providerId: null, model: null, reasoningLevel: null };
+const appRequest = { origin: "app", hostId: "mac", requested: { providerId: null, model: null, reasoningLevel: null }, sources: noSources };
 const listsNeon = { modelLoadError: null, models: [{ model: GEMINI_NEON.model }] };
 
 function setup(overrides: { models?: () => Promise<unknown>; list?: () => Promise<unknown>; readUsage?: () => Promise<UsageReading | null>; enabled?: boolean } = {}) {
@@ -56,7 +57,7 @@ describe("the autopilot shell", () => {
     expect(off.readUsage).not.toHaveBeenCalled();
     expect(off.bb.sdk.providers.list).not.toHaveBeenCalled();
     const named = setup();
-    expect(await named.autopilot.choose({ ...appRequest, origin: "cli", requested: { providerId: "pi", model: null, reasoningLevel: null } })).toBeNull();
+    expect(await named.autopilot.choose({ ...appRequest, origin: "cli", requested: { providerId: "pi", model: null, reasoningLevel: null }, sources: { ...noSources, providerId: "explicit" } })).toBeNull();
     expect(named.bb.sdk.providers.list).not.toHaveBeenCalled();
   });
 

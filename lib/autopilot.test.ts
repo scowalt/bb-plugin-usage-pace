@@ -51,7 +51,7 @@ const reading = (...groups: UsageAccount[][]): UsageReading => ({ accounts: grou
 function decide(usage: UsageReading | null, overrides: Partial<AutopilotInput> = {}) {
   return chooseExecution({
     usage, gemini: runnable, hostId: null, settings: { enabled: true, bands }, now: NOW,
-    request: { origin: "app", requested: { providerId: "pi", model: "claude-bridge/claude-opus-5-5", reasoningLevel: null } },
+    request: { origin: "app", requested: { providerId: "pi", model: "claude-bridge/claude-opus-5-5", reasoningLevel: null }, sources: { providerId: "client-preference", model: "client-preference", reasoningLevel: null } },
     ...overrides,
   });
 }
@@ -225,6 +225,25 @@ describe("effort", () => {
     expect(alone?.reason).toContain("overall pace 0.80×");
   });
 
+  it("leaves a skipped subscription out of the overall pace", () => {
+    const withoutAntigravity = decide(reading(claudeAt(0.8), [geminiAccount(60)]), { gemini: { runnable: false, reason: "Antigravity is not available on this machine" } });
+    expect(withoutAntigravity?.providerId).toBe(OPUS.providerId);
+    expect(withoutAntigravity?.reasoningLevel).toBe("xhigh");
+    expect(withoutAntigravity?.reason).toContain("overall pace 0.80×");
+    const gated = decide(reading(claudeAt(0.8), [geminiAccount(60, 90)]));
+    expect(gated?.reasoningLevel).toBe("xhigh");
+    const claudeGated = decide(reading([claudeAccount("a", [fiveHour(10), weekly(95)])], [geminiAccount(30)]));
+    expect(claudeGated?.providerId).toBe(GEMINI_NEON.providerId);
+    expect(claudeGated?.reasoningLevel).toBe("xhigh");
+    expect(claudeGated?.reason).toContain("overall pace 0.60×");
+  });
+
+  it("uses both known paces when both subscriptions are skipped", () => {
+    const choice = decide(reading([claudeAccount("a", [fiveHour(10), weekly(95)])], [geminiAccount(60)]), { gemini: { runnable: false, reason: "no Antigravity" } });
+    expect(choice?.providerId).toBe(OPUS.providerId);
+    expect(choice?.reasoningLevel).toBe("low");
+  });
+
   it("uses Gemini alone when Claude is unknown", () => {
     const choice = decide(reading(claudeAt(1.0, { stale: true }), [geminiAccount(50)]));
     expect(choice?.reasoningLevel).toBe("medium");
@@ -287,13 +306,23 @@ describe("effort band text", () => {
 });
 
 describe("which requests autopilot covers", () => {
-  const request = (origin: string, providerId: string | null, model: string | null) => ({
+  const request = (origin: string, providerId: string | null, model: string | null, source: string | null = null) => ({
     origin, requested: { providerId, model, reasoningLevel: null },
+    sources: { providerId: providerId === null ? null : source, model: model === null ? null : source, reasoningLevel: null },
   });
 
-  it("always covers composer threads, whatever the remembered model", () => {
-    expect(autopilotApplies({ enabled: true }, request("app", "claude-code", "sonnet"))).toBe(true);
-    expect(decide(reading(claudeAt(1.0)), { request: request("app", "claude-code", "sonnet") })).not.toBeNull();
+  it("covers composer threads whatever the remembered model", () => {
+    for (const source of [null, "client-preference"]) {
+      expect(autopilotApplies({ enabled: true }, request("app", "claude-code", "sonnet", source))).toBe(true);
+      expect(decide(reading(claudeAt(1.0)), { request: request("app", "claude-code", "sonnet", source) })).not.toBeNull();
+    }
+  });
+
+  it("leaves a composer thread alone when someone or a plugin named its model", () => {
+    expect(autopilotApplies({ enabled: true }, request("app", "claude-code", "sonnet", "explicit"))).toBe(false);
+    expect(decide(reading(claudeAt(1.0)), { request: request("app", "claude-code", "sonnet", "explicit") })).toBeNull();
+    const providerOnly = { ...request("app", "pi", "claude-bridge/claude-opus-5-5", "client-preference"), sources: { providerId: "explicit", model: "client-preference", reasoningLevel: null } };
+    expect(autopilotApplies({ enabled: true }, providerOnly)).toBe(false);
   });
 
   it("covers other origins only when they name no provider and no model", () => {
@@ -307,8 +336,16 @@ describe("which requests autopilot covers", () => {
     expect(decide(reading(claudeAt(1.0)), { request: request("plugin", null, "gpt-5") })).toBeNull();
   });
 
-  it("covers a spawn that names only an effort", () => {
-    expect(decide(reading(claudeAt(1.0)), { request: { origin: "cli", requested: { providerId: null, model: null, reasoningLevel: "low" } } })).not.toBeNull();
+  it("covers a spawn that names only an effort, and keeps that effort", () => {
+    const named = (reasoningLevel: string, origin = "cli") => ({ origin, requested: { providerId: null, model: null, reasoningLevel }, sources: { providerId: null, model: null, reasoningLevel: "explicit" } });
+    const opus = decide(reading(claudeAt(0.4), [geminiAccount(40)]), { request: named("low") });
+    expect(opus).toMatchObject({ providerId: OPUS.providerId, reasoningLevel: "low" });
+    expect(opus?.reason).toContain("effort low as requested");
+    const gemini = decide(reading(claudeAt(1.0), [geminiAccount(10)]), { request: named("max") });
+    expect(gemini).toMatchObject({ providerId: GEMINI_NEON.providerId, reasoningLevel: "xhigh" });
+    expect(gemini?.reason).toContain("effort xhigh (max is not offered) as requested");
+    expect(decide(reading(claudeAt(1.0)), { request: named("bogus") })?.reasoningLevel).toBe("medium");
+    expect(decide(reading(claudeAt(1.0)), { request: named("low", "app") })?.reasoningLevel).toBe("medium");
   });
 
   it("chooses nothing when autopilot is off", () => {

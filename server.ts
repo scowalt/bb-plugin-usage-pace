@@ -255,7 +255,7 @@ export default async function plugin(bb: BbPluginApi) {
         if (hostId === "" || hostId.startsWith("--")) return { exitCode: 1, stderr: `--host needs a machine id.\n${usage}` };
       } else return { exitCode: 1, stderr: usage };
     }
-    const choice = await autopilot.choose({ origin: "cli", hostId, requested: { providerId: null, model: null, reasoningLevel: null } });
+    const choice = await autopilot.choose({ origin: "cli", hostId, requested: { providerId: null, model: null, reasoningLevel: null }, sources: { providerId: null, model: null, reasoningLevel: null } });
     if (json) return { exitCode: 0, stdout: JSON.stringify({ enabled: autopilotEnabled, active: autopilotRegistered, hostId, choice }) };
     if (choice === null) return { exitCode: 0, stdout: "Autopilot is off. New threads get the model they name, or bb's usual default." };
     return {
