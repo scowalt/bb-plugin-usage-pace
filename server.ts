@@ -1,5 +1,7 @@
 import { defineRpcContract, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
+import { ANTIGRAVITY_PROVIDER_ID, registerAntigravityProvider } from "./lib/antigravity-provider";
+import { createAntigravityUsageSource } from "./lib/antigravity-usage-source";
 import { registerGrokProvider } from "./lib/grok-provider";
 import { createGrokUsageSource } from "./lib/grok-usage-source";
 import { createSubscriptionUsageSource } from "./lib/subscription-usage-source";
@@ -106,6 +108,11 @@ export default async function plugin(bb: BbPluginApi) {
       label: "Add Grok Build usage to bb's usage card (takes effect after a plugin reload)",
       default: true,
     },
+    antigravityUsage: {
+      type: "boolean",
+      label: "Add Google Antigravity usage to bb's usage card (takes effect after a plugin reload)",
+      default: true,
+    },
   });
   let cacheMs = 5 * 60_000;
   let showStrip = false;
@@ -125,14 +132,20 @@ export default async function plugin(bb: BbPluginApi) {
   await applySettings();
   const usageSources: UsageSource[] = [createSubscriptionUsageSource(bb, (hostId, providerId) =>
     hostEntry.call("readUsage", { providerId }, { hostId, signal: bankedController.signal }))];
-  if ((await settings.get()).grokUsage !== false) {
+  const providerSettings = await settings.get();
+  if (providerSettings.grokUsage !== false) {
     registerGrokProvider(bb);
     usageSources.push(createGrokUsageSource(bb));
+  }
+  if (providerSettings.antigravityUsage !== false) {
+    registerAntigravityProvider(bb);
+    usageSources.push(createAntigravityUsageSource(bb, async (hostId) =>
+      (await hostEntry.call("readUsage", { providerId: ANTIGRAVITY_PROVIDER_ID }, { hostId, signal: bankedController.signal })).usage));
   }
   bb.rpc.register(usageSourceContract, combineUsageSources(usageSources), {
     experimental_discoverable: true,
     experimental_description:
-      "Usage from Usage Pace: Grok Build, plus Claude Code and Codex on machines where bb's own provider is disabled. Inventory reads metadata only.",
+      "Usage from Usage Pace: Grok Build and Google Antigravity, plus Claude Code and Codex on machines where bb's own provider is disabled. Inventory reads metadata only.",
   });
   settings.onChange?.(async () => {
     await applySettings();

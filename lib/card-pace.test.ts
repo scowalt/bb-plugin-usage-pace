@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  cardUsageRequest,
   decorateFailure,
   describeFailures,
   hideTabs,
@@ -606,5 +607,18 @@ describe("failure notice", () => {
     decorateFailure(header, [opencode], "MacBook Pro (7)", memory());
     expect(watch.takeRecords()).toHaveLength(0);
     watch.disconnect();
+  });
+});
+
+describe("cardUsageRequest", () => {
+  it("asks for the provider behind an open Antigravity or Grok tab", () => {
+    expect(cardUsageRequest(null, ["Google Antigravity (usage)"]).providerIds).toEqual(["usage-pace-antigravity"]);
+    expect(cardUsageRequest(null, ["Grok Build (usage)"]).providerIds).toEqual(["usage-pace-grok"]);
+  });
+
+  it("asks for every known provider when no tab is open", () => {
+    expect(cardUsageRequest(null, []).providerIds).toEqual(
+      expect.arrayContaining(["claude-code", "codex", "usage-pace-grok", "usage-pace-antigravity"]),
+    );
   });
 });

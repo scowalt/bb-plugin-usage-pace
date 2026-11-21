@@ -8,7 +8,7 @@
   },
   "bb": {
     "name": "Usage Pace",
-    "description": "Shows quota pace, read-only Codex and Claude resets, and Grok Build usage in bb's sidebar.",
+    "description": "Shows quota pace, read-only Codex and Claude resets, and Grok Build and Google Antigravity usage in bb's sidebar.",
     "branding": {
       "icon": "ChartColumn"
     },

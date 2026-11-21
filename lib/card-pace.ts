@@ -162,7 +162,7 @@ export function parseCardSettings(body: unknown): string[] {
 export function cardUsageRequest(body: unknown, tabs: string[]) {
   const result = (body as { result?: { accounts?: unknown; providers?: unknown } } | null)?.result;
   const accounts = result?.accounts ?? result?.providers;
-  const ids = new Map<string, string>([["Claude Code", "claude-code"], ["Codex", "codex"], ["Grok Build (usage)", "usage-pace-grok"]]);
+  const ids = new Map<string, string>([["Claude Code", "claude-code"], ["Codex", "codex"], ["Grok Build (usage)", "usage-pace-grok"], ["Google Antigravity (usage)", "usage-pace-antigravity"]]);
   if (Array.isArray(accounts)) for (const account of accounts) {
     if (typeof account?.id === "string" && typeof account.displayName === "string") ids.set(account.displayName, account.id);
   }
