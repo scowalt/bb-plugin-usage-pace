@@ -90,11 +90,42 @@ describe("which subscription a new thread gets", () => {
     expect(decide(reading(claudeAt(1.0), [expired]))?.providerId).toBe(OPUS.providerId);
   });
 
-  it("prefers the Gemini reading from the thread's machine", () => {
+  it("uses only readings available on the thread's machine (local or shared)", () => {
     const here = geminiAccount(10, 0, { hosts: [{ id: "here", name: "Here" }], observedAt: NOW - 1000 });
     const there = geminiAccount(80, 0, { hosts: [{ id: "there", name: "There" }], observedAt: NOW });
-    const choice = decide(reading(claudeAt(1.0), [there, here]), { hostId: "here" });
-    expect(choice?.reason).toContain("weekly pace 0.20×");
+    const localClaude = claudeAccount("local", [fiveHour(10), weekly(50)], { hosts: [{ id: "here", name: "Here" }] });
+    const choice = decide(reading([localClaude], [there, here]), { hostId: "here" });
+    expect(choice?.providerId).toBe(GEMINI_NEON.providerId);
+    expect(choice?.reason).toContain("weekly pace 0.20× vs Claude 1.00×");
+  });
+
+  it("ignores another machine's Claude subscription when choosing for a host", () => {
+    const localClaude = claudeAccount("local", [fiveHour(10), weekly(40)], { hosts: [{ id: "beegent", name: "beegent" }] });
+    const remoteClaude = claudeAccount("remote", [fiveHour(10), weekly(90)], { hosts: [{ id: "mac", name: "mac" }] });
+    const localGemini = geminiAccount(55, 0, { hosts: [{ id: "beegent", name: "beegent" }] });
+    const choice = decide(reading([localClaude, remoteClaude], [localGemini]), { hostId: "beegent" });
+    expect(choice?.providerId).toBe(OPUS.providerId);
+    expect(choice?.reason).toContain("weekly pace 0.80× vs Gemini Neon 1.10×");
+  });
+
+  it("includes shared Claude subscriptions alongside host-local ones", () => {
+    const localClaude = claudeAccount("local", [fiveHour(10), weekly(60)], { hosts: [{ id: "beelink", name: "beelink" }] });
+    const sharedClaude = claudeAccount("shared", [fiveHour(10), weekly(20)], {
+      hosts: [],
+      sources: [{ pluginId: "claude-accounts", label: "Claude Accounts", resourceId: "shared-b", scope: { kind: "shared" } }],
+    });
+    const localGemini = geminiAccount(50, 0, { hosts: [{ id: "beelink", name: "beelink" }] });
+    const choice = decide(reading([localClaude, sharedClaude], [localGemini]), { hostId: "beelink" });
+    expect(choice?.providerId).toBe(OPUS.providerId);
+    expect(choice?.reason).toContain("weekly pace 0.80× vs Gemini Neon 1.00×");
+  });
+
+  it("does not borrow another machine's Gemini reading when the target host has none", () => {
+    const localClaude = claudeAccount("local", [fiveHour(10), weekly(50)], { hosts: [{ id: "beegent", name: "beegent" }] });
+    const remoteGemini = geminiAccount(0, 0, { hosts: [{ id: "mac", name: "mac" }] });
+    const choice = decide(reading([localClaude], [remoteGemini]), { hostId: "beegent" });
+    expect(choice?.providerId).toBe(OPUS.providerId);
+    expect(choice?.reason).toContain("Gemini Neon skipped (its usage is unknown)");
   });
 
   it("weights Claude accounts by plan weight, as the pool does", () => {
@@ -223,6 +254,18 @@ describe("effort", () => {
     const alone = decide(reading(claudeAt(0.8)));
     expect(alone?.reasoningLevel).toBe("xhigh");
     expect(alone?.reason).toContain("overall pace 0.80×");
+  });
+
+  it("averages per-subscription paces for effort instead of provider buckets", () => {
+    const claudeSubs = [
+      claudeAccount("a", [fiveHour(10), weekly(30)]),
+      claudeAccount("b", [fiveHour(10), weekly(30)]),
+      claudeAccount("c", [fiveHour(10), weekly(30)]),
+    ];
+    const choice = decide(reading(claudeSubs, [geminiAccount(70)]));
+    expect(choice?.providerId).toBe(OPUS.providerId);
+    expect(choice?.reasoningLevel).toBe("xhigh");
+    expect(choice?.reason).toContain("overall pace 0.80×");
   });
 
   it("leaves a skipped subscription out of the overall pace", () => {
