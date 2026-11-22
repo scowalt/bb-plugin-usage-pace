@@ -3,9 +3,9 @@
   "sdkVersion": "0.6.178",
   "artifactFormatVersion": 1,
   "pluginId": "usage-pace",
-  "pluginVersion": "0.5.0",
+  "pluginVersion": "0.5.1",
   "builtWith": {
-    "bbVersion": "0.50.2-fork.23",
+    "bbVersion": "0.50.2-fork.24",
     "pluginSdkVersion": "0.6.178"
   },
   "artifactDigest": "110aef3e19302863d83987929ca773823f44438dfff8f476bb76e3a27a08e937"
