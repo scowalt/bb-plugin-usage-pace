@@ -1,7 +1,7 @@
 import { ANTIGRAVITY_PROVIDER_ID } from "./antigravity-provider";
 import type { NewThreadExecutionRequest } from "./new-thread-seam";
 import { MIN_ELAPSED_FRACTION, paceForWindows } from "./pace";
-import { isWeeklyWindow, observationTime, onHost, usageIsStale, type UsageAccount, type UsageWindow } from "./usage-accounts";
+import { hasSharedSource, isWeeklyWindow, observationTime, onHost, usageIsStale, type UsageAccount, type UsageWindow } from "./usage-accounts";
 
 export const EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
 export type Effort = (typeof EFFORTS)[number];
@@ -140,11 +140,16 @@ export function autopilotApplies(settings: Pick<AutopilotSettings, "enabled">, r
 
 interface Standing {
   pace: number | null;
+  subPaces: number[];
   blocked: string | null;
 }
 
 const percent = (value: number) => `${Math.round(value)}%`;
 const times = (value: number) => `${value.toFixed(2)}×`;
+
+function availableOnHost(account: UsageAccount, hostId: string | null): boolean {
+  return hostId === null || hasSharedSource(account) || onHost(account, hostId);
+}
 
 function weeklyOf(account: UsageAccount, belongs: (window: UsageWindow) => boolean): UsageWindow | undefined {
   return account.windows.find(window => belongs(window) && isWeeklyWindow(window));
@@ -166,14 +171,18 @@ function pacedRatio(parts: { weight: number; used: number; elapsed: number }[]):
   return parts.reduce((sum, part) => sum + part.weight * part.used, 0) / budget;
 }
 
-function claudeStanding(usage: UsageReading, now: number): Standing {
-  const healthy = usage.accounts.filter(account => account.id === CLAUDE_USAGE_ID && account.status === "ok" && !usageIsStale(account, now));
+function claudeStanding(usage: UsageReading, hostId: string | null, now: number): Standing {
+  const healthy = usage.accounts.filter(account =>
+    account.id === CLAUDE_USAGE_ID
+    && account.status === "ok"
+    && !usageIsStale(account, now)
+    && availableOnHost(account, hostId));
   const shared = (window: UsageWindow) => window.model == null;
   const weekly = healthy.flatMap(account => {
     const window = weeklyOf(account, shared);
     return window ? [{ account, window }] : [];
   });
-  if (weekly.length === 0) return { pace: null, blocked: null };
+  if (weekly.length === 0) return { pace: null, subPaces: [], blocked: null };
   const weightOf = (account: UsageAccount) => account.weight ?? 1;
   const totalWeight = weekly.reduce((sum, { account }) => sum + weightOf(account), 0);
   const used = weekly.reduce((sum, { account, window }) => sum + weightOf(account) * window.usedPercent, 0) / totalWeight;
@@ -181,29 +190,40 @@ function claudeStanding(usage: UsageReading, now: number): Standing {
   const pace = parts.every(part => part.reading !== null)
     ? pacedRatio(parts.map(part => ({ weight: part.weight, ...part.reading! })))
     : null;
+  const subPaces = parts.flatMap(part => {
+    if (part.reading === null) return [];
+    const ratio = pacedRatio([{ weight: 1, ...part.reading }]);
+    return ratio === null ? [] : [ratio];
+  });
   const fiveHours = weekly.map(({ account }) => fiveHourOf(account, shared));
   const blocked =
     used >= WEEKLY_LIMIT_PERCENT ? `weekly ${percent(used)} used`
       : fiveHours.every(window => window !== undefined && window.usedPercent >= FIVE_HOUR_LIMIT_PERCENT) ? `5h window at ${FIVE_HOUR_LIMIT_PERCENT}% or more on every account`
         : null;
-  return { pace, blocked };
+  return { pace, subPaces, blocked };
 }
 
 function geminiStanding(usage: UsageReading, hostId: string | null, now: number): Standing {
   const group = (window: UsageWindow) => window.model === GEMINI_USAGE_GROUP;
   const candidates = usage.accounts
-    .filter(account => account.id === ANTIGRAVITY_PROVIDER_ID && account.status === "ok" && !usageIsStale(account, now) && weeklyOf(account, group) !== undefined)
+    .filter(account =>
+      account.id === ANTIGRAVITY_PROVIDER_ID
+      && account.status === "ok"
+      && !usageIsStale(account, now)
+      && availableOnHost(account, hostId)
+      && weeklyOf(account, group) !== undefined)
     .sort((a, b) => Number(hostId !== null && onHost(b, hostId)) - Number(hostId !== null && onHost(a, hostId)) || (b.observedAt ?? 0) - (a.observedAt ?? 0));
   const account = candidates[0];
   const window = account && weeklyOf(account, group);
-  if (!account || !window) return { pace: null, blocked: null };
+  if (!account || !window) return { pace: null, subPaces: [], blocked: null };
   const reading = weeklyPace(account, window, usage.fetchedAt, now);
   const fiveHour = fiveHourOf(account, group);
   const blocked =
     fiveHour && fiveHour.usedPercent >= FIVE_HOUR_LIMIT_PERCENT ? `5h window ${percent(fiveHour.usedPercent)} used`
       : window.usedPercent >= WEEKLY_LIMIT_PERCENT ? `weekly ${percent(window.usedPercent)} used`
         : null;
-  return { pace: reading === null ? null : pacedRatio([{ weight: 1, ...reading }]), blocked };
+  const pace = reading === null ? null : pacedRatio([{ weight: 1, ...reading }]);
+  return { pace, subPaces: pace === null ? [] : [pace], blocked };
 }
 
 function mean(values: (number | null)[]): number | null {
@@ -217,8 +237,8 @@ export function chooseExecution(input: AutopilotInput): AutopilotChoice | null {
   const { usage, settings, request, now } = input;
   if (!autopilotApplies(settings, request)) return null;
 
-  const claude = usage ? claudeStanding(usage, now) : { pace: null, blocked: null };
-  const gemini = usage ? geminiStanding(usage, input.hostId, now) : { pace: null, blocked: null };
+  const claude = usage ? claudeStanding(usage, input.hostId, now) : { pace: null, subPaces: [], blocked: null };
+  const gemini = usage ? geminiStanding(usage, input.hostId, now) : { pace: null, subPaces: [], blocked: null };
   const geminiSkipped =
     gemini.blocked !== null ? gemini.blocked
       : !input.gemini.runnable ? input.gemini.reason
@@ -252,10 +272,10 @@ export function chooseExecution(input: AutopilotInput): AutopilotChoice | null {
 
   const named = request.origin === "app" ? null : namedEffort(request.requested.reasoningLevel);
   const counted = [
-    ...(claude.blocked === null ? [claude.pace] : []),
-    ...(geminiSkipped === null ? [gemini.pace] : []),
+    ...(claude.blocked === null ? claude.subPaces : []),
+    ...(geminiSkipped === null ? gemini.subPaces : []),
   ];
-  const overall = mean(counted.length > 0 ? counted : [claude.pace, gemini.pace]);
+  const overall = mean(counted.length > 0 ? counted : [...claude.subPaces, ...gemini.subPaces]);
   const wanted = named ?? effortForPace(settings.bands, overall);
   const level = clampEffort(model, wanted);
   const clamp = level === wanted ? "" : ` (${wanted} is not offered)`;

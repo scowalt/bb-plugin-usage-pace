@@ -9,11 +9,11 @@ afterEach(() => {
 });
 
 const claude = makeAccount({
-  accountKey: "a", weight: 10,
+  accountKey: "a", weight: 10, hosts: [{ id: "mac", name: "Mac" }],
   windows: [{ id: "weekly", kind: "weekly", model: null, label: "Weekly limit", weekly: true, usedPercent: 50, resetsAt: at(84) }],
 });
 const gemini = makeAccount({
-  id: ANTIGRAVITY_PROVIDER_ID, accountKey: null, weight: null, plan: null,
+  id: ANTIGRAVITY_PROVIDER_ID, accountKey: null, weight: null, plan: null, hosts: [{ id: "mac", name: "Mac" }],
   windows: [{ id: "gemini-weekly", kind: "weekly", model: "Gemini Models", label: "Gemini Models · Weekly", weekly: true, usedPercent: 5, resetsAt: at(84) }],
 });
 const usage: UsageReading = { accounts: [claude, gemini], fetchedAt: new Date(NOW).toISOString() };
