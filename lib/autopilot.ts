@@ -22,7 +22,7 @@ export const OPUS: AutopilotModel = {
 
 export const GEMINI_NEON: AutopilotModel = {
   name: "Gemini Neon",
-  providerId: "acp-antigravity-acp",
+  providerId: ANTIGRAVITY_PROVIDER_ID,
   model: "gemini-4-neon",
   efforts: ["low", "medium", "high", "xhigh"],
 };
