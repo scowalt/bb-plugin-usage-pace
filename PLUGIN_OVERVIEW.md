@@ -95,13 +95,13 @@ bb's provider picker shows it next to bb's own "Grok Build". It reads the
 Grok CLI login from `grok login` and asks xAI's billing service for the
 credit window. A setting turns this off.
 
-For Google Antigravity, it registers a companion provider, "Google
-Antigravity (usage)", so bb's provider picker shows it next to bb's own
-"Google Antigravity". bb lists it only on machines where `agy` is installed. It
-runs `agy -p /usage --output-format json`, and never reads agy's files or calls
+bb ships no Google Antigravity provider, so Usage Pace registers one, "Google
+Antigravity (usage)". It runs `agy acp` for threads, and model autopilot sends
+Gemini Neon threads to it. bb lists it only on machines where `agy` is
+installed. For usage it runs `agy -p /usage --output-format json`, and never reads agy's files or calls
 a Google service. A signed-out machine shows as unauthenticated. agy reports no
 account or plan, so none is shown. Usage Pace caches each machine's read for
-five minutes. The companion keeps a good read for up to five minutes, but bb
+five minutes. The provider keeps a good read for up to five minutes, but bb
 stops its idle bridge after a minute, and the next read runs agy again. A
 setting turns this off.
 

@@ -151,10 +151,10 @@ Turn this off with the *Add Grok Build usage to bb's usage card* setting, then r
 
 ## Google Antigravity
 
-bb runs Google Antigravity through its built-in ACP provider (`acp-antigravity-acp`). That provider reports no usage, so bb's usage card has no Antigravity tab. Usage Pace adds one:
+bb ships no Google Antigravity provider: its ACP registry lists Antigravity as a manual install. Usage Pace adds one, and with it an Antigravity tab on bb's usage card:
 
-- It registers a companion provider, `usage-pace-antigravity` ("Google Antigravity (usage)"). It runs the same `agy acp` agent, and it answers bb's usage request. bb's provider picker shows it next to "Google Antigravity". Threads on either one run the same agent.
-- bb lists the companion only on machines where the `agy` command is installed. A machine without `agy` reports `not_installed`.
+- It registers a provider, `usage-pace-antigravity` ("Google Antigravity (usage)"). It runs `agy acp`, lists agy's models and effort levels, runs threads, and answers bb's usage request. If you also added Antigravity as a custom ACP agent, threads on either provider run the same agent.
+- bb lists it only on machines where the `agy` command is installed. A machine without `agy` reports `not_installed`.
 - It reads the quota by running `agy -p /usage --output-format json` on that machine. This runs agy's `/usage` command, not an agent turn. Usage Pace refuses any output that did not come from `/usage`.
 - Each quota bucket agy reports becomes one window. A window is named `<group> · 5h` or `<group> · Weekly`, for example `Gemini Models · 5h` and `Gemini Models · Weekly`. The used percent is 100 minus the remaining percent that agy reports, rounded to two decimals. A bucket also has a reset time, so it gets a pace like every other window.
 - A machine where agy is signed out shows as `unauthenticated`. agy then waits for a pasted login code, so Usage Pace stops it as soon as it asks. Run `agy` on the machine and sign in.
@@ -165,13 +165,13 @@ Usage Pace only runs the `agy` command. It never reads agy's files under `~/.gem
 
 Usage Pace's own source caches each machine's read for five minutes, and a refresh bypasses that cache.
 
-Another plugin reads the companion provider with `bb.sdk.system.usageLimits({ hostId, providerId: "usage-pace-antigravity" })`. The companion keeps a successful read for up to five minutes and shares one read between concurrent callers. It does not keep a failure. The read lives in the companion's bridge process, and bb stops that process after a minute with no requests. The first call after a quiet minute therefore runs `agy` again and takes about 2 to 5 seconds. If `agy` hangs, the call returns an error after about 15 seconds.
+Another plugin reads the provider with `bb.sdk.system.usageLimits({ hostId, providerId: "usage-pace-antigravity" })`. The provider keeps a successful read for up to five minutes and shares one read between concurrent callers. It does not keep a failure. The read lives in the provider's bridge process, and bb stops that process after a minute with no requests. The first call after a quiet minute therefore runs `agy` again and takes about 2 to 5 seconds. If `agy` hangs, the call returns an error after about 15 seconds.
 
 Turn this off with the *Add Google Antigravity usage to bb's usage card* setting (`antigravityUsage`), then reload the plugin.
 
 ## Model autopilot
 
-Usage Pace can pick the model and effort of every new thread, so nobody picks a model by hand. It chooses between Opus (`pi`, `claude-bridge/claude-opus-5-5`) and Gemini Neon (`acp-antigravity-acp`, `gemini-4-neon`), using the usage it already reads.
+Usage Pace can pick the model and effort of every new thread, so nobody picks a model by hand. It chooses between Opus (`pi`, `claude-bridge/claude-opus-5-5`) and Gemini Neon (`usage-pace-antigravity`, `gemini-4-neon`), run through the Antigravity provider above, using the usage it already reads.
 
 It needs a bb that has the new-thread chooser (`bb.providers.experimental_chooseNewThreadExecution`). On an older bb the setting does nothing, and `bb usage-pace autopilot` says so. bb allows one chooser, so another plugin's chooser makes Usage Pace log a warning and carry on.
 
@@ -182,7 +182,7 @@ It needs a bb that has the new-thread chooser (`bb.providers.experimental_choose
 - Claude uses the plan-weighted pool of your Claude accounts. Gemini uses the `Gemini Models · Weekly` window.
 - Early in a window the ratio is not shown, so autopilot divides used by elapsed time with elapsed time floored at 5%.
 - A subscription is skipped when its 5-hour window is at 85% or more, or its weekly use is at 90% or more. For Claude that means the pool's weekly use, or every account's 5-hour window.
-- Gemini Neon is also skipped when it cannot start on the thread's machine: Antigravity is missing or disabled there, its model list failed to load, or `gemini-4-neon` is not listed. Autopilot reads this in the background and keeps the answer for five minutes.
+- Gemini Neon is also skipped when it cannot start on the thread's machine: `agy` is not installed there, the Antigravity provider is disabled or turned off with `antigravityUsage`, its model list failed to load, or `gemini-4-neon` is not listed. Autopilot reads this in the background and keeps the answer for five minutes.
 - Unknown usage, a tie (paces within 0.02) or both subscriptions skipped all go to Opus.
 
 **Which effort.** It follows the overall pace, the mean of the Claude and Gemini paces. A subscription that was skipped for this thread (at its limit, or Gemini Neon unable to start on the machine) and one with unknown usage are left out, so an Opus thread on a machine without Antigravity takes its effort from Claude's pace alone. When both are skipped, the mean of the paces it knows applies. A spawn that names only an effort keeps it, lowered to the nearest level the chosen model has. The default bands, in the `autopilotEffortBands` setting:
@@ -203,7 +203,7 @@ Autopilot never waits on a slow read. When usage has not loaded yet, it waits at
 To see what a new thread would get now, run `bb usage-pace autopilot` (add `--host <id>` for another machine, `--json` for scripts). It prints the choice and the reason, for example:
 
 ```
-New threads get acp-antigravity-acp · gemini-4-neon at effort xhigh.
+New threads get usage-pace-antigravity · gemini-4-neon at effort xhigh.
 Why: Gemini Neon: weekly pace 0.00× vs Claude 0.97×; effort xhigh (max is not offered) at overall pace 0.48×
 ```
 

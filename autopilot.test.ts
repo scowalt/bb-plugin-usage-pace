@@ -38,7 +38,7 @@ async function setup(options: { seam?: boolean; settings?: Record<string, boolea
     sdk: {
       hosts: { list: async () => [server] },
       providers: {
-        list: async () => [{ id: "usage-pace-antigravity" }, { id: "acp-antigravity-acp", available: options.neon !== false }],
+        list: async () => [{ id: "usage-pace-antigravity", available: options.neon !== false }, { id: "acp-antigravity-acp", available: true }],
         models: async () => ({ modelLoadError: null, models: [{ model: "gemini-4-neon" }] }),
       },
       system: { config: async () => ({ primaryHostId: "server" }) },
@@ -116,7 +116,7 @@ describe("autopilot choices", () => {
   it("picks Gemini Neon for a composer thread when its pace is lower", async () => {
     const { choose } = await setup();
     const choice = await choose(request());
-    expect(choice).toMatchObject({ providerId: "acp-antigravity-acp", model: "gemini-4-neon", reasoningLevel: "xhigh" });
+    expect(choice).toMatchObject({ providerId: "usage-pace-antigravity", model: "gemini-4-neon", reasoningLevel: "xhigh" });
     expect(choice?.reason).toMatch(/^Gemini Neon: weekly pace 0\.\d\d× vs Claude 1\.\d\d×; effort xhigh \(max is not offered\)/u);
   });
 
@@ -140,7 +140,7 @@ describe("bb usage-pace autopilot", () => {
     const result = await harness.behavior.runCli(["autopilot"]);
     expect(result.exitCode).toBe(0);
     const [first, second] = (result.stdout ?? "").split("\n");
-    expect(first).toBe("New threads get acp-antigravity-acp · gemini-4-neon at effort xhigh.");
+    expect(first).toBe("New threads get usage-pace-antigravity · gemini-4-neon at effort xhigh.");
     expect(second).toMatch(/^Why: Gemini Neon: weekly pace /u);
   });
 
@@ -148,7 +148,7 @@ describe("bb usage-pace autopilot", () => {
     const { harness } = await setup();
     for (const args of [["autopilot", "--json", "--host", "server"], ["autopilot", "--host=server", "--json"]]) {
       const output = JSON.parse((await harness.behavior.runCli(args)).stdout ?? "");
-      expect(output).toMatchObject({ enabled: true, active: true, hostId: "server", choice: { providerId: "acp-antigravity-acp", reasoningLevel: "xhigh" } });
+      expect(output).toMatchObject({ enabled: true, active: true, hostId: "server", choice: { providerId: "usage-pace-antigravity", reasoningLevel: "xhigh" } });
     }
   });
 
