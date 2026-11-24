@@ -236,6 +236,32 @@ it("ticks the tooltip countdown without changing shortfall and removes it if ref
   expect(container.querySelector("button")?.textContent).toContain("unknown");
 });
 
+it.each([true, false])("flags the machines an account is signed out on in the strip, even while a reset countdown replaces the windows (exhausted: %s)", async exhausted => {
+  const windows = exhausted ? [provider.windows[0]!, { ...provider.windows[1]!, usedPercent: 100 }] : provider.windows;
+  state.data!.providers = [{ ...provider, windows, signedOutHosts: [{ id: "y", name: "scott-beelink-ubuntu", status: "unauthenticated" }] }];
+  await render();
+  const button = container.querySelector("button")!;
+  const line = [...button.querySelectorAll("span")].find(span => span.textContent === "signed out on scott-beelink-ubuntu");
+  expect(line?.style.color).toBe(usageStore.toneColor("warning"));
+  expect(button.getAttribute("aria-label")).toContain("signed out on scott-beelink-ubuntu");
+});
+
+it.each([
+  ["unauthenticated", "Signed out on scott-beelink-ubuntu. Sign in there, then refresh."],
+  ["expired", "Login expired on scott-beelink-ubuntu. Sign in again there, then refresh."],
+] as const)("tells the dialog reader where to sign in again (%s)", async (status, text) => {
+  state.data = { ...state.data!, providers: [{ ...provider, signedOutHosts: [{ id: "y", name: "scott-beelink-ubuntu", status }] }] };
+  const dialog = await renderOverlay();
+  const line = [...dialog.querySelectorAll('[role="status"]')].find(element => element.textContent === text);
+  expect((line as HTMLElement | undefined)?.style.color).toBe(usageStore.toneColor("warning"));
+});
+
+it("shows nothing about sign-in when an account is signed in everywhere", async () => {
+  const dialog = await renderOverlay();
+  expect(dialog.textContent).not.toMatch(/signed out|login expired/iu);
+  expect(container.textContent).not.toMatch(/signed out|login expired/iu);
+});
+
 it("replaces all quota percentages with a single-line reset countdown when blocked", async () => {
   state.data!.providers = [{ ...provider, windows: [provider.windows[0]!, { ...provider.windows[1]!, usedPercent: 100 }] }];
   await render();
