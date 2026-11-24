@@ -9,7 +9,7 @@ const server: UsageProvider = {
   id: "claude-code", displayName: "Claude Code", hostId: "server", hostName: "Server",
   accountEmail: "shared@example.test", status: "ok", message: null,
   accountKey: "one", accountLabel: "shared", observedAt: NOW, plan: null, weight: null, stale: false,
-  sources: [], hosts: [{ id: "server", name: "Server" }],
+  sources: [], hosts: [{ id: "server", name: "Server" }], signedOutHosts: [],
   logoUrl: null, icon: null, iconTint: null, planLabel: null,
   windows: [{ label: "Weekly limit", weekly: true, usedPercent: 52, resetsAt: "2026-10-03T12:00:00Z" }],
 };
@@ -59,6 +59,12 @@ describe("usage display scope", () => {
     expect(compactUsageRows(display, NOW)[0]?.provider).toBe(server);
     expect(input.data?.providers).toHaveLength(3);
     expect(usageForDisplay({ ...input, data: { ...input.data!, serverOnly: false } }).data?.providers).toHaveLength(3);
+  });
+
+  it("keeps an account signed out on the server machine visible so it can be flagged", () => {
+    const signedOut: UsageProvider = { ...remote, signedOutHosts: [{ id: "server", name: "Server", status: "unauthenticated" }] };
+    expect(usageForDisplay(state({ providers: [signedOut] })).data?.providers).toEqual([signedOut]);
+    expect(usageForDisplay(state({ providers: [remote] })).data?.providers).toEqual([]);
   });
 
   it("keeps separate provider accounts and providers with missing account identities on the server", () => {

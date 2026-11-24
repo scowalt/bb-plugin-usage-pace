@@ -22,7 +22,7 @@ const target = { hostId: "host-one", accountEmail: "one@example.test", accountKe
 const provider: UsageProvider = {
   ...target, id: "codex", displayName: "Codex", hostName: "One", status: "ok",
   accountLabel: "one", observedAt: NOW, plan: null, weight: null, stale: false,
-  sources: [], hosts: [{ id: "host-one", name: "One" }],
+  sources: [], hosts: [{ id: "host-one", name: "One" }], signedOutHosts: [],
   logoUrl: null, icon: null, iconTint: null, message: null, planLabel: null,
   windows: [{ label: "Weekly", weekly: true, usedPercent: 52, resetsAt: "2026-10-03T12:00:00Z" }],
 };

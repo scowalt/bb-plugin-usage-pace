@@ -6,7 +6,7 @@ import {
   useRealtime,
 } from "@get-bb/plugin-sdk/app";
 import type { UsageAccount, UsageWindow } from "./server";
-import { accountId, accountLocation, distinctAccountLabel, lastReadDescription, mergeAccounts, observationTime, staleUsageReason, usageIsStale } from "./lib/usage-accounts";
+import { accountId, accountLocation, distinctAccountLabel, lastReadDescription, mergeAccounts, observationTime, signedOutLabel, staleUsageReason, usageIsStale } from "./lib/usage-accounts";
 import { describePool, usagePools, type UsagePool } from "./lib/usage-pools";
 import {
   formatReset,
@@ -159,7 +159,7 @@ export function UsageBar({ onOpen }: { onOpen: (target?: BankedResetTarget) => v
     >
       {rows.length === 0 ? (
         <button type="button" onClick={open} aria-haspopup="dialog" title={state.error ?? state.data?.error ?? undefined} className="truncate rounded px-1.5 py-1 text-left text-muted-foreground hover:bg-sidebar-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">{empty}</button>
-      ) : rows.map(({ key, provider, windows, status, notice, countdown, title }, index) => (
+      ) : rows.map(({ key, provider, windows, status, notice, signedOut, countdown, title }, index) => (
         <Fragment key={key}>
         <div className="@container flex min-w-0 items-start">
           <button
@@ -201,6 +201,9 @@ export function UsageBar({ onOpen }: { onOpen: (target?: BankedResetTarget) => v
             ) : null}
             {notice && status.glyph !== "⌛" ? (
               <span aria-hidden="true" className="col-start-2" style={{ color: notice.tone === null ? "var(--muted-foreground)" : toneColor(notice.tone) }}>{notice.label}</span>
+            ) : null}
+            {signedOut ? (
+              <span aria-hidden="true" className="col-start-2" style={{ color: toneColor("warning") }}>{signedOut}</span>
             ) : null}
           </button>
           {supportsBankedResets(provider.id) ? <BankedResetsBadge target={provider} onOpen={() => onOpen(provider)} className="min-h-5.5" /> : null}
@@ -307,6 +310,8 @@ export function ProviderBlock({
   const paces = reliable ? paceForWindows(provider.windows, observationTime(provider, "", Date.now())) : provider.windows.map(() => null);
   const location = accountLocation(provider, scopeHostId);
   const label = distinctAccountLabel(provider);
+  const signedOutLine = signedOutLabel(provider);
+  const signedOut = signedOutLine && `${signedOutLine[0]!.toUpperCase()}${signedOutLine.slice(1)}. ${provider.signedOutHosts.every(host => host.status === "expired") ? "Sign in again there to use this account on that machine." : "Sign in there to use this account on that machine."}`;
   const subtitle = [
     provider.planLabel,
     provider.accountEmail,
@@ -349,6 +354,7 @@ export function ProviderBlock({
                 : (provider.message ?? "Usage could not be loaded.")}
         </p>
       )}
+      {signedOut ? <p role="status" className="text-xs" style={{ color: toneColor("warning") }}>{signedOut}</p> : null}
       {showBankedResets && supportsBankedResets(provider.id) ? <BankedResetsSection {...provider} focus={focusBankedResets} /> : null}
     </div>
   );

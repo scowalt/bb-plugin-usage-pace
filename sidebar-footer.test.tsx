@@ -28,7 +28,7 @@ let footer: HTMLDivElement;
 let showStrip: boolean;
 let accounts: UsageAccount[];
 const account: UsageAccount = {
-  id: "claude-code", displayName: "Claude Code", hostId: "test-host", hostName: "Test host", hosts: [{ id: "test-host", name: "Test host" }],
+  id: "claude-code", displayName: "Claude Code", hostId: "test-host", hostName: "Test host", hosts: [{ id: "test-host", name: "Test host" }], signedOutHosts: [],
   accountKey: "synthetic-a", accountEmail: "a@example.test", accountLabel: "A", plan: null, planLabel: null, weight: null,
   status: "ok", message: null, stale: false, observedAt: NOW, sources: [], logoUrl: null, icon: null, iconTint: null,
   windows: [{ label: "5-hour limit", usedPercent: 100, resetsAt: new Date(NOW + 60_000).toISOString(), kind: "five-hour" }],

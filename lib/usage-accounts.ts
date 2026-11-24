@@ -33,6 +33,7 @@ export const accountSchema = z.object({
   accountKey: z.string().nullable(),
   sources: z.array(sourceSchema),
   hosts: z.array(z.object({ id: z.string(), name: z.string() })),
+  signedOutHosts: z.array(z.object({ id: z.string(), name: z.string(), status: z.enum(["unauthenticated", "expired"]) })).default([]),
   observedAt: z.number().finite().nonnegative().nullable(),
   plan: planSchema,
   accountLabel: z.string(),
@@ -70,12 +71,22 @@ function sizedPlanSource(prior: UsageAccount, account: UsageAccount): UsageAccou
   return (account.observedAt ?? -1) > (prior.observedAt ?? -1) ? account : prior;
 }
 
+const accountKeyOf = (account: UsageAccount) => account.accountKey === null ? null : JSON.stringify([account.id, account.accountKey]);
+const signedOutRow = (account: UsageAccount) => (account.status === "unauthenticated" || account.status === "expired") && account.hosts.length > 0;
+const distinctById = <T extends { id: string }>(items: T[]) => items.filter((item, i) => items.findIndex(other => other.id === item.id) === i);
+
 export function mergeAccounts(accounts: UsageAccount[]): UsageAccount[] {
   const merged: UsageAccount[] = [];
   const planSources: UsageAccount[] = [];
   const known = new Map<string, number>();
+  const signedIn = new Set(accounts.filter(account => !signedOutRow(account)).map(accountKeyOf));
+  const departed = new Map<string, UsageAccount["signedOutHosts"]>();
   for (const account of accounts) {
-    const key = account.accountKey === null ? null : JSON.stringify([account.id, account.accountKey]);
+    const key = accountKeyOf(account);
+    if (key !== null && signedOutRow(account) && signedIn.has(key)) {
+      departed.set(key, [...departed.get(key) ?? [], ...account.hosts.map(host => ({ ...host, status: account.status as "unauthenticated" | "expired" }))]);
+      continue;
+    }
     const index = key === null ? undefined : known.get(key);
     if (index === undefined) {
       if (key !== null) known.set(key, merged.length);
@@ -92,11 +103,18 @@ export function mergeAccounts(accounts: UsageAccount[]): UsageAccount[] {
     const freshest = preferAccount ? account : prior;
     const sources = [...prior.sources, ...account.sources].filter((source, i, all) =>
       all.findIndex(other => other.pluginId === source.pluginId && other.resourceId === source.resourceId) === i);
-    const hosts = [...prior.hosts, ...account.hosts].filter((host, i, all) => all.findIndex(other => other.id === host.id) === i);
+    const hosts = distinctById([...prior.hosts, ...account.hosts]);
+    const signedOutHosts = distinctById([...prior.signedOutHosts, ...account.signedOutHosts]);
     const errors = [...new Set([prior.message, account.message].filter(Boolean))].join("; ");
     const planSource = sizedPlanSource(planSources[index]!, account);
     planSources[index] = planSource;
-    merged[index] = { ...freshest, plan: planSource.plan, planLabel: planSource.planLabel, sources, hosts, message: errors || null };
+    merged[index] = { ...freshest, plan: planSource.plan, planLabel: planSource.planLabel, sources, hosts, signedOutHosts, message: errors || null };
+  }
+  for (const [key, index] of known) {
+    const account = merged[index]!;
+    const signedOutHosts = distinctById([...account.signedOutHosts, ...departed.get(key) ?? []])
+      .filter(host => !account.hosts.some(other => other.id === host.id));
+    if (departed.has(key) || signedOutHosts.length !== account.signedOutHosts.length) merged[index] = { ...account, signedOutHosts };
   }
   return merged.sort((a, b) => a.displayName.localeCompare(b.displayName) || a.accountLabel.localeCompare(b.accountLabel));
 }
@@ -132,6 +150,16 @@ export function distinctAccountLabel(account: UsageAccount): string | null {
 
 export const hasSharedSource = (account: UsageAccount) => account.sources.some(source => source.scope.kind === "shared");
 export const onHost = (account: UsageAccount, hostId: string) => account.hosts.some(host => host.id === hostId);
+export const signedOutOn = (account: UsageAccount, hostId: string) => account.signedOutHosts.some(host => host.id === hostId);
+export const usableOnHost = (account: UsageAccount, hostId: string) =>
+  (hasSharedSource(account) || onHost(account, hostId)) && !signedOutOn(account, hostId);
+export function signedOutLabel(account: UsageAccount): string | null {
+  const phrases = (["unauthenticated", "expired"] as const).flatMap(status => {
+    const names = account.signedOutHosts.filter(host => host.status === status).map(host => host.name);
+    return names.length === 0 ? [] : [`${status === "expired" ? "login expired" : "signed out"} on ${names.join(", ")}`];
+  });
+  return phrases.length === 0 ? null : phrases.join(", ");
+}
 export function accountLocation(account: UsageAccount, scopeHostId?: string | null): string {
   const hosts = scopeHostId === undefined ? account.hosts : account.hosts.filter(host => host.id === scopeHostId);
   return [...new Set(hosts.map(host => host.name))].join(", ") || (hasSharedSource(account) ? "shared" : account.hostName);

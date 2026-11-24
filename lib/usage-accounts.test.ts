@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { accountId, currentClaudePlan, isWeeklyWindow, mergeAccounts, parsePairs, withAccountSettings } from "./usage-accounts";
+import { accountId, currentClaudePlan, isWeeklyWindow, mergeAccounts, parsePairs, signedOutLabel, usableOnHost, withAccountSettings } from "./usage-accounts";
 import { makeAccount, NOW } from "../tests/usage-fixtures";
 import { paceForWindows } from "./pace";
+import type { UsageAccount } from "./usage-accounts";
 
 describe("quota account identities", () => {
   it("merges the same issued identity across two sources and machines using the freshest measurement", () => {
@@ -85,4 +86,51 @@ it("shows Claude's current plan names and weighs plans by their weekly limit", (
   const unsized = { plan: { id: "max", multiplier: null }, planLabel: "Max" };
   expect(currentClaudePlan(unsized)).toBe(unsized);
   expect(withAccountSettings(makeAccount(currentClaudePlan({ plan: { id: "max", multiplier: 20 }, planLabel: "Max 20x" })), new Map(), new Map()).weight).toBe(10);
+});
+
+describe("machines where an account is signed out", () => {
+  const shared = (overrides: Partial<UsageAccount> = {}) => makeAccount({
+    hostId: "", hostName: "Claude Accounts", hosts: [], sources: [{ pluginId: "claude-accounts", label: "Claude Accounts", resourceId: "a", scope: { kind: "shared" } }], ...overrides,
+  });
+  const signedOut = (hostId: string, status: UsageAccount["status"] = "unauthenticated", overrides: Partial<UsageAccount> = {}) => makeAccount({
+    hostId, hostName: hostId, hosts: [{ id: hostId, name: hostId }], status, stale: true, observedAt: null, windows: [],
+    message: `Claude Accounts: ${status}`, sources: [{ pluginId: "claude-accounts", label: "Claude Accounts", resourceId: `a@${hostId}`, scope: { kind: "host", hostId, hostName: hostId } }], ...overrides,
+  });
+
+  it("lists a signed-out machine apart from the machines the account is on, without leaking its message", () => {
+    const [account] = mergeAccounts([signedOut("beelink"), shared({ hosts: [{ id: "mac", name: "MacBook" }] })]);
+    expect(account).toMatchObject({ status: "ok", message: null, hosts: [{ id: "mac", name: "MacBook" }], signedOutHosts: [{ id: "beelink", name: "beelink", status: "unauthenticated" }] });
+    expect(signedOutLabel(account!)).toBe("signed out on beelink");
+  });
+  it("lets a healthy report from the same machine win over a signed-out row", () => {
+    const [account] = mergeAccounts([signedOut("beelink"), shared(), makeAccount()]);
+    expect(account?.hosts.map(host => host.id)).toEqual(["beelink"]);
+    expect(account?.signedOutHosts).toEqual([]);
+    expect(signedOutLabel(account!)).toBeNull();
+  });
+  it("groups several machines by how they are signed out", () => {
+    const [account] = mergeAccounts([signedOut("y"), signedOut("x", "expired"), signedOut("z"), signedOut("z"), shared()]);
+    expect(account?.signedOutHosts).toHaveLength(3);
+    expect(signedOutLabel(account!)).toBe("signed out on y, z, login expired on x");
+  });
+  it("keeps a lone signed-out row exactly as reported", () => {
+    const lone = signedOut("beelink");
+    expect(mergeAccounts([lone])).toEqual([lone]);
+    expect(mergeAccounts([lone, signedOut("mac")])[0]).toMatchObject({ status: "unauthenticated", hosts: [{ id: "beelink" }, { id: "mac" }], signedOutHosts: [] });
+  });
+  it("keeps signed-out machines when an already merged account is merged again", () => {
+    const once = mergeAccounts([signedOut("beelink"), shared()]);
+    expect(mergeAccounts(once)).toEqual(once);
+    expect(mergeAccounts([...once, signedOut("mac")])[0]?.signedOutHosts.map(host => host.id)).toEqual(["beelink", "mac"]);
+  });
+  it("swaps a machine that is healthy again for one that just signed out", () => {
+    const [merged] = mergeAccounts([signedOut("beelink"), shared()]);
+    const [account] = mergeAccounts([merged!, makeAccount({ hosts: [{ id: "beelink", name: "beelink" }] }), signedOut("mac")]);
+    expect(account?.signedOutHosts.map(host => host.id)).toEqual(["mac"]);
+  });
+  it("makes an account unusable on the machine it is signed out on, even through a shared source", () => {
+    const [account] = mergeAccounts([signedOut("beelink"), shared()]);
+    expect(usableOnHost(account!, "beelink")).toBe(false);
+    expect(usableOnHost(account!, "mac")).toBe(true);
+  });
 });

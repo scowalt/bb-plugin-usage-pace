@@ -14,7 +14,7 @@ import { createTokenTotals } from "./lib/token-totals";
 import { bankedResetsSchema, bankedResetsUnavailable, resetProviderSchema, type BankedResets, type ResetProviderId } from "./lib/banked-resets-contract";
 import { bankedResetsHostContract } from "./lib/banked-resets-host-contract";
 
-import { accountLocation, accountSchema, distinctAccountLabel, lastReadDescription, observationTime, parsePairs, staleUsageReason, usageIsStale, withAccountSettings, type UsageAccount } from "./lib/usage-accounts";
+import { accountLocation, accountSchema, distinctAccountLabel, lastReadDescription, observationTime, parsePairs, signedOutLabel, staleUsageReason, usageIsStale, withAccountSettings, type UsageAccount } from "./lib/usage-accounts";
 import { createUsageCollector } from "./lib/usage-collector";
 import { accountWithPace, usageCliSchema } from "./lib/usage-cli";
 import { describePool, poolSchema, usagePools } from "./lib/usage-pools";
@@ -332,8 +332,10 @@ export default async function plugin(bb: BbPluginApi) {
       for (const provider of accounts) {
         const heading = [provider.displayName, distinctAccountLabel(provider)].filter(Boolean).join(" · ");
         const location = accountLocation(provider);
+        const signedOut = signedOutLabel(provider);
         if (provider.status !== "ok") {
           lines.push(`${heading} (${location}): ${provider.status}${provider.message ? ` — ${provider.message}` : ""}`);
+          if (signedOut) lines.push(`  ${signedOut}`);
           if (provider.stale || provider.windows.length > 0) lines.push(`  usage unknown · ${lastReadDescription(provider)}`);
           continue;
         }
@@ -346,6 +348,7 @@ export default async function plugin(bb: BbPluginApi) {
         if (shown.length === 0) continue;
         lines.push(
           `${heading}${provider.planLabel ? ` · ${provider.planLabel}` : ""} (${location})`,
+          ...(signedOut ? [`  ${signedOut}`] : []),
           `  via ${[...new Set(provider.sources.map(source => source.label))].join(", ")} · observed ${provider.observedAt === null ? "unknown" : new Date(provider.observedAt).toISOString()}`,
           ...(stale ? [`  stale: usage unknown · ${lastReadDescription(provider)}. ${staleUsageReason(provider)}`] : []),
         );

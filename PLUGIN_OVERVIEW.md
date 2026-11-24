@@ -40,7 +40,7 @@ Provider usage card.
   When exhausted, an amber hourglass and reset countdown replace the ordinary
   values on one line, using the latest exhausted reset; missing times show
   “reset unknown.” Hover for details; click for quota and reset details. The dialog has a single-row header, no token totals, and hides unused provider discoveries while retaining known accounts with read failures.
-- **Multiple quota accounts.** Discovers machine and shared usage sources, merges only matching provider-issued identities, and shows each account once. Optional email aliases label accounts. The dialog lists sources, available machines, and measurement age.
+- **Multiple quota accounts.** Discovers machine and shared usage sources, merges only matching provider-issued identities, and shows each account once. Optional email aliases label accounts. The dialog lists sources, available machines, and measurement age. A machine where a healthy account is signed out or its login expired is flagged in a warning line on the strip row, in the dialog card, and in `bb usage-pace`, and autopilot skips the account there. Plugins report such machines through `account-sign-ins.v1.listSignedOut` (Claude Accounts 0.3.0 does).
 - **Provider pools.** Two or more displayed accounts add a pool row with shared availability and plan-weighted weekly use/pace. Weekly numbers are estimates; unknown plans and stale reads make them partial. Model-family exhaustion is separate, and there is no pool run-out forecast.
 - **Server-only view.** An optional, shared setting limits Usage Pace's strip,
   dialog, and saved-reset details to accounts available on the bb server machine; shared-source accounts remain visible.

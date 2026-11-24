@@ -10,7 +10,7 @@ const provider: UsageProvider = {
   id: "claude-code", displayName: "Claude Code", hostId: "one", hostName: "One",
   accountEmail: "one@example.test", status: "ok", message: null,
   accountKey: "one", accountLabel: "one", observedAt: NOW, plan: null, weight: null, stale: false,
-  sources: [], hosts: [{ id: "one", name: "One" }],
+  sources: [], hosts: [{ id: "one", name: "One" }], signedOutHosts: [],
   logoUrl: null, icon: null, iconTint: null, planLabel: null,
   windows: [session, weekly],
 };
@@ -71,6 +71,21 @@ describe("compact usage rows", () => {
     expect(result.notice?.label).toBe("usage unknown");
     expect(result.status.glyph).toBe("—");
     expect(result.title).not.toContain("All quota windows last to reset");
+  });
+
+  it("names the machines an account is signed out on and keeps that in the row's description", () => {
+    const signedOutHosts = [{ id: "y", name: "scott-beelink-ubuntu", status: "unauthenticated" as const }, { id: "z", name: "host-b", status: "expired" as const }];
+    const result = compactUsageRows(state([{ ...provider, signedOutHosts }]), NOW)[0]!;
+    expect(result.signedOut).toBe("signed out on scott-beelink-ubuntu, login expired on host-b");
+    expect(result.title).toContain(result.signedOut);
+    expect(result.status.glyph).toBe("●");
+    expect(row().signedOut).toBeNull();
+  });
+
+  it("keeps the signed-out machines when a window is exhausted", () => {
+    const result = compactUsageRows(state([{ ...provider, windows: [{ ...weekly, usedPercent: 100 }], signedOutHosts: [{ id: "y", name: "Y", status: "unauthenticated" }] }]), NOW)[0]!;
+    expect(result.status.glyph).toBe("⌛");
+    expect(result.signedOut).toBe("signed out on Y");
   });
 
   it("keeps weekly-only and session-only rows without fabricated percentages", () => {

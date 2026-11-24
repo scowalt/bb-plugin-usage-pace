@@ -84,7 +84,7 @@ async function setupUsage(settings: { serverOnly?: boolean } = {}) {
   const { bb, harness } = createFakePluginHost({
     pluginId: "usage-pace", settings: { grokUsage: false, ...settings },
     sdk: { hosts: { list: listHosts }, providers: { list: listProviders }, system: { config, usageLimits }, plugins: {
-      experimental_discoverRpc: async () => [{ pluginId: "provider-claude-code", displayName: "Claude Code provider" }],
+      experimental_discoverRpc: async (args?: { method?: string }) => args?.method === "provider-usage.v1.listResources" ? [{ pluginId: "provider-claude-code", displayName: "Claude Code provider" }] : [],
       callRpc: async ({ method, input }: { method: string; input: { resourceId?: string } }) => {
         if (method.endsWith("listResources")) return { resources: scope.hosts.map(host => ({
           id: host.id, providerId: "claude-code", accountKey: null, label: "Claude Code", scope: { kind: "host", hostId: host.id, hostName: host.name },
@@ -114,6 +114,40 @@ describe("account CLI schema", () => {
     const text = (await harness.behavior.runCli([])).stdout ?? "";
     expect(text.indexOf("Claude Code ∑")).toBeLessThan(text.indexOf("Claude Code · shared"));
     expect(usageCliSchema.safeParse({ providers: output.providers }).success).toBe(false);
+  });
+});
+
+describe("signed-out machines", () => {
+  it("prints the machine an account is signed out on under its heading and carries it in --json", async () => {
+    vi.useFakeTimers({ now: Date.parse("2026-10-12T12:00:00Z") });
+    const key = "anthropic:account:b";
+    const ok = { accountKey: key, observedAt: Date.now(), usage: { status: "ok", accountEmail: "b@example.test", plan: null, planLabel: "Max",
+      windows: [{ id: "weekly", kind: "weekly", model: null, label: "Weekly limit", usedPercent: 11, resetsAt: "2026-10-15T12:00:00Z" }] } };
+    const { bb, harness } = createFakePluginHost({
+      pluginId: "usage-pace", settings: { grokUsage: false },
+      sdk: {
+        hosts: { list: async () => [makeHostResponse({ id: "mac", name: "mac", status: "connected" }), makeHostResponse({ id: "beelink", name: "scott-beelink-ubuntu", status: "connected" })] },
+        providers: { list: async () => [{ id: "claude-code", displayName: "Claude Code" }] },
+        system: { config: async () => ({ primaryHostId: "mac" }) },
+        plugins: {
+          experimental_discoverRpc: async () => [{ pluginId: "claude-accounts", displayName: "Claude Accounts" }],
+          callRpc: async ({ method, input }: { method: string; input: { resourceId?: string } }) => {
+            if (method.endsWith("listResources")) return { resources: [
+              { id: "b", providerId: "claude-code", accountKey: key, label: "b", scope: { kind: "shared" } },
+              { id: "b@beelink", providerId: "claude-code", accountKey: key, label: "b", scope: { kind: "host", hostId: "beelink", hostName: "scott-beelink-ubuntu" } },
+            ] };
+            return input.resourceId === "b" ? ok : { accountKey: null, observedAt: null, usage: { status: "unauthenticated", accountEmail: "b@example.test", plan: null, planLabel: "Max" } };
+          },
+        },
+      },
+    });
+    cleanups.push(() => harness.lifecycle.dispose());
+    await plugin(bb);
+    const lines = ((await harness.behavior.runCli([])).stdout ?? "").split("\n");
+    expect(lines[lines.findIndex(line => line.startsWith("Claude Code")) + 1]).toBe("  signed out on scott-beelink-ubuntu");
+    const output = JSON.parse((await harness.behavior.runCli(["--json"])).stdout ?? "");
+    expect(output.accounts).toHaveLength(1);
+    expect(output.accounts[0]).toMatchObject({ status: "ok", message: null, signedOutHosts: [{ id: "beelink", name: "scott-beelink-ubuntu", status: "unauthenticated" }] });
   });
 });
 

@@ -1,6 +1,8 @@
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { accountSchema, currentClaudePlan, isWeeklyWindow, mergeAccounts, planSchema, scopeSchema, usageIsStale, windowKindSchema, type UsageAccount } from "./usage-accounts";
+import { providerFields, signedOutAccount, type Provider, type Source } from "./signed-out-account";
+import { signedOutListMethod, signedOutListSchema } from "./signed-out-contract";
 
 export const sourceListSchema = z.object({
   label: z.string().optional(),
@@ -26,20 +28,14 @@ export const measurementSchema = z.object({
 });
 type Resource = z.infer<typeof sourceListSchema>["resources"][number];
 type Host = Awaited<ReturnType<BbPluginApi["sdk"]["hosts"]["list"]>>[number];
-type Provider = Awaited<ReturnType<BbPluginApi["sdk"]["providers"]["list"]>>[number];
-type Source = { pluginId: string; displayName: string };
 type RefreshAttempt = { at: number; accountKey: string | null; message: string | null };
 export type CollectedUsage = { accounts: UsageAccount[]; error: string | null; hostsError: string | null };
 
-const names: Record<string, string> = { "claude-code": "Claude Code", codex: "Codex", "usage-pace-grok": "Grok Build (usage)", "usage-pace-antigravity": "Google Antigravity (usage)" };
-const disabledProviderMarks: Record<string, { logoUrl: string; iconTint: { light: string; dark: string } | null }> = {
-  "claude-code": { logoUrl: "/api/v1/system/providers/claude-code/logo", iconTint: { light: "#D97757", dark: "#D97757" } },
-  codex: { logoUrl: "/api/v1/system/providers/codex/logo", iconTint: null },
-};
 const messageOf = (error: unknown) => error instanceof Error ? error.message : String(error);
 
 export function createUsageCollector(bb: Pick<BbPluginApi, "sdk">, signal: AbortSignal, now: () => number = Date.now, cachePeriod: () => number = () => 5 * 60_000) {
   let discovery: { at: number; sources: Source[] } | null = null;
+  let signedOutDiscovery: { at: number; sources: Source[] } | null = null;
   const previous = new Map<string, Map<string, UsageAccount>>();
   const refreshAttempts = new Map<string, Map<string, RefreshAttempt>>();
 
@@ -64,6 +60,24 @@ export function createUsageCollector(bb: Pick<BbPluginApi, "sdk">, signal: Abort
   }
   async function rpc<T>(source: Source, method: string, input: { resourceId: string; refresh: boolean } | Record<string, never>, outputSchema: z.ZodType<T>): Promise<T> {
     return outputSchema.parse(await bounded(signal => bb.sdk.plugins.callRpc({ pluginId: source.pluginId, method, input, outputSchema, signal })));
+  }
+  async function signedOutRows(hosts: Host[], metadata: Map<string, Provider>): Promise<UsageAccount[]> {
+    try {
+      if (!signedOutDiscovery || now() - signedOutDiscovery.at >= 60_000) {
+        const discovered = await bounded(() => bb.sdk.plugins.experimental_discoverRpc({ method: signedOutListMethod }));
+        signedOutDiscovery = { at: now(), sources: [...new Map(discovered.map(source => [source.pluginId, source])).values()] };
+      }
+    } catch { return []; }
+    const lists = await Promise.all(signedOutDiscovery.sources.map(async source => {
+      try {
+        const { machines } = await rpc(source, signedOutListMethod, {}, signedOutListSchema);
+        return machines.flatMap(machine => {
+          const host = hosts.find(known => known.id === machine.hostId && known.status !== "disconnected");
+          return host ? [signedOutAccount(machine, source, host.name, metadata.get(machine.providerId))] : [];
+        });
+      } catch { return []; }
+    }));
+    return lists.flat();
   }
   return async function collect(force: boolean): Promise<CollectedUsage> {
     let hostsError: string | null = null;
@@ -93,6 +107,7 @@ export function createUsageCollector(bb: Pick<BbPluginApi, "sdk">, signal: Abort
     }
     const active = new Set(sources.map(source => source.pluginId));
     for (const id of previous.keys()) if (!active.has(id)) { previous.delete(id); refreshAttempts.delete(id); }
+    const signedOut = signedOutRows(hosts, metadata);
     const tasks: (() => Promise<void>)[] = [];
     for (const source of sources) {
       let resources: Resource[];
@@ -119,13 +134,10 @@ export function createUsageCollector(bb: Pick<BbPluginApi, "sdk">, signal: Abort
         tasks.push(async () => {
           const provider = metadata.get(resource.providerId);
           const base: UsageAccount = accountSchema.parse({
-            id: resource.providerId, displayName: provider?.displayName ?? names[resource.providerId] ?? resource.providerId,
+            id: resource.providerId, ...providerFields(resource.providerId, provider),
             hostId: scope.kind === "host" ? scope.hostId : "", hostName: scope.kind === "host" ? scope.hostName : source.displayName,
-            logoUrl: provider ? provider.logoUrl ?? null : disabledProviderMarks[resource.providerId]?.logoUrl ?? null,
-            icon: provider?.icon?.glyph ? { glyph: provider.icon.glyph } : null,
-            iconTint: provider ? provider.strings?.iconTint ?? null : disabledProviderMarks[resource.providerId]?.iconTint ?? null,
             status: "error", message: null, accountEmail: null, planLabel: null, windows: [],
-            accountKey: null, observedAt: null, plan: null, accountLabel: resource.label, weight: null, stale: true,
+            accountKey: resource.accountKey, observedAt: null, plan: null, accountLabel: resource.label, weight: null, stale: true,
             hosts: scope.kind === "host" ? [{ id: scope.hostId, name: scope.hostName }] : [],
             sources: [{ pluginId: source.pluginId, label: source.displayName, resourceId: resource.id, scope }],
           });
@@ -170,7 +182,7 @@ export function createUsageCollector(bb: Pick<BbPluginApi, "sdk">, signal: Abort
             const usage = measurement.usage;
             if (usage.status === "error" || usage.status === "expired" || usage.status === "unauthenticated") {
               const message = `${source.displayName}: ${usage.status === "error" ? usage.message : `${usage.status}${usage.message ? ` — ${usage.message}` : ""}`}`;
-              const accountKey = measurement.accountKey ?? prior?.accountKey ?? null;
+              const accountKey = measurement.accountKey ?? prior?.accountKey ?? resource.accountKey;
               const sameAccount = accountKey !== null && prior?.accountKey === accountKey;
               const retained = sameAccount && prior ? prior : base;
               account = { ...retained, status: usage.status === "error" ? retained.status : usage.status, stale: true, message,
@@ -201,6 +213,7 @@ export function createUsageCollector(bb: Pick<BbPluginApi, "sdk">, signal: Abort
     await Promise.all(Array.from({ length: Math.min(3, tasks.length) }, async () => {
       while (next < tasks.length && !signal.aborted) await tasks[next++]!();
     }));
+    rows.push(...await signedOut);
     return { accounts: mergeAccounts(rows), error: errors.length ? [...new Set(errors)].join("; ") : null, hostsError };
   };
 }

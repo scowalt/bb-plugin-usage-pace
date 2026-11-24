@@ -1,6 +1,6 @@
 import type { UsageAccount, UsageWindow } from "../server";
 import type { UsageState } from "./usage-store";
-import { accountId, accountLocation, distinctAccountLabel, lastReadDescription, mergeAccounts, observationTime, staleUsageReason, usageIsStale } from "./usage-accounts";
+import { accountId, accountLocation, distinctAccountLabel, lastReadDescription, mergeAccounts, observationTime, signedOutLabel, staleUsageReason, usageIsStale } from "./usage-accounts";
 import { formatReset } from "./usage-store";
 import { displayedAccounts } from "./usage-pools";
 import { describePace, formatDuration, paceForWindows, toneForUsed, windowDurationMs, type Pace, type Tone } from "./pace";
@@ -28,6 +28,7 @@ export interface CompactUsageRow {
   windows: CompactWindow[];
   status: CompactStatus;
   notice: { label: string; tone: Tone | null } | null;
+  signedOut: string | null;
   countdown: {
     label: string;
     detail: string;
@@ -146,8 +147,9 @@ export function compactUsageRows(state: UsageState, now = Date.now()): CompactUs
     const notice: CompactUsageRow["notice"] = selected.length === 0 ? { label: "usage unknown", tone: null }
       : noticeLabel ? { label: noticeLabel, tone: quotaWarning ? "warning" : null } : null;
     const identity = [provider.displayName, distinctAccountLabel(provider), provider.accountEmail, accountLocation(provider, state.data?.serverOnly ? state.data.serverHostId ?? null : undefined)].filter(Boolean).join(" · ");
-    rows.push({ key, provider, windows: selected, status, notice, countdown,
-      title: [identity, status.detail, unreliable ? lastReadDescription(provider, now) : null, notice?.label, countdown?.detail, ...allWindows.map(entry => entry.detail),
+    const signedOut = signedOutLabel(provider);
+    rows.push({ key, provider, windows: selected, status, notice, signedOut, countdown,
+      title: [identity, status.detail, signedOut, unreliable ? lastReadDescription(provider, now) : null, notice?.label, countdown?.detail, ...allWindows.map(entry => entry.detail),
         "1.0× is even pace. Below 1.0× uses less quota than even pace; above uses more. Average since window start, not an agent-count recommendation."].filter(Boolean).join("\n") });
   }
   return rows;
