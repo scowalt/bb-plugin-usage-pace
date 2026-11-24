@@ -170,7 +170,7 @@ export function createUsageCollector(bb: Pick<BbPluginApi, "sdk">, signal: Abort
             const usage = measurement.usage;
             if (usage.status === "error" || usage.status === "expired" || usage.status === "unauthenticated") {
               const message = `${source.displayName}: ${usage.status === "error" ? usage.message : `${usage.status}${usage.message ? ` — ${usage.message}` : ""}`}`;
-              const accountKey = measurement.accountKey ?? prior?.accountKey ?? null;
+              const accountKey = measurement.accountKey ?? prior?.accountKey ?? resource.accountKey;
               const sameAccount = accountKey !== null && prior?.accountKey === accountKey;
               const retained = sameAccount && prior ? prior : base;
               account = { ...retained, status: usage.status === "error" ? retained.status : usage.status, stale: true, message,

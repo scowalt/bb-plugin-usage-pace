@@ -102,6 +102,20 @@ describe("discoverable usage collection", () => {
     expect(changed.accounts.find(account => account.accountKey === "anthropic:account:a")?.sources).toHaveLength(2);
   });
 
+  it("reports the machine a source lists as signed out for an account without making it a machine the account is on", async () => {
+    const { collect, callRpc, lists, sources } = await setup();
+    sources.splice(0, 1);
+    const key = "anthropic:account:a";
+    lists.set("pool", { resources: [resource("a"), { ...resource("a@mac"), scope: { kind: "host", hostId: "mac", hostName: "mac" }, accountKey: key }] });
+    const original = callRpc.getMockImplementation()!;
+    callRpc.mockImplementation(async args => args.input.resourceId === "a@mac" && !args.method.endsWith("listResources") ? {
+      accountKey: null, observedAt: null, usage: { status: "unauthenticated", accountEmail: "a@example.test", plan: null, planLabel: null },
+    } : original(args));
+    const { accounts } = await collect(false);
+    expect(accounts).toHaveLength(1);
+    expect(accounts[0]).toMatchObject({ status: "ok", message: null, hosts: [], signedOutHosts: [{ id: "mac", name: "mac", status: "unauthenticated" }] });
+  });
+
   it("collects three accounts once, merging default logins from two hosts with the pooled account", async () => {
     const { collect, callRpc } = await setup();
     const result = await collect(false);
