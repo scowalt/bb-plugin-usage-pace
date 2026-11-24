@@ -254,17 +254,17 @@ describe("effort", () => {
   });
 
   it("clamps max to xhigh on Gemini Neon and says so", () => {
-    const choice = decide(reading(claudeAt(1.0), [geminiAccount(0)]));
+    const choice = decide(reading(claudeAt(0.6), [geminiAccount(0)]));
     expect(choice?.providerId).toBe(GEMINI_NEON.providerId);
     expect(choice?.reasoningLevel).toBe("xhigh");
-    expect(choice?.reason).toContain("effort xhigh (max is not offered) at overall pace 0.50×");
+    expect(choice?.reason).toContain("effort xhigh (max is not offered) at overall pace 0.55×");
   });
 
-  it("averages the two paces for effort and falls back to Claude alone", () => {
+  it("weighs the two paces by plan for effort and falls back to Claude alone", () => {
     const both = decide(reading(claudeAt(0.8), [geminiAccount(60)]));
     expect(both?.providerId).toBe(OPUS.providerId);
-    expect(both?.reasoningLevel).toBe("medium");
-    expect(both?.reason).toContain("overall pace 1.00×");
+    expect(both?.reasoningLevel).toBe("xhigh");
+    expect(both?.reason).toContain("overall pace 0.84×");
     const alone = decide(reading(claudeAt(0.8)));
     expect(alone?.reasoningLevel).toBe("xhigh");
     expect(alone?.reason).toContain("overall pace 0.80×");
@@ -278,8 +278,24 @@ describe("effort", () => {
     ];
     const choice = decide(reading(claudeSubs, [geminiAccount(70)]));
     expect(choice?.providerId).toBe(OPUS.providerId);
-    expect(choice?.reasoningLevel).toBe("xhigh");
-    expect(choice?.reason).toContain("overall pace 0.80×");
+    expect(choice?.reasoningLevel).toBe("max");
+    expect(choice?.reason).toContain("overall pace 0.63×");
+  });
+
+  it("counts each Claude subscription by its plan, so a Max 20x weighs ten $20 Google plans", () => {
+    const claudeSubs = [
+      claudeAccount("a", [fiveHour(10), weekly(50)]),
+      claudeAccount("b", [fiveHour(10), weekly(15)]),
+      claudeAccount("c", [fiveHour(10), weekly(60)]),
+    ];
+    const earlyGemini = geminiAccount(25, 0, {}, 160);
+    const choice = decide(reading(claudeSubs, [earlyGemini]));
+    expect(choice?.providerId).toBe(OPUS.providerId);
+    expect(choice?.reasoningLevel).toBe("high");
+    expect(choice?.reason).toContain("Gemini Neon 5.25×");
+    expect(choice?.reason).toContain("overall pace 0.98×");
+    const pro = decide(reading([claudeAccount("p", [fiveHour(10), weekly(20)], { weight: 1 })], [geminiAccount(80)]));
+    expect(pro?.reason).toContain("overall pace 1.00×");
   });
 
   it("leaves a skipped subscription out of the overall pace", () => {

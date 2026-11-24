@@ -32,6 +32,7 @@ export const WEEKLY_LIMIT_PERCENT = 90;
 export const TIE_PACE = 0.02;
 export const UNKNOWN_EFFORT: Effort = "high";
 export const DEFAULT_BANDS_TEXT = "0.7=max,0.9=xhigh,1.0=high,1.2=medium,low";
+export const GEMINI_PLAN_WEIGHT = 1;
 
 const CLAUDE_USAGE_ID = "claude-code";
 const GEMINI_USAGE_GROUP = "Gemini Models";
@@ -141,9 +142,14 @@ export function autopilotApplies(settings: Pick<AutopilotSettings, "enabled">, r
   return request.requested.providerId === null && request.requested.model === null;
 }
 
+interface SubPace {
+  pace: number;
+  weight: number;
+}
+
 interface Standing {
   pace: number | null;
-  subPaces: number[];
+  subPaces: SubPace[];
   blocked: string | null;
 }
 
@@ -196,7 +202,7 @@ function claudeStanding(usage: UsageReading, hostId: string | null, now: number)
   const subPaces = parts.flatMap(part => {
     if (part.reading === null) return [];
     const ratio = pacedRatio([{ weight: 1, ...part.reading }]);
-    return ratio === null ? [] : [ratio];
+    return ratio === null ? [] : [{ pace: ratio, weight: part.weight }];
   });
   const fiveHours = weekly.map(({ account }) => fiveHourOf(account, shared));
   const blocked =
@@ -226,12 +232,12 @@ function geminiStanding(usage: UsageReading, hostId: string | null, now: number)
       : window.usedPercent >= WEEKLY_LIMIT_PERCENT ? `weekly ${percent(window.usedPercent)} used`
         : null;
   const pace = reading === null ? null : pacedRatio([{ weight: 1, ...reading }]);
-  return { pace, subPaces: pace === null ? [] : [pace], blocked };
+  return { pace, subPaces: pace === null ? [] : [{ pace, weight: GEMINI_PLAN_WEIGHT }], blocked };
 }
 
-function mean(values: (number | null)[]): number | null {
-  const known = values.filter((value): value is number => value !== null);
-  return known.length === 0 ? null : known.reduce((sum, value) => sum + value, 0) / known.length;
+function weightedMean(parts: SubPace[]): number | null {
+  const total = parts.reduce((sum, part) => sum + part.weight, 0);
+  return total <= 0 ? null : parts.reduce((sum, part) => sum + part.weight * part.pace, 0) / total;
 }
 
 const namedEffort = (level: string | null): Effort | null => (level !== null && isEffort(level) ? level : null);
@@ -278,7 +284,7 @@ export function chooseExecution(input: AutopilotInput): AutopilotChoice | null {
     ...(claude.blocked === null ? claude.subPaces : []),
     ...(geminiSkipped === null ? gemini.subPaces : []),
   ];
-  const overall = mean(counted.length > 0 ? counted : [...claude.subPaces, ...gemini.subPaces]);
+  const overall = weightedMean(counted.length > 0 ? counted : [...claude.subPaces, ...gemini.subPaces]);
   const wanted = named ?? effortForPace(settings.bands, overall);
   const level = clampEffort(model, wanted);
   const clamp = level === wanted ? "" : ` (${wanted} is not offered)`;
