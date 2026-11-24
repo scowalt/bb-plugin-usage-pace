@@ -114,7 +114,7 @@ export function mergeAccounts(accounts: UsageAccount[]): UsageAccount[] {
     const account = merged[index]!;
     const signedOutHosts = distinctById([...account.signedOutHosts, ...departed.get(key) ?? []])
       .filter(host => !account.hosts.some(other => other.id === host.id));
-    if (signedOutHosts.length !== account.signedOutHosts.length) merged[index] = { ...account, signedOutHosts };
+    if (departed.has(key) || signedOutHosts.length !== account.signedOutHosts.length) merged[index] = { ...account, signedOutHosts };
   }
   return merged.sort((a, b) => a.displayName.localeCompare(b.displayName) || a.accountLabel.localeCompare(b.accountLabel));
 }

@@ -123,6 +123,11 @@ describe("machines where an account is signed out", () => {
     expect(mergeAccounts(once)).toEqual(once);
     expect(mergeAccounts([...once, signedOut("mac")])[0]?.signedOutHosts.map(host => host.id)).toEqual(["beelink", "mac"]);
   });
+  it("swaps a machine that is healthy again for one that just signed out", () => {
+    const [merged] = mergeAccounts([signedOut("beelink"), shared()]);
+    const [account] = mergeAccounts([merged!, makeAccount({ hosts: [{ id: "beelink", name: "beelink" }] }), signedOut("mac")]);
+    expect(account?.signedOutHosts.map(host => host.id)).toEqual(["mac"]);
+  });
   it("makes an account unusable on the machine it is signed out on, even through a shared source", () => {
     const [account] = mergeAccounts([signedOut("beelink"), shared()]);
     expect(usableOnHost(account!, "beelink")).toBe(false);
