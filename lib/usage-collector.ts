@@ -137,7 +137,7 @@ export function createUsageCollector(bb: Pick<BbPluginApi, "sdk">, signal: Abort
             id: resource.providerId, ...providerFields(resource.providerId, provider),
             hostId: scope.kind === "host" ? scope.hostId : "", hostName: scope.kind === "host" ? scope.hostName : source.displayName,
             status: "error", message: null, accountEmail: null, planLabel: null, windows: [],
-            accountKey: null, observedAt: null, plan: null, accountLabel: resource.label, weight: null, stale: true,
+            accountKey: resource.accountKey, observedAt: null, plan: null, accountLabel: resource.label, weight: null, stale: true,
             hosts: scope.kind === "host" ? [{ id: scope.hostId, name: scope.hostName }] : [],
             sources: [{ pluginId: source.pluginId, label: source.displayName, resourceId: resource.id, scope }],
           });

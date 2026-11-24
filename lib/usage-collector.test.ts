@@ -171,6 +171,16 @@ describe("discoverable usage collection", () => {
       expect(failed.accounts[0]).toMatchObject({ stale: false, message: null, signedOutHosts: [] });
     });
 
+    it("flags the machine on the account even when its first usage read fails", async () => {
+      const { collect, callRpc, lists } = await signedOutSetup([machine("mac")]);
+      lists.set("pool", { resources: [{ ...resource("b"), accountKey: keyB }] });
+      const original = callRpc.getMockImplementation()!;
+      callRpc.mockImplementation(async args => args.method.endsWith("getResource") ? Promise.reject(new Error("boom")) : original(args));
+      const { accounts } = await collect(false);
+      expect(accounts).toHaveLength(1);
+      expect(accounts[0]).toMatchObject({ accountLabel: "b@example.test", accountKey: keyB, signedOutHosts: [{ id: "mac", status: "unauthenticated" }] });
+    });
+
     it("ignores a malformed signed-out answer", async () => {
       const { collect, callRpc } = await signedOutSetup([machine("mac")]);
       const original = callRpc.getMockImplementation()!;
