@@ -247,8 +247,8 @@ it.each([true, false])("flags the machines an account is signed out on in the st
 });
 
 it.each([
-  ["unauthenticated", "Signed out on scott-beelink-ubuntu. Sign in there, then refresh."],
-  ["expired", "Login expired on scott-beelink-ubuntu. Sign in again there, then refresh."],
+  ["unauthenticated", "Signed out on scott-beelink-ubuntu. Sign in there to use this account on that machine."],
+  ["expired", "Login expired on scott-beelink-ubuntu. Sign in again there to use this account on that machine."],
 ] as const)("tells the dialog reader where to sign in again (%s)", async (status, text) => {
   state.data = { ...state.data!, providers: [{ ...provider, signedOutHosts: [{ id: "y", name: "scott-beelink-ubuntu", status }] }] };
   const dialog = await renderOverlay();

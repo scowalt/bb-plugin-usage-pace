@@ -311,7 +311,7 @@ export function ProviderBlock({
   const location = accountLocation(provider, scopeHostId);
   const label = distinctAccountLabel(provider);
   const signedOutLine = signedOutLabel(provider);
-  const signedOut = signedOutLine && `${signedOutLine[0]!.toUpperCase()}${signedOutLine.slice(1)}. ${provider.signedOutHosts.every(host => host.status === "expired") ? "Sign in again there, then refresh." : "Sign in there, then refresh."}`;
+  const signedOut = signedOutLine && `${signedOutLine[0]!.toUpperCase()}${signedOutLine.slice(1)}. ${provider.signedOutHosts.every(host => host.status === "expired") ? "Sign in again there to use this account on that machine." : "Sign in there to use this account on that machine."}`;
   const subtitle = [
     provider.planLabel,
     provider.accountEmail,
