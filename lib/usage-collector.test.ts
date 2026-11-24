@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { createFakePluginHost, makeHostResponse } from "@get-bb/plugin-sdk/testing";
 import { createUsageCollector, measurementSchema, sourceListSchema } from "./usage-collector";
+import { signedOutListMethod } from "./signed-out-contract";
 import { makeAccount, NOW } from "../tests/usage-fixtures";
 import { withAccountSettings } from "./usage-accounts";
 import { usagePools } from "./usage-pools";
@@ -25,8 +26,12 @@ async function setup() {
     ["machine", { resources: [resource("beelink", false), resource("mac", false), resource("offline", false)] }],
     ["pool", { resources: [resource("a"), resource("b"), resource("c")] }],
   ]);
-  const discover = vi.fn(async () => sources);
+  const signedOutSources: typeof sources = [];
+  const signedOutMachines: { providerId: string; accountKey: string; hostId: string; hostName: string; status: "unauthenticated" | "expired" }[] = [];
+  const discover = vi.fn(async (args?: { method?: string }) => args?.method === signedOutListMethod ? signedOutSources : sources);
+  const signedOutCalls = vi.fn(async () => ({ machines: signedOutMachines }));
   const callRpc = vi.fn(async ({ pluginId, method, input }: { pluginId: string; method: string; input: { resourceId?: string; refresh?: boolean } }) => {
+    if (method === signedOutListMethod) return signedOutCalls();
     if (method.endsWith("listResources")) return lists.get(pluginId);
     return measurement(pluginId === "machine" ? "a" : input.resourceId, pluginId === "pool" ? NOW + 1000 : NOW);
   });
@@ -39,7 +44,7 @@ async function setup() {
   let now = NOW;
   const controller = new AbortController();
   const collect = createUsageCollector(bb, controller.signal, () => now);
-  return { collect, controller, discover, callRpc, lists, sources, advance: (ms: number) => { now += ms; } };
+  return { collect, controller, discover, callRpc, lists, sources, signedOutSources, signedOutMachines, signedOutCalls, advance: (ms: number) => { now += ms; } };
 }
 
 describe("discoverable usage collection", () => {
@@ -114,6 +119,66 @@ describe("discoverable usage collection", () => {
     const { accounts } = await collect(false);
     expect(accounts).toHaveLength(1);
     expect(accounts[0]).toMatchObject({ status: "ok", message: null, hosts: [], signedOutHosts: [{ id: "mac", name: "mac", status: "unauthenticated" }] });
+  });
+
+  describe("signed-out machines", () => {
+    const keyB = "anthropic:account:b";
+    const machine = (hostId: string, hostName = hostId) => ({ providerId: "claude-code", accountKey: keyB, hostId, hostName, status: "unauthenticated" as const });
+    async function signedOutSetup(machines: ReturnType<typeof machine>[]) {
+      const context = await setup();
+      context.sources.splice(0, 1);
+      context.lists.set("pool", { resources: [resource("b")] });
+      context.signedOutSources.push({ pluginId: "pool", displayName: "Claude Accounts" });
+      context.signedOutMachines.push(...machines);
+      return context;
+    }
+
+    it("reports a machine the account is signed out on without making it a machine or source of the account", async () => {
+      const { collect } = await signedOutSetup([machine("mac")]);
+      const result = await collect(false);
+      expect(result.error).toBeNull();
+      expect(result.accounts).toHaveLength(1);
+      expect(result.accounts[0]).toMatchObject({
+        accountKey: keyB, status: "ok", stale: false, message: null, hosts: [],
+        signedOutHosts: [{ id: "mac", name: "mac", status: "unauthenticated" }],
+      });
+      expect(result.accounts[0]!.sources).toEqual([{ pluginId: "pool", label: "Claude Accounts", resourceId: "b", scope: { kind: "shared" } }]);
+    });
+
+    it("lets the live host name win over the name the plugin reports", async () => {
+      const { collect } = await signedOutSetup([machine("mac", "Old Mac")]);
+      expect((await collect(false)).accounts[0]?.signedOutHosts).toEqual([{ id: "mac", name: "mac", status: "unauthenticated" }]);
+    });
+
+    it("skips machines whose host is disconnected or unknown", async () => {
+      const { collect } = await signedOutSetup([machine("offline"), machine("gone")]);
+      expect((await collect(false)).accounts[0]?.signedOutHosts).toEqual([]);
+    });
+
+    it("contributes nothing, and no error, when the signed-out call fails or times out", async () => {
+      vi.useFakeTimers();
+      const { collect, callRpc } = await signedOutSetup([machine("mac")]);
+      const original = callRpc.getMockImplementation()!;
+      callRpc.mockImplementation(args => args.method === signedOutListMethod ? new Promise(() => {}) : original(args));
+      const pending = collect(false);
+      await vi.advanceTimersByTimeAsync(5001);
+      const timedOut = await pending;
+      expect(timedOut.error).toBeNull();
+      expect(timedOut.accounts[0]).toMatchObject({ stale: false, message: null, signedOutHosts: [] });
+      callRpc.mockImplementation(args => args.method === signedOutListMethod ? Promise.reject(new Error("offline")) : original(args));
+      const failed = await collect(false);
+      expect(failed.error).toBeNull();
+      expect(failed.accounts[0]).toMatchObject({ stale: false, message: null, signedOutHosts: [] });
+    });
+
+    it("ignores a malformed signed-out answer", async () => {
+      const { collect, callRpc } = await signedOutSetup([machine("mac")]);
+      const original = callRpc.getMockImplementation()!;
+      callRpc.mockImplementation(async args => args.method === signedOutListMethod ? { machines: [{ hostId: "mac" }] } : original(args));
+      const result = await collect(false);
+      expect(result.error).toBeNull();
+      expect(result.accounts[0]?.signedOutHosts).toEqual([]);
+    });
   });
 
   it("collects three accounts once, merging default logins from two hosts with the pooled account", async () => {
@@ -259,11 +324,12 @@ describe("discoverable usage collection", () => {
 
   it("caches discovery for one minute and forwards force to every measurement", async () => {
     const { collect, discover, callRpc, advance } = await setup();
+    const discoveries = () => discover.mock.calls.filter(([args]) => args?.method === "provider-usage.v1.listResources").length;
     await collect(false); await collect(true);
-    expect(discover).toHaveBeenCalledTimes(1);
+    expect(discoveries()).toBe(1);
     expect(callRpc.mock.calls.filter(([args]) => args.method.endsWith("getResource")).slice(-5).every(([args]) => args.input.refresh)).toBe(true);
     advance(60_000); await collect(false);
-    expect(discover).toHaveBeenCalledTimes(2);
+    expect(discoveries()).toBe(2);
   });
   it("retains failed source rows with their timestamp and error, without making healthy accounts stale", async () => {
     const { collect, callRpc } = await setup();

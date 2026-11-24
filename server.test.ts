@@ -84,7 +84,7 @@ async function setupUsage(settings: { serverOnly?: boolean } = {}) {
   const { bb, harness } = createFakePluginHost({
     pluginId: "usage-pace", settings: { grokUsage: false, ...settings },
     sdk: { hosts: { list: listHosts }, providers: { list: listProviders }, system: { config, usageLimits }, plugins: {
-      experimental_discoverRpc: async () => [{ pluginId: "provider-claude-code", displayName: "Claude Code provider" }],
+      experimental_discoverRpc: async (args?: { method?: string }) => args?.method === "provider-usage.v1.listResources" ? [{ pluginId: "provider-claude-code", displayName: "Claude Code provider" }] : [],
       callRpc: async ({ method, input }: { method: string; input: { resourceId?: string } }) => {
         if (method.endsWith("listResources")) return { resources: scope.hosts.map(host => ({
           id: host.id, providerId: "claude-code", accountKey: null, label: "Claude Code", scope: { kind: "host", hostId: host.id, hostName: host.name },
