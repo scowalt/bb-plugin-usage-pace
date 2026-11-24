@@ -90,9 +90,10 @@ describe("discoverable usage collection", () => {
     const failed = await collect(true);
     expect(failed.accounts).toHaveLength(2);
     expect(failed.accounts.find(account => account.accountKey === "anthropic:account:a")).toMatchObject({
-      status: "ok", stale: false, accountEmail: "a@example.test", message: `Machine source: ${status}`,
+      status: "ok", stale: false, accountEmail: "a@example.test", message: null, signedOutHosts: [{ id: "mac", name: "mac", status }],
     });
-    expect(failed.accounts.find(account => account.accountKey === "anthropic:account:a")?.sources).toHaveLength(3);
+    expect(failed.accounts.find(account => account.accountKey === "anthropic:account:a")?.hosts.map(host => host.id)).toEqual(["beelink"]);
+    expect(failed.accounts.find(account => account.accountKey === "anthropic:account:a")?.sources).toHaveLength(2);
     accountKey = "anthropic:account:replacement";
     const changed = await collect(true);
     expect(changed.accounts.find(account => account.accountKey === accountKey)).toMatchObject({

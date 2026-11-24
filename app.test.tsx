@@ -21,7 +21,7 @@ const provider: UsageProvider = {
   id: "claude-code", displayName: "Claude Code", hostId: "one", hostName: "One",
   accountEmail: "one@example.test", status: "ok", message: null,
   accountKey: "one", accountLabel: "one", observedAt: NOW, plan: null, weight: null, stale: false,
-  sources: [], hosts: [{ id: "one", name: "One" }],
+  sources: [], hosts: [{ id: "one", name: "One" }], signedOutHosts: [],
   logoUrl: null, icon: null, iconTint: null, planLabel: null,
   windows: [
     { label: "Weekly limit", weekly: true, usedPercent: 52, resetsAt: "2026-10-03T12:00:00Z" },

@@ -120,6 +120,20 @@ describe("which subscription a new thread gets", () => {
     expect(choice?.reason).toContain("weekly pace 0.80× vs Gemini Neon 1.00×");
   });
 
+  it("does not count an account that is signed out on the target machine", () => {
+    const sharedSource = [{ pluginId: "claude-accounts", label: "Claude Accounts", resourceId: "shared", scope: { kind: "shared" as const } }];
+    const shared = { hosts: [], sources: sharedSource };
+    const a = claudeAccount("a", [fiveHour(10), weekly(97, 5.04)], shared);
+    const c = claudeAccount("c", [fiveHour(10), weekly(92, 39.1)], shared);
+    const b = claudeAccount("b", [fiveHour(10), weekly(11, 75.6)], { ...shared, signedOutHosts: [{ id: "beelink", name: "beelink", status: "unauthenticated" }] });
+    const there = decide(reading([a, b, c]), { hostId: "beelink" });
+    expect(there?.reason).toContain("both skipped (Claude: weekly 95% used");
+    expect(there?.reasoningLevel).toBe("medium");
+    const elsewhere = decide(reading([a, b, c]), { hostId: "mac" });
+    expect(elsewhere?.reason).not.toContain("Claude: weekly");
+    expect(elsewhere?.reasoningLevel).toBe("xhigh");
+  });
+
   it("does not borrow another machine's Gemini reading when the target host has none", () => {
     const localClaude = claudeAccount("local", [fiveHour(10), weekly(50)], { hosts: [{ id: "beegent", name: "beegent" }] });
     const remoteGemini = geminiAccount(0, 0, { hosts: [{ id: "mac", name: "mac" }] });

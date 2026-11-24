@@ -1,5 +1,5 @@
 import type { UsageState } from "./usage-store";
-import { hasSharedSource, onHost } from "./usage-accounts";
+import { hasSharedSource, onHost, signedOutOn } from "./usage-accounts";
 import { displayedAccounts, usagePools } from "./usage-pools";
 
 export function usageForDisplay(state: UsageState): UsageState {
@@ -13,7 +13,8 @@ export function usageForDisplay(state: UsageState): UsageState {
     };
   }
   const error = data.serverHostError ?? (data.serverHostId ? null : "Server host is not available. Check bb's machine connection, then refresh.");
+  const serverHostId = error ? null : data.serverHostId ?? null;
   const accounts = visible.filter(account =>
-    hasSharedSource(account) || (!error && data.serverHostId && onHost(account, data.serverHostId)));
+    hasSharedSource(account) || (serverHostId !== null && (onHost(account, serverHostId) || signedOutOn(account, serverHostId))));
   return { ...state, data: { ...data, accounts, providers: accounts, pools: usagePools(accounts, data.fetchedAt), error: error ?? data.error } };
 }

@@ -10,7 +10,7 @@ export function makeAccount(overrides: Partial<UsageAccount> = {}): UsageAccount
     accountEmail: "a@example.test", planLabel: "Max 20x", accountKey: "anthropic:account:a", accountLabel: "a",
     plan: { id: "max", multiplier: 20 }, weight: 20, observedAt: NOW, stale: false,
     sources: [{ pluginId: "provider-claude-code", label: "Claude Code provider", resourceId: "host-a", scope: { kind: "host", hostId: "beelink", hostName: "Beelink" } }],
-    hosts: [{ id: "beelink", name: "Beelink" }],
+    hosts: [{ id: "beelink", name: "Beelink" }], signedOutHosts: [],
     windows: [
       { id: "five-hour", kind: "five-hour", model: null, label: "Current session", weekly: false, usedPercent: 32, resetsAt: at(2) },
       { id: "weekly", kind: "weekly", model: null, label: "Weekly limit", weekly: true, usedPercent: 52, resetsAt: at(48) },

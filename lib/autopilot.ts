@@ -1,7 +1,7 @@
 import { ANTIGRAVITY_PROVIDER_ID } from "./antigravity-provider";
 import type { NewThreadExecutionRequest } from "./new-thread-seam";
 import { MIN_ELAPSED_FRACTION, paceForWindows } from "./pace";
-import { hasSharedSource, isWeeklyWindow, observationTime, onHost, usageIsStale, type UsageAccount, type UsageWindow } from "./usage-accounts";
+import { isWeeklyWindow, observationTime, onHost, usableOnHost, usageIsStale, type UsageAccount, type UsageWindow } from "./usage-accounts";
 
 export const EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
 export type Effort = (typeof EFFORTS)[number];
@@ -151,7 +151,7 @@ const percent = (value: number) => `${Math.round(value)}%`;
 const times = (value: number) => `${value.toFixed(2)}×`;
 
 function availableOnHost(account: UsageAccount, hostId: string | null): boolean {
-  return hostId === null || hasSharedSource(account) || onHost(account, hostId);
+  return hostId === null || usableOnHost(account, hostId);
 }
 
 function weeklyOf(account: UsageAccount, belongs: (window: UsageWindow) => boolean): UsageWindow | undefined {
