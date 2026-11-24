@@ -47,7 +47,7 @@ describe("the autopilot shell", () => {
   it("chooses Gemini Neon when it is cheaper and runs on the machine", async () => {
     const { autopilot, bb } = setup();
     const choice = await autopilot.choose(appRequest);
-    expect(choice).toMatchObject({ providerId: GEMINI_NEON.providerId, model: GEMINI_NEON.model, reasoningLevel: "xhigh" });
+    expect(choice).toMatchObject({ providerId: GEMINI_NEON.providerId, model: GEMINI_NEON.model, reasoningLevel: "high" });
     expect(bb.sdk.providers.models).toHaveBeenCalledWith(expect.objectContaining({ hostId: "mac", providerId: GEMINI_NEON.providerId }));
   });
 
