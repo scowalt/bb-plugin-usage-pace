@@ -92,6 +92,13 @@ describe("parseAgyUsage", () => {
     expect(resets("not a date")).toBeNull();
   });
 
+  it("reports agy's Unix-epoch reset on an untouched window as no reset, so the account stays fresh", () => {
+    const [untouched] = windowsOf(
+      parseAgyUsage(report([{ name: "G", buckets: [bucket({ remaining_fraction: 1, reset_time: "1970-01-01T00:00:00Z" })] }])),
+    );
+    expect(untouched).toMatchObject({ usedPercent: 0, resetsAt: null });
+  });
+
   it("reports the signed-out JSON as unauthenticated", () => {
     expect(parseAgyUsage(signedOutJson)).toEqual({
       status: "unauthenticated",
