@@ -62,9 +62,11 @@ function usedPercent(remainingFraction: number): number {
   return Math.round(used * 100) / 100;
 }
 
-function isoOrNull(value: string | null | undefined): string | null {
+const UNSTARTED_WINDOW_RESET_MS = 0;
+
+function resetOrNull(value: string | null | undefined): string | null {
   const at = value ? Date.parse(value) : Number.NaN;
-  return Number.isFinite(at) ? new Date(at).toISOString() : null;
+  return Number.isFinite(at) && at > UNSTARTED_WINDOW_RESET_MS ? new Date(at).toISOString() : null;
 }
 
 function toWindow(group: string, bucket: Bucket): SourceWindow {
@@ -74,7 +76,7 @@ function toWindow(group: string, bucket: Bucket): SourceWindow {
     id: bucket.id,
     label: `${group} · ${suffix}`,
     usedPercent: usedPercent(bucket.remaining_fraction),
-    resetsAt: isoOrNull(bucket.reset_time),
+    resetsAt: resetOrNull(bucket.reset_time),
     model: group,
     cost: null,
   };
