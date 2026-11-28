@@ -168,10 +168,11 @@ function fiveHourOf(account: UsageAccount, belongs: (window: UsageWindow) => boo
   return account.windows.find(window => belongs(window) && (window.kind === "five-hour" || /\b5h\b/iu.test(window.label)));
 }
 
-function weeklyPace(account: UsageAccount, window: UsageWindow, fetchedAt: string, now: number): { used: number; elapsed: number } | null {
+function weeklyPace(account: UsageAccount, window: UsageWindow, fetchedAt: string, now: number): { used: number; elapsed: number; early: boolean } | null {
   const pace = paceForWindows([window], observationTime(account, fetchedAt, now))[0];
   if (!pace) return null;
-  return { used: window.usedPercent / 100, elapsed: pace.ratio === null ? Math.max(pace.elapsedFraction, MIN_ELAPSED_FRACTION) : pace.elapsedFraction };
+  const early = pace.ratio === null;
+  return { used: window.usedPercent / 100, elapsed: early ? Math.max(pace.elapsedFraction, MIN_ELAPSED_FRACTION) : pace.elapsedFraction, early };
 }
 
 function pacedRatio(parts: { weight: number; used: number; elapsed: number }[]): number | null {
@@ -200,7 +201,7 @@ function claudeStanding(usage: UsageReading, hostId: string | null, now: number)
     ? pacedRatio(parts.map(part => ({ weight: part.weight, ...part.reading! })))
     : null;
   const subPaces = parts.flatMap(part => {
-    if (part.reading === null) return [];
+    if (part.reading === null || part.reading.early) return [];
     const ratio = pacedRatio([{ weight: 1, ...part.reading }]);
     return ratio === null ? [] : [{ pace: ratio, weight: part.weight }];
   });
@@ -232,7 +233,7 @@ function geminiStanding(usage: UsageReading, hostId: string | null, now: number)
       : window.usedPercent >= WEEKLY_LIMIT_PERCENT ? `weekly ${percent(window.usedPercent)} used`
         : null;
   const pace = reading === null ? null : pacedRatio([{ weight: 1, ...reading }]);
-  return { pace, subPaces: pace === null ? [] : [{ pace, weight: GEMINI_PLAN_WEIGHT }], blocked };
+  return { pace, subPaces: pace === null || reading?.early ? [] : [{ pace, weight: GEMINI_PLAN_WEIGHT }], blocked };
 }
 
 function weightedMean(parts: SubPace[]): number | null {

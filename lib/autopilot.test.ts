@@ -222,6 +222,22 @@ describe("early in a window", () => {
     expect(choice?.providerId).toBe(OPUS.providerId);
     expect(choice?.reason).toContain("weekly pace 0.40× vs Gemini Neon 0.60×");
   });
+
+  it("does not put threads at max effort right after a usage reset", () => {
+    const freshClaude = [claudeAccount("a", [fiveHour(0), weekly(0, 167.9)])];
+    const freshGemini = [geminiAccount(0, 0, {}, 167.9)];
+    const bothFresh = decide(reading(freshClaude, freshGemini));
+    expect(bothFresh?.reasoningLevel).toBe("high");
+    expect(bothFresh?.reason).toContain("overall pace unknown");
+
+    const claudeOnlyFresh = decide(reading(freshClaude));
+    expect(claudeOnlyFresh?.reasoningLevel).toBe("high");
+    expect(claudeOnlyFresh?.reason).toContain("overall pace unknown");
+
+    const mixed = decide(reading([claudeAccount("fresh", [fiveHour(0), weekly(0, 167.9)]), claudeAccount("mid", [fiveHour(10), weekly(55)])]));
+    expect(mixed?.reasoningLevel).toBe("medium");
+    expect(mixed?.reason).toContain("overall pace 1.10×");
+  });
 });
 
 describe("effort", () => {
