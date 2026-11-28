@@ -106,7 +106,7 @@ describe("autopilot registration", () => {
   it("warns about bad effort bands and keeps the default", async () => {
     const { harness, warn, choose } = await setup({ settings: { autopilotEffortBands: "0.5=huge,low" } });
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("Ignoring the effort bands"));
-    expect(await choose(request())).toMatchObject({ reasoningLevel: "xhigh" });
+    expect(await choose(request())).toMatchObject({ reasoningLevel: "medium" });
     await harness.behavior.setSettings({ autopilotEffortBands: "9=low,low" });
     expect(await choose(request())).toMatchObject({ reasoningLevel: "low" });
   });
@@ -116,8 +116,8 @@ describe("autopilot choices", () => {
   it("picks Gemini Neon for a composer thread when its pace is lower", async () => {
     const { choose } = await setup();
     const choice = await choose(request());
-    expect(choice).toMatchObject({ providerId: "usage-pace-antigravity", model: "gemini-4-neon", reasoningLevel: "xhigh" });
-    expect(choice?.reason).toMatch(/^Gemini Neon: weekly pace 0\.\d\d× vs Claude 1\.\d\d×; effort xhigh \(max is not offered\)/u);
+    expect(choice).toMatchObject({ providerId: "usage-pace-antigravity", model: "gemini-4-neon", reasoningLevel: "medium" });
+    expect(choice?.reason).toMatch(/^Gemini Neon: weekly pace 0\.\d\d× vs Claude 1\.\d\d×; effort medium at overall pace 1\.\d\d×/u);
   });
 
   it("picks Opus when Gemini Neon is not available on the machine", async () => {
@@ -140,7 +140,7 @@ describe("bb usage-pace autopilot", () => {
     const result = await harness.behavior.runCli(["autopilot"]);
     expect(result.exitCode).toBe(0);
     const [first, second] = (result.stdout ?? "").split("\n");
-    expect(first).toBe("New threads get usage-pace-antigravity · gemini-4-neon at effort xhigh.");
+    expect(first).toBe("New threads get usage-pace-antigravity · gemini-4-neon at effort medium.");
     expect(second).toMatch(/^Why: Gemini Neon: weekly pace /u);
   });
 
@@ -148,7 +148,7 @@ describe("bb usage-pace autopilot", () => {
     const { harness } = await setup();
     for (const args of [["autopilot", "--json", "--host", "server"], ["autopilot", "--host=server", "--json"]]) {
       const output = JSON.parse((await harness.behavior.runCli(args)).stdout ?? "");
-      expect(output).toMatchObject({ enabled: true, active: true, hostId: "server", choice: { providerId: "usage-pace-antigravity", reasoningLevel: "xhigh" } });
+      expect(output).toMatchObject({ enabled: true, active: true, hostId: "server", choice: { providerId: "usage-pace-antigravity", reasoningLevel: "medium" } });
     }
   });
 
